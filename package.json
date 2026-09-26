@@ -1,0 +1,26 @@
+{
+  "name": "shelfit",
+  "version": "1.0.0",
+  "description": "Self-hosted PWA for tracking movies and TV shows",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"node server/index.js\" \"vite client/\"",
+    "build": "vite build client/ --outDir ../client/dist",
+    "start": "node server/index.js",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:logs": "docker compose logs -f"
+  },
+  "dependencies": {
+    "fastify": "^4",
+    "better-sqlite3": "^9",
+    "@fastify/static": "^7",
+    "@fastify/cors": "^9",
+    "node-fetch": "^3"
+  },
+  "devDependencies": {
+    "vite": "^5",
+    "concurrently": "^9"
+  }
+}

@@ -1,0 +1,16 @@
+# shelfIt — cinema list
+#
+# One cinema name per line. This file populates the "Cinema" selector shown on
+# each cinema ticket (My Tickets). Add, edit, or remove names below — changes are
+# picked up on the next open, no restart needed.
+#
+# Rules:
+#   • One cinema name per line.
+#   • Blank lines and lines starting with '#' are ignored (like this header).
+#   • If this file is missing or has no names, the ticket's cinema field becomes a
+#     plain free-text input instead of a dropdown.
+#
+# Example (delete the leading '#' to use, or just add your own below):
+# Cinema 1
+# Cinema 2
+# Cinema 3

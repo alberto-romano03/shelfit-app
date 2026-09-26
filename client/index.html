@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="shelfit" />
+    <!-- iOS home-screen icon: dedicated 180x180 opaque PNG (no alpha channel),
+         at a stable non-hashed path. iOS Safari "Add to Home Screen" reads only
+         this tag — not the manifest — so it must come first and be flat/opaque. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" href="%BASE_URL%icons/shelf-iticon-browser.png" />
+    <link rel="manifest" href="%BASE_URL%manifest.json" />
+    <title>shelfit</title>
+
+    <!-- Console silence (default; must be the FIRST script so it covers every
+         later one). For privacy/security shelfit emits nothing to the browser
+         console: every console method is replaced with a no-op unless debug
+         logging is explicitly opted into — localStorage 'shelfit:debug' = '1', or
+         a '?debug=1' URL param — which restores the real console for that session.
+         This silences ALL script-originated output (shelfit's own and anything it
+         loads). NOTE: browser-native diagnostics — failed network requests, CSP
+         reports, service-worker registration errors — are emitted by the browser
+         itself and cannot be suppressed from JavaScript. -->
+    <script>
+      (function () {
+        try {
+          var dbg = false;
+          try { dbg = localStorage.getItem('shelfit:debug') === '1'; } catch (e) {}
+          try { if (/[?&]debug=1(?:&|$)/.test(location.search)) dbg = true; } catch (e) {}
+          if (dbg || typeof console === 'undefined' || !console) return;
+          var noop = function () {};
+          var methods = [
+            'log', 'info', 'warn', 'error', 'debug', 'trace', 'dir', 'dirxml',
+            'table', 'group', 'groupCollapsed', 'groupEnd', 'count', 'countReset',
+            'time', 'timeEnd', 'timeLog', 'assert', 'profile', 'profileEnd', 'clear',
+          ];
+          for (var i = 0; i < methods.length; i++) {
+            try { console[methods[i]] = noop; } catch (e) {}
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Language, stamped before first paint. A first-paint hint only: i18n.js
+         checks it against the languages it has. -->
+    <script>
+      try {
+        var lang = localStorage.getItem('shelfit:lang');
+        if (!/^[a-z]{2}$/.test(lang || '')) lang = (navigator.language || 'en').slice(0, 2).toLowerCase();
+        document.documentElement.setAttribute('lang', lang);
+      } catch (e) {}
+    </script>
+    <!-- Resume detection (must run BEFORE the splash paints). If this browsing
+         session has already shown the splash once, this load is a RESUME, not a
+         cold start — iOS standalone PWAs relaunch/reload the app when returning
+         from an external Safari link, which would otherwise replay the splash.
+         Marking <html> now lets the CSS below suppress the splash on the very
+         first frame (no flash). sessionStorage is cleared when the PWA is fully
+         terminated, so a genuine cold start has no flag and plays the splash. -->
+    <script>
+      try {
+        if (sessionStorage.getItem('shelfit:seen-splash')) {
+          document.documentElement.classList.add('app-resume', 'app-revealed');
+        }
+      } catch (e) {}
+    </script>
+
+    <!-- Splash: inlined so it paints on the first frame, before the JS bundle
+         loads. The app boots (and Home starts caching) behind it. -->
+    <style>
+      /* Single source of truth for the splash colour, shared by the splash and
+         the anti-flash overlay below so they can never drift apart. */
+      :root {
+        --splash-bg: #0a0a0a;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--splash-bg);
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: var(--splash-bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 1;
+        transition: opacity 0.35s ease;
+      }
+      #splash.splash-hide {
+        opacity: 0;
+        pointer-events: none;
+      }
+      /* Resume (see the head script): skip the splash + anti-flash overlay
+         entirely so the app restores directly, with no entrance animation. */
+      html.app-resume #splash,
+      html.app-resume #app-flash {
+        display: none !important;
+      }
+      /* THE GUARANTEE that the splash is the first thing on screen. The two
+         overlays above cover the app visually, but only from the frame they
+         themselves paint on; the module bundle can mount the header and navbar
+         before the render-blocking stylesheet has arrived, and an unstyled
+         <header>/<nav> laid out in normal flow is exactly the chrome that pops
+         for an instant before the splash takes over. Gated here there is
+         nothing to pop: the subtree is not painted until the boot script below
+         releases it (or, on a resume, the head script already has).
+         `visibility` rather than `display` on purpose — the app still lays out
+         underneath, so anything that measures during boot measures correctly. */
+      html:not(.app-revealed) #app {
+        visibility: hidden;
+      }
+      /* Anti-flash overlay: sits above ALL app content (header/navbar/views) but
+         BELOW the splash, in the exact splash colour. It keeps the screen a solid
+         colour during the brief window between the splash fading out and the app
+         being ready, so the navbar never flashes in. Faded out (and removed)
+         once the splash has finished leaving. */
+      #app-flash {
+        position: fixed;
+        inset: 0;
+        z-index: 9990;
+        background: var(--splash-bg);
+        opacity: 1;
+        transition: opacity 0.3s ease;
+      }
+      #app-flash.flash-hide {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .splash-stage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      /* Mask whose bottom edge is the slot line: the disc slides DOWN through it
+         and is clipped away bottom-first, i.e. sucked into the slot. No scaleY,
+         so no edge-on "rotation" look. */
+      .splash-clip {
+        width: 148px;
+        height: 148px;
+        overflow: hidden;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+      }
+      .splash-logo {
+        width: 148px;
+        height: 148px;
+        will-change: transform;
+        animation: splash-logo 1.5s forwards;
+      }
+      /* The "DVD player" slot, flush under the mask so the disc enters it. */
+      .splash-slot {
+        width: 190px;
+        height: 4px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, #2a2a2a, #e5a00d, #2a2a2a);
+        transform: scaleX(0);
+        opacity: 0;
+        animation: splash-slot 1.5s forwards;
+      }
+      /* shelfIt wordmark, matching the in-app header. */
+      .splash-word {
+        margin-top: 22px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          Helvetica, Arial, sans-serif;
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        color: #ffffff;
+        opacity: 0;
+        animation: splash-word 1.5s forwards;
+      }
+      .splash-word span {
+        color: #e5a00d;
+      }
+      @keyframes splash-logo {
+        0% {
+          transform: translateY(0) scale(0.9) rotate(0deg);
+          animation-timing-function: ease-out;
+        }
+        16% {
+          transform: translateY(0) scale(1) rotate(0deg);
+          animation-timing-function: ease;
+        }
+        52% {
+          transform: translateY(0) scale(1) rotate(0deg);
+          /* the "suck" itself is linear, as requested */
+          animation-timing-function: linear;
+        }
+        100% {
+          /* slide fully below the mask (clipped into the slot) while the disc
+             spins about its centre */
+          transform: translateY(170px) scale(0.86) rotate(540deg);
+        }
+      }
+      @keyframes splash-word {
+        0% {
+          opacity: 0;
+        }
+        20% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+      @keyframes splash-slot {
+        0% {
+          transform: scaleX(0);
+          opacity: 0;
+          box-shadow: 0 0 0 rgba(229, 160, 13, 0);
+        }
+        22% {
+          transform: scaleX(1);
+          opacity: 1;
+          box-shadow: 0 0 6px rgba(229, 160, 13, 0.25);
+        }
+        /* brief flare as the disc is drawn in */
+        88% {
+          box-shadow: 0 0 10px rgba(229, 160, 13, 0.35);
+        }
+        96% {
+          box-shadow: 0 0 22px rgba(229, 160, 13, 0.8);
+        }
+        100% {
+          transform: scaleX(1);
+          opacity: 1;
+          box-shadow: 0 0 10px rgba(229, 160, 13, 0.3);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .splash-logo,
+        .splash-slot,
+        .splash-word {
+          animation: none;
+          opacity: 1;
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="splash">
+      <div class="splash-stage">
+        <div class="splash-clip">
+          <img
+            class="splash-logo"
+            src="%BASE_URL%icons/shelf-iticon-browser.png"
+            alt="shelfit"
+          />
+        </div>
+        <div class="splash-slot"></div>
+        <div class="splash-word">shelf<span>it</span></div>
+      </div>
+    </div>
+    <div id="app"></div>
+    <!-- Anti-flash overlay: solid splash-colour layer above the app but below the
+         splash; hidden once the splash has left so the navbar never flashes. -->
+    <div id="app-flash"></div>
+
+    <script>
+      // Dismiss the splash when the suck animation ends (with a safety fallback).
+      // Runs independently of the app bundle so it never blocks or waits on it —
+      // image preloading runs in the background and does NOT hold the splash.
+      (function () {
+        // Resume: the splash is already hidden via CSS — nothing to animate or
+        // dismiss, so skip straight past it (the app paints directly behind).
+        if (document.documentElement.classList.contains('app-resume')) return;
+        var s = document.getElementById('splash');
+        // No splash element to wait on (it was already torn down) — release the
+        // app immediately rather than leaving it gated forever.
+        if (!s) {
+          document.documentElement.classList.add('app-revealed');
+          return;
+        }
+        var done = false;
+        // Fade + remove the anti-flash overlay only after the splash has fully
+        // left, so the transition goes splash → solid colour → ready app with no
+        // navbar flash in between. The app bundle has already mounted behind it.
+        function clearFlash() {
+          var f = document.getElementById('app-flash');
+          if (!f) return;
+          f.classList.add('flash-hide');
+          setTimeout(function () {
+            if (f.parentNode) f.parentNode.removeChild(f);
+          }, 400);
+        }
+        function hide() {
+          if (done) return;
+          done = true;
+          // Reveal the app UNDER the still-opaque anti-flash overlay, so it is
+          // painted and settled by the time that overlay fades.
+          document.documentElement.classList.add('app-revealed');
+          s.classList.add('splash-hide');
+          setTimeout(function () {
+            if (s.parentNode) s.parentNode.removeChild(s);
+            clearFlash();
+          }, 400);
+        }
+        var reduce =
+          window.matchMedia &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var logo = s.querySelector('.splash-logo');
+        if (!reduce && logo) {
+          logo.addEventListener('animationend', hide);
+        }
+        setTimeout(hide, reduce ? 800 : 2400);
+      })();
+    </script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

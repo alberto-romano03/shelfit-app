@@ -1,0 +1,10 @@
+node_modules
+client/dist
+data
+.git
+.env
+*.log
+Caddyfile
+docker-compose.yml
+README.md
+.claude

@@ -1,0 +1,28 @@
+# shelfIt runs on its own; the reverse proxy lives in a separate compose project
+# (~/caddy). shelfIt joins the shared external network "webproxy" so the central
+# Caddy container can reach it by name (shelfit:3000) and serve it under /shelfit/.
+#
+# Prerequisite (created once, out-of-band):  docker network create webproxy
+services:
+  shelfit:
+    build: .
+    container_name: shelfit
+    restart: unless-stopped
+    # No host port is published: Caddy reaches the container over the shared
+    # network. (For direct LAN access without Caddy, uncomment the ports block.)
+    expose:
+      - "3000"
+    # ports:
+    #   - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    networks:
+      - webproxy
+
+networks:
+  # Shared, centrally-managed proxy network. Created out-of-band so it persists
+  # independently of any single compose project:  docker network create webproxy
+  webproxy:
+    external: true
