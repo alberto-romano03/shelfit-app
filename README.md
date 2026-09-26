@@ -62,7 +62,35 @@ database and cache folder that you own.
 
 ## Screenshots
 
-_Screenshots are being retaken against a demo library and will land here shortly._
+<table>
+  <tr>
+    <td width="33%"><img src="brand/screenshot/home.webp" alt="Home screen" /><br /><sub><b>Home</b> — profile, watch-time stats & currently watching</sub></td>
+    <td width="33%"><img src="brand/screenshot/home_2.webp" alt="The Desk and The Wall" /><br /><sub><b>The Desk & The Wall</b> — ticket drawer, receipt printer, taped-up favourites</sub></td>
+    <td width="33%"><img src="brand/screenshot/movies.webp" alt="Movies grid" /><br /><sub><b>Movies</b> — virtualised poster grid with filters & ratings</sub></td>
+  </tr>
+  <tr>
+    <td><img src="brand/screenshot/details.webp" alt="Title detail" /><br /><sub><b>Detail</b> — disc art, status, ownership, Play on Kodi</sub></td>
+    <td><img src="brand/screenshot/details-liner.webp" alt="Liner Notes" /><br /><sub><b>Liner Notes</b> — production, director, budget & tagline</sub></td>
+    <td><img src="brand/screenshot/whats-next.webp" alt="What's Next" /><br /><sub><b>What's Next</b> — On the Horizon + Up Next progress</sub></td>
+  </tr>
+  <tr>
+    <td><img src="brand/screenshot/btts.webp" alt="Back to the Shelf" /><br /><sub><b>Back to the Shelf</b> — spin up a disc you have already watched</sub></td>
+    <td><img src="brand/screenshot/dustitoff.webp" alt="Dust It Off" /><br /><sub><b>Dust It Off</b> — pick by mood, duration, rating & era</sub></td>
+    <td><img src="brand/screenshot/rateomatic.webp" alt="Rate-O-Matic" /><br /><sub><b>Rate-O-Matic</b> — quick-rate everything still unrated</sub></td>
+  </tr>
+  <tr>
+    <td><img src="brand/screenshot/receipt.webp" alt="Monthly rental receipt" /><br /><sub><b>Rental receipt</b> — a shareable monthly wrap-up</sub></td>
+    <td><img src="brand/screenshot/cinema.webp" alt="My Tickets" /><br /><sub><b>My Tickets</b> — a ticket per cinema screening, swipeable</sub></td>
+    <td><img src="brand/screenshot/showcase.webp" alt="Feature showcase" /><br /><sub><b>Showcase</b> — the illustrated tour shown on first launch</sub></td>
+  </tr>
+  <tr>
+    <td><img src="brand/screenshot/login.webp" alt="Login screen" /><br /><sub><b>Login</b> — password or passwordless magic-link</sub></td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
+
+<sub>Screenshots come from a demo library built for this README — invented profile, ratings and watch history over real TMDB titles.</sub>
 
 ## Features
 
