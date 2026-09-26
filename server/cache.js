@@ -11,6 +11,7 @@ import {
   downloadImage,
 } from './tmdb.js';
 import { toWebp, throwIfAborted } from './images.js';
+import { getTmdbLanguage } from './language.js';
 import { ensureCollection } from './collections.js';
 import { imageRamCache } from './imageRamCache.js';
 
@@ -216,6 +217,10 @@ function pickDirector(raw) {
 function normalizeMovie(raw) {
   return {
     cached_at: nowIso(),
+    // The TMDB language this record was fetched in. When the user changes the
+    // metadata language in Settings, a mismatch here is what marks the cached
+    // copy as stale (see cacheMovie / cacheShow).
+    lang: getTmdbLanguage(),
     tmdb_id: String(raw.id),
     type: 'movie',
     title_it: raw.title || raw.original_title || '',
@@ -259,6 +264,8 @@ function normalizeCollectionRef(btc) {
 function normalizeShow(raw) {
   return {
     cached_at: nowIso(),
+    lang: getTmdbLanguage(), // see normalizeMovie
+
     tmdb_id: String(raw.id),
     type: 'show',
     title_it: raw.name || raw.original_name || '',
@@ -316,7 +323,7 @@ function normalizeSeason(raw) {
 // Download + persist a movie (meta + poster + backdrop). Returns the meta.
 export async function cacheMovie(tmdbId, { force = false, signal } = {}) {
   const existing = readMetaSync('movie', tmdbId);
-  if (existing && !force) return existing;
+  if (existing && !force && !wrongLanguage(existing)) return existing;
 
   const raw = await getMovie(tmdbId, { signal });
   const meta = normalizeMovie(raw);
@@ -355,7 +362,7 @@ export async function ensureMovieCollectionField(tmdbId) {
 // stills. Future seasons (no aired episodes) are skipped. Returns the meta.
 export async function cacheShow(tmdbId, { force = false, signal } = {}) {
   const existing = readMetaSync('show', tmdbId);
-  if (existing && !force) return existing;
+  if (existing && !force && !wrongLanguage(existing)) return existing;
 
   const raw = await getTv(tmdbId, { signal });
   const meta = normalizeShow(raw);
@@ -425,6 +432,14 @@ export async function ensureCached(type, tmdbId, { force = false, signal } = {})
   } finally {
     inflightBuilds.delete(key);
   }
+}
+
+// True when a cached record was fetched in a language the user has since changed
+// away from. Records written before the language became a setting carry no
+// `lang` at all; those were Italian, so treat a missing stamp as it-IT.
+export function wrongLanguage(meta) {
+  if (!meta) return false;
+  return (meta.lang || 'it-IT') !== getTmdbLanguage();
 }
 
 // Sentinel fields that exist ONLY in the newer meta schema (Bento "Details").

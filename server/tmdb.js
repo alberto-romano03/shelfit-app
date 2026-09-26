@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import { TMDB_API_KEY } from './config.js';
+import { getTmdbLanguage, fallbackTmdbLanguage } from './language.js';
 import { guard, record } from './usage.js';
 
 const API_BASE = 'https://api.themoviedb.org/3';
@@ -91,7 +92,7 @@ export async function downloadImage(size, filePath, { signal } = {}) {
 export async function searchMovie(query) {
   const data = await tmdbGet('/search/movie', {
     query,
-    language: 'it-IT',
+    language: getTmdbLanguage(),
     include_adult: false,
   });
   return data.results || [];
@@ -100,7 +101,7 @@ export async function searchMovie(query) {
 export async function searchTv(query) {
   const data = await tmdbGet('/search/tv', {
     query,
-    language: 'it-IT',
+    language: getTmdbLanguage(),
     include_adult: false,
   });
   return data.results || [];
@@ -110,7 +111,7 @@ export async function searchTv(query) {
 export async function findByImdb(imdbId) {
   const data = await tmdbGet(`/find/${imdbId}`, {
     external_source: 'imdb_id',
-    language: 'it-IT',
+    language: getTmdbLanguage(),
   });
   const movies = (data.movie_results || []).map((r) => ({ ...r, _type: 'movie' }));
   const shows = (data.tv_results || []).map((r) => ({ ...r, _type: 'show' }));
@@ -126,20 +127,21 @@ export async function findShowByTvdb(tvdbId) {
   return r ? String(r.id) : null;
 }
 
-// --- Detail (with IT overview + EN fallback) ------------------------------
+// --- Detail (localized, with a fallback-language overview) ----------------
 
-// Fetch a movie in it-IT; if the overview is empty, fill it from en-US.
+// Fetch a movie in the configured language; if the overview is empty, fill it
+// from the fallback language.
 export async function getMovie(tmdbId, { signal } = {}) {
   // append_to_response=release_dates piggybacks the certification data on the same
   // request (no extra API call) so we can show an age rating.
   const it = await tmdbGet(
     `/movie/${tmdbId}`,
-    { language: 'it-IT', append_to_response: 'release_dates,credits' },
+    { language: getTmdbLanguage(), append_to_response: 'release_dates,credits' },
     { signal }
   );
   if (!it.overview || it.overview.trim() === '') {
     try {
-      const en = await tmdbGet(`/movie/${tmdbId}`, { language: 'en-US' }, { signal });
+      const en = await tmdbGet(`/movie/${tmdbId}`, { language: fallbackTmdbLanguage() }, { signal });
       it.overview = en.overview || '';
     } catch {
       /* keep empty overview if EN fetch fails */
@@ -148,12 +150,12 @@ export async function getMovie(tmdbId, { signal } = {}) {
   return it;
 }
 
-// Fetch a tv series in it-IT; fall back to en-US for an empty overview.
+// Fetch a tv series in the configured language; fall back for an empty overview.
 export async function getTv(tmdbId, { signal } = {}) {
-  const it = await tmdbGet(`/tv/${tmdbId}`, { language: 'it-IT' }, { signal });
+  const it = await tmdbGet(`/tv/${tmdbId}`, { language: getTmdbLanguage() }, { signal });
   if (!it.overview || it.overview.trim() === '') {
     try {
-      const en = await tmdbGet(`/tv/${tmdbId}`, { language: 'en-US' }, { signal });
+      const en = await tmdbGet(`/tv/${tmdbId}`, { language: fallbackTmdbLanguage() }, { signal });
       it.overview = en.overview || '';
     } catch {
       /* ignore */
@@ -162,18 +164,18 @@ export async function getTv(tmdbId, { signal } = {}) {
   return it;
 }
 
-// Fetch a single season (episodes included) with IT overview + EN fallback.
+// Fetch a single season (episodes included), same language fallback as above.
 export async function getSeason(tmdbId, seasonNumber, { signal } = {}) {
   const it = await tmdbGet(
     `/tv/${tmdbId}/season/${seasonNumber}`,
-    { language: 'it-IT' },
+    { language: getTmdbLanguage() },
     { signal }
   );
   if (!it.overview || it.overview.trim() === '') {
     try {
       const en = await tmdbGet(
         `/tv/${tmdbId}/season/${seasonNumber}`,
-        { language: 'en-US' },
+        { language: fallbackTmdbLanguage() },
         { signal }
       );
       it.overview = en.overview || '';
@@ -198,12 +200,12 @@ export async function discover(kind, params, { signal } = {}) {
   return data.results || [];
 }
 
-// Fetch a movie collection (its films list) in it-IT with EN overview fallback.
+// Fetch a movie collection (its films list) with the same language fallback.
 export async function getCollection(collectionId, { signal } = {}) {
-  const it = await tmdbGet(`/collection/${collectionId}`, { language: 'it-IT' }, { signal });
+  const it = await tmdbGet(`/collection/${collectionId}`, { language: getTmdbLanguage() }, { signal });
   if (!it.overview || it.overview.trim() === '') {
     try {
-      const en = await tmdbGet(`/collection/${collectionId}`, { language: 'en-US' }, { signal });
+      const en = await tmdbGet(`/collection/${collectionId}`, { language: fallbackTmdbLanguage() }, { signal });
       it.overview = en.overview || '';
     } catch {
       /* keep empty overview if EN fetch fails */
@@ -217,7 +219,7 @@ export async function getCollection(collectionId, { signal } = {}) {
 export async function findSeriesByEpisodeId(episodeId) {
   try {
     const data = await tmdbGet(`/tv/episode/${episodeId}`, {
-      language: 'it-IT',
+      language: getTmdbLanguage(),
     });
     return data.show_id || null;
   } catch {
@@ -227,13 +229,13 @@ export async function findSeriesByEpisodeId(episodeId) {
 
 export { tmdbGet };
 
-// Fetch a person in it-IT; fall back to en-US for an empty biography (same
+// Fetch a person in the configured language; fall back for an empty biography (same
 // language pattern as getMovie/getTv).
 export async function getPerson(tmdbId, { signal } = {}) {
-  const it = await tmdbGet(`/person/${tmdbId}`, { language: 'it-IT' }, { signal });
+  const it = await tmdbGet(`/person/${tmdbId}`, { language: getTmdbLanguage() }, { signal });
   if (!it.biography || it.biography.trim() === '') {
     try {
-      const en = await tmdbGet(`/person/${tmdbId}`, { language: 'en-US' }, { signal });
+      const en = await tmdbGet(`/person/${tmdbId}`, { language: fallbackTmdbLanguage() }, { signal });
       it.biography = en.biography || '';
     } catch {
       /* keep the empty biography if the EN fetch fails */
@@ -244,5 +246,5 @@ export async function getPerson(tmdbId, { signal } = {}) {
 
 // Every acting + crew credit for a person, in one call.
 export async function getPersonCredits(tmdbId, { signal } = {}) {
-  return tmdbGet(`/person/${tmdbId}/combined_credits`, { language: 'it-IT' }, { signal });
+  return tmdbGet(`/person/${tmdbId}/combined_credits`, { language: getTmdbLanguage() }, { signal });
 }

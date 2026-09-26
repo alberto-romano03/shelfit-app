@@ -30,6 +30,9 @@ const RULES = [
   { method: 'POST', path: '/api/library/import', max: 3, windowMs: 60 * 60 * 1000 },
   { method: 'POST', path: '/api/import/tvtime', max: 3, windowMs: 60 * 60 * 1000 },
   { method: 'POST', path: '/api/import/extras', max: 3, windowMs: 60 * 60 * 1000 },
+  // Changing the metadata language re-fetches the WHOLE library from TMDB, so
+  // it belongs with the bulk operations rather than the blanket default.
+  { method: 'PATCH', path: '/api/settings/metadata-language', max: 4, windowMs: 60 * 60 * 1000 },
   // Image upload.
   { method: 'POST', path: '/api/profile/photo', max: 10, windowMs: 60 * 60 * 1000 },
   { method: 'POST', id: 'person-photo', match: (p) => p.startsWith('/api/persons/') && p.endsWith('/photo'), max: 10, windowMs: 60 * 60 * 1000 },

@@ -36,6 +36,7 @@ import shareRoutes from './routes/share.js';
 import cinemaRoutes from './routes/cinema.js';
 import favoriteRoutes from './routes/favorites.js';
 import personRoutes from './routes/persons.js';
+import settingsRoutes from './routes/settings.js';
 import { startKodiScheduler } from './kodiSync.js';
 import { startPushScheduler } from './push.js';
 import { imageRamCache } from './imageRamCache.js';
@@ -227,6 +228,7 @@ await fastify.register(libraryRoutes);
 await fastify.register(cinemaRoutes);
 await fastify.register(favoriteRoutes);
 await fastify.register(personRoutes);
+await fastify.register(settingsRoutes);
 // Share Target (GET /share) — an explicit route so it is matched ahead of the
 // SPA static handler / not-found fallback and reaches this handler, not the shell.
 await fastify.register(shareRoutes);

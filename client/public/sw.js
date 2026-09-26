@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v70'; // bumped: first-launch feature showcase
+const CACHE = 'shelfit-shell-v71'; // bumped: metadata-language setting in Library settings
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

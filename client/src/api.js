@@ -344,6 +344,13 @@ function buildApi(signal) {
     kodiSyncClaim: () => api.post('/api/kodi/sync/claim'),
     kodiSyncCommit: (items) => api.post('/api/kodi/sync/commit', { items }),
 
+    // Server-side app settings (as opposed to the client's own preferences).
+    // Changing the metadata language re-fetches every title from TMDB, so the
+    // PATCH can take a while on a large library — the caller shows progress.
+    metadataLanguage: () => api.get('/api/settings/metadata-language'),
+    setMetadataLanguage: (language) =>
+      api.patch('/api/settings/metadata-language', { language }),
+
     // Push notifications (subscription lives server-side).
     pushConfig: () => api.get('/api/push/config'),
     pushSubscribe: (subscription) => api.post('/api/push/subscribe', { subscription }),

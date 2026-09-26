@@ -61,6 +61,16 @@ const it = {
   // --- settings: language ---
   'settings.language': 'Lingua',
 
+  // --- settings: lingua dei metadati (TMDB) ---
+  'settings.metaLang': 'Lingua dei metadati',
+  'settings.metaLang.en': 'Inglese',
+  'settings.metaLang.it': 'Italiano',
+  'settings.metaLangSub':
+    'La lingua in cui shelfit chiede a TMDB titoli, trame e nomi degli episodi. Cambiandola, i metadati della libreria vengono riscaricati.',
+  'settings.metaLangBusy': 'Aggiorno i titoli della libreria…',
+  'settings.metaLangDone': '{count} titoli aggiornati',
+  'settings.metaLangFailed': 'Impossibile cambiare la lingua dei metadati',
+
   // --- shared UI: modals, toasts, loaders, network ---
   'ui.confirm.title': 'Sei sicuro?',
   'ui.selectPill.clear': 'Azzera {label}',
@@ -884,6 +894,16 @@ const en = {
 
   // --- settings: language ---
   'settings.language': 'Language',
+
+  // --- settings: metadata language (TMDB) ---
+  'settings.metaLang': 'Metadata language',
+  'settings.metaLang.en': 'English',
+  'settings.metaLang.it': 'Italian',
+  'settings.metaLangSub':
+    'The language shelfit asks TMDB for: titles, plots and episode names. Changing it re-downloads the metadata for every title you have.',
+  'settings.metaLangBusy': 'Updating the titles in your library…',
+  'settings.metaLangDone': '{count} titles updated',
+  'settings.metaLangFailed': 'Could not change the metadata language',
 
   // --- shared UI: modals, toasts, loaders, network ---
   'ui.confirm.title': 'Are you sure?',

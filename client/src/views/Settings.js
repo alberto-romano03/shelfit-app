@@ -942,6 +942,74 @@ export default async function Settings(container) {
   renderLists(null); // ghost frame
 
   // --- Kodi integration (self-contained section) ---
+  // --- Metadata language (server-side: what shelfIt asks TMDB for) ---------
+  // Distinct from the app language in General: that one translates the
+  // interface, this one decides the language of the titles, plots and episode
+  // names TMDB returns. Changing it re-downloads the library's metadata, so the
+  // row locks itself while that runs and reloads afterwards — the grids keep a
+  // per-session cache of the old titles.
+  const metadataSection = el('div', { class: 'settings-section' }, [
+    settingsHeader('languages', t('settings.metaLang')),
+  ]);
+  {
+    const status = el('div', { class: 'muted backup-status' });
+    status.style.display = 'none';
+
+    const picker = selectPill({
+      options: [
+        { value: 'en-US', text: t('settings.metaLang.en') },
+        { value: 'it-IT', text: t('settings.metaLang.it') },
+      ],
+      value: 'en-US',
+      className: 'selpill--block',
+      onChange: async (value) => {
+        picker.select.disabled = true;
+        status.style.display = '';
+        status.textContent = t('settings.metaLangBusy');
+        try {
+          const res = await api.setMetadataLanguage(value);
+          if (res && res.changed) {
+            status.textContent = t('settings.metaLangDone', { count: res.refreshed || 0 });
+            toast(t('settings.metaLangDone', { count: res.refreshed || 0 }), 'good');
+            // Titles live in the grids' session cache and in every open view —
+            // a reload is the only way to show them all in the new language.
+            setTimeout(() => location.reload(), 900);
+            return;
+          }
+          status.style.display = 'none';
+        } catch (err) {
+          if (isAbortError(err)) return;
+          status.textContent = t('settings.metaLangFailed');
+          toast(err.message || t('settings.metaLangFailed'), 'bad');
+        } finally {
+          picker.select.disabled = false;
+        }
+      },
+    });
+    picker.select.setAttribute('aria-label', t('settings.metaLang'));
+
+    metadataSection.append(
+      el('div', { class: 'srow srow--stack' }, [
+        el('div', { class: 'srow-head' }, [
+          lucideIcon('languages', 'srow-ico'),
+          el('div', { class: 'srow-label', text: t('settings.metaLang') }),
+        ]),
+        picker.el,
+        el('div', { class: 'srow-sub', text: t('settings.metaLangSub') }),
+      ]),
+      status
+    );
+
+    // Fill in the stored choice once the server answers; a failure leaves the
+    // default showing rather than blocking the rest of the page.
+    api
+      .metadataLanguage()
+      .then((res) => {
+        if (res && res.language) picker.set(res.language);
+      })
+      .catch(() => { /* offline / error — keep the default */ });
+  }
+
   const kodiSection = buildKodiSettings(api);
 
   // ------ Tabbed layout (chips) -----------------------------------------
@@ -952,7 +1020,7 @@ export default async function Settings(container) {
   const wrapPanel = (...sections) => el('div', { class: 'settings-panel' }, sections);
   const TAB_DEFS = [
     { key: 'general', label: t('settings.tab.general'), panel: wrapPanel(appearanceSection, installSection, notificationsSection) },
-    { key: 'library', label: t('settings.tab.library'), panel: wrapPanel(listsSection, backupSection, importSection) },
+    { key: 'library', label: t('settings.tab.library'), panel: wrapPanel(metadataSection, listsSection, backupSection, importSection) },
     { key: 'kodi', label: 'Kodi', panel: wrapPanel(kodiSection) },
     { key: 'advanced', label: t('settings.tab.advanced'), panel: wrapPanel(usageSection, cacheSection) },
     // Account chip stays hidden until authStatus confirms a login is enabled.

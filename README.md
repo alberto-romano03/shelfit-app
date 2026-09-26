@@ -165,9 +165,13 @@ _Screenshots are being retaken against a demo library and will land here shortly
 ### Languages & theming
 
 - Full **English and Italian** UI, auto-detected from the browser on first run
-  and switchable in Settings → General with no reload. Only the interface is
-  translated — TMDB titles, overviews and your own notes stay as they are;
-  dates, numbers and plurals follow the chosen locale.
+  and switchable in Settings → General with no reload. Dates, numbers and
+  plurals follow the chosen locale; your own notes stay as you typed them.
+- A separate **metadata language** (Settings → Library) decides the language
+  shelfIt asks TMDB for — titles, plots, taglines and episode names. Changing it
+  re-downloads the metadata for every title you have, so the whole library
+  switches over at once. English by default; an existing library keeps Italian
+  until you choose otherwise.
 - **System / dark / light** theme. *System* follows the OS preference live, and
   the browser theme colour follows along. A quick flip button on the home cover
   pins the opposite of whatever is currently showing.
@@ -671,7 +675,7 @@ enabled.
 | Tab | Sections |
 | --- | --- |
 | **General** | *Appearance* — language, theme, snow effect, vibration. *Install* — Add to Home Screen. *Notifications* — enable, plus a test notification. |
-| **Library** | *Lists* — create / rename / delete custom lists. *Backup* — XML export and import. *Import from TV Time*. |
+| **Library** | *Metadata language* — the language TMDB metadata is fetched in (English / Italian). *Lists* — create / rename / delete custom lists. *Backup* — XML export and import. *Import from TV Time*. |
 | **Kodi** | Instances (add, name, icon, test, activate), the master enable toggle, and **Sync now**. |
 | **Advanced** | *API Usage* — monthly budget and usage per API, with a session-only bypass. *Cache* — scan size per folder, refresh ongoing series, clear all media cache (confirm-gated). |
 | **Account** | Sign out, **Recent access**, **Sign out of all devices**, and **Magic Links**. |
