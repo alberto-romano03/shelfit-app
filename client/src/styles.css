@@ -11,6 +11,10 @@
   --danger: #e5484d;
   --border: rgba(255, 255, 255, 0.08);
   --shadow: rgba(0, 0, 0, 0.5);
+  /* Hairline around the printer's paper strip (.pos-paper). Dark theme: the
+     paper already stands out on black, so the edge only needs to be a shade
+     below it. Light theme: this is what makes the strip visible at all. */
+  --paper-edge: rgba(0, 0, 0, 0.35);
   /* 60, not 56: the tab glyphs and labels each went up a step, and the four
      extra pixels keep the room above the icon that the taller content would
      otherwise have eaten. Every "clear the navbar" calc reads this one number. */
@@ -93,6 +97,7 @@
   --danger: #d33;
   --border: rgba(0, 0, 0, 0.1);
   --shadow: rgba(0, 0, 0, 0.15);
+  --paper-edge: #d5d2ca;
 }
 
 /* System theme (Settings → Appearance → "System"): when the user has NOT pinned a
@@ -114,6 +119,7 @@
     --danger: #d33;
     --border: rgba(0, 0, 0, 0.1);
     --shadow: rgba(0, 0, 0, 0.15);
+    --paper-edge: #d5d2ca;
   }
   :root:not([data-theme='dark']) .selpill-select {
     color-scheme: light;
@@ -2320,6 +2326,15 @@ textarea.note-sheet-input:focus {
 @media (hover: hover) and (pointer: fine) {
   .railway-arrow {
     display: flex;
+  }
+  /* Mandatory snapping is for the touch drag. With a mouse the arrows drive the
+     scroll, and the browser re-snapped every programmatic scrollTo() back to the
+     nearest stop — the arrows appeared to do nothing. It also parked the scroller
+     a few px off zero on load, which kept the "scroll left" arrow visible at the
+     very start. Same query as the arrows, so snapping is off exactly where they
+     are shown. */
+  .railway-scroller {
+    scroll-snap-type: none;
   }
 }
 /* What's Next vertical rhythm: keep the "episode info → Up Next" gap tight (to
@@ -7291,8 +7306,19 @@ textarea.notes:focus,
   width: 60%; /* narrower than the slot → looks fed through it */
   height: 52px;
   margin: -8px auto 0; /* tuck the top right up to the slot line */
-  background: #f6f3ea;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
+  background: #fffdf6;
+  /* drop-shadow, not box-shadow: clip-path clips the element's own box shadow
+     away, so the strip had no edge at all — invisible against the light theme's
+     near-white background. A filter is applied AFTER the clip, so it follows the
+     torn silhouette. Four 1px offsets draw a thin light-grey border around that
+     silhouette (a real `border` would be cut apart by the zigzag), and the last
+     shadow keeps the paper lifted off the page. */
+  filter:
+    drop-shadow(1px 0 0 var(--paper-edge))
+    drop-shadow(-1px 0 0 var(--paper-edge))
+    drop-shadow(0 1px 0 var(--paper-edge))
+    drop-shadow(0 -1px 0 var(--paper-edge))
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.16));
   /* Torn thermal-paper bottom edge (pure CSS zigzag). */
   clip-path: polygon(
     0% 0%, 100% 0%,
@@ -8380,8 +8406,9 @@ textarea.notes:focus,
 }
 .wall-section .section-title {
   margin: 0 0 18px;
-  /* Small shadow so the title stays legible over the wall texture. */
+  /* Small shadow so the title stays legible over the wall texture.
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+  */
 }
 .wall-row {
   display: flex;

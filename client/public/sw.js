@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v71'; // bumped: metadata-language setting in Library settings
+const CACHE = 'shelfit-shell-v72'; // bumped: horizon arrow fix + visible receipt strip
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

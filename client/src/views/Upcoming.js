@@ -299,24 +299,46 @@ function buildHorizonRailway(horizon) {
     html: icons.back, // flipped horizontally via CSS
   });
 
+  const maxScroll = () => Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+
   function updateArrows() {
-    const maxScroll = scroller.scrollWidth - scroller.clientWidth;
+    const max = maxScroll();
     const x = scroller.scrollLeft;
-    leftBtn.classList.toggle('is-hidden', x <= 1);
-    rightBtn.classList.toggle('is-hidden', x >= maxScroll - 1);
+    leftBtn.classList.toggle('is-hidden', x <= 2);
+    rightBtn.classList.toggle('is-hidden', x >= max - 2);
   }
   scroller.addEventListener('scroll', updateArrows, { passive: true });
+  // The railway is as wide as the window, so a resize changes how much of the
+  // track fits and therefore which arrows belong on screen. Observed on the
+  // scroller rather than bound to window.resize: this node is retained and
+  // re-attached across navigations (upcomingDom), so there is no teardown point
+  // for a window listener — the observer simply goes away with the element.
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(updateArrows).observe(scroller);
+  }
 
+  // Move by roughly a viewport at a time — the desktop railway shows several
+  // stops at once, so advancing to "the next stop past the centre" barely moved
+  // anything. The landing position is aligned to a stop's left edge (allowing for
+  // the 16px mask fade) so the railway never comes to rest mid-title, and always
+  // travels at least one stop.
+  const EDGE_INSET = 16;
   function scrollToDir(dir) {
-    const stops = [...track.querySelectorAll('.railway-stop')];
-    const centers = stops.map((s) => s.offsetLeft + s.offsetWidth / 2);
-    const viewCenter = scroller.scrollLeft + scroller.clientWidth / 2;
-    const target =
-      dir > 0
-        ? centers.find((c) => c > viewCenter + 4)
-        : [...centers].reverse().find((c) => c < viewCenter - 4);
-    if (target == null) return;
-    scroller.scrollTo({ left: Math.max(0, target - scroller.clientWidth / 2), behavior: 'smooth' });
+    const max = maxScroll();
+    const here = scroller.scrollLeft;
+    const edges = [...track.querySelectorAll('.railway-stop')].map((s) =>
+      Math.min(max, Math.max(0, s.offsetLeft - EDGE_INSET))
+    );
+    const desired = Math.min(max, Math.max(0, here + dir * scroller.clientWidth * 0.8));
+    // Only stops we would actually travel to, so a click can never stand still.
+    const ahead = dir > 0 ? edges.filter((e) => e > here + 1) : edges.filter((e) => e < here - 1);
+    let target;
+    if (desired <= 0 || desired >= max || !ahead.length) {
+      target = dir > 0 ? max : 0; // ran out of stops — finish at the end
+    } else {
+      target = ahead.reduce((best, e) => (Math.abs(e - desired) < Math.abs(best - desired) ? e : best));
+    }
+    scroller.scrollTo({ left: target, behavior: 'smooth' });
   }
   leftBtn.addEventListener('click', () => scrollToDir(-1));
   rightBtn.addEventListener('click', () => scrollToDir(1));
