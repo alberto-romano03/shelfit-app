@@ -487,7 +487,7 @@ export default async function Home(container) {
         <span class="pos-label">${t('home.receiptLabel')}</span>
         <span class="pos-slot" aria-hidden="true"></span>
       </span>
-      <span class="pos-paper" aria-hidden="true"></span>`,
+      <span class="pos-paper" aria-hidden="true"><span class="pos-paper-sheet"></span></span>`,
   });
 
   // --- The Desk ------------------------------------------------------------

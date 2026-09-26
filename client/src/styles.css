@@ -11,10 +11,15 @@
   --danger: #e5484d;
   --border: rgba(255, 255, 255, 0.08);
   --shadow: rgba(0, 0, 0, 0.5);
-  /* Hairline around the printer's paper strip (.pos-paper). Dark theme: the
-     paper already stands out on black, so the edge only needs to be a shade
-     below it. Light theme: this is what makes the strip visible at all. */
-  --paper-edge: rgba(0, 0, 0, 0.35);
+  /* Border around the POS printer's paper strip (.pos-paper). Dark theme: the
+     paper already stands out on black, so the rim only has to stay out of the
+     way. Light theme: this is what makes the strip visible at all. Distinct
+     from the cinema ticket's own --paper-edge, which is scoped to .cine-ticket.
+     The shadow below it is a whole filter list, not a colour, because the light
+     theme needs two layers to lift the strip off a near-white page while the
+     dark theme only needs one (a black shadow on black does nothing anyway). */
+  --pos-paper-edge: #2a2a2a;
+  --pos-paper-shadow: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.16));
   /* 60, not 56: the tab glyphs and labels each went up a step, and the four
      extra pixels keep the room above the icon that the taller content would
      otherwise have eaten. Every "clear the navbar" calc reads this one number. */
@@ -97,7 +102,9 @@
   --danger: #d33;
   --border: rgba(0, 0, 0, 0.1);
   --shadow: rgba(0, 0, 0, 0.15);
-  --paper-edge: #d5d2ca;
+  --pos-paper-edge: #c0bcb4;
+  --pos-paper-shadow: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.18))
+    drop-shadow(0 12px 22px rgba(0, 0, 0, 0.26));
 }
 
 /* System theme (Settings → Appearance → "System"): when the user has NOT pinned a
@@ -119,7 +126,9 @@
     --danger: #d33;
     --border: rgba(0, 0, 0, 0.1);
     --shadow: rgba(0, 0, 0, 0.15);
-    --paper-edge: #d5d2ca;
+    --pos-paper-edge: #c0bcb4;
+    --pos-paper-shadow: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.18))
+      drop-shadow(0 12px 22px rgba(0, 0, 0, 0.26));
   }
   :root:not([data-theme='dark']) .selpill-select {
     color-scheme: light;
@@ -7298,7 +7307,17 @@ textarea.notes:focus,
 }
 /* --- Blank receipt strip emerging from the slot (top tucked behind the body,
    so it appears to come out of the slot on the bottom edge). display:block is
-   required — as a <span> it would be inline and collapse to zero size. --- */
+   required — as a <span> it would be inline and collapse to zero size.
+
+   The strip is TWO boxes, one inside the other, because the paper needs a
+   visible border and neither of the usual tools can give it one: `border` and
+   `box-shadow` are both cut away by the clip-path that makes the torn edge, and
+   chained drop-shadows do not compound into a ring (each stage filters the
+   previous stage's silhouette, so only the last offset survives). So the OUTER
+   box is the border — a solid rectangle of --pos-paper-edge with the torn edge cut
+   out of it — and .pos-paper-sheet sits 1px inside it with the same cut, leaving
+   an even 1px rim all the way round, torn bottom included. Without it the strip
+   is invisible against the light theme's near-white page. --- */
 .pos-paper {
   display: block;
   position: relative;
@@ -7306,21 +7325,13 @@ textarea.notes:focus,
   width: 60%; /* narrower than the slot → looks fed through it */
   height: 52px;
   margin: -8px auto 0; /* tuck the top right up to the slot line */
-  background: #fffdf6;
-  /* drop-shadow, not box-shadow: clip-path clips the element's own box shadow
-     away, so the strip had no edge at all — invisible against the light theme's
-     near-white background. A filter is applied AFTER the clip, so it follows the
-     torn silhouette. Four 1px offsets draw a thin light-grey border around that
-     silhouette (a real `border` would be cut apart by the zigzag), and the last
-     shadow keeps the paper lifted off the page. */
-  filter:
-    drop-shadow(1px 0 0 var(--paper-edge))
-    drop-shadow(-1px 0 0 var(--paper-edge))
-    drop-shadow(0 1px 0 var(--paper-edge))
-    drop-shadow(0 -1px 0 var(--paper-edge))
-    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.16));
-  /* Torn thermal-paper bottom edge (pure CSS zigzag). */
-  clip-path: polygon(
+  background: var(--pos-paper-edge);
+  /* drop-shadow, not box-shadow: a box-shadow is clipped away with everything
+     else outside the polygon, while a filter follows the torn silhouette. */
+  filter: var(--pos-paper-shadow);
+  /* Torn thermal-paper bottom edge (pure CSS zigzag). Held in a custom property
+     so the sheet inside can be cut with the exact same shape. */
+  --torn-edge: polygon(
     0% 0%, 100% 0%,
     100% calc(100% - 5px),
     95% 100%, 90% calc(100% - 5px), 85% 100%, 80% calc(100% - 5px),
@@ -7329,10 +7340,23 @@ textarea.notes:focus,
     35% 100%, 30% calc(100% - 5px), 25% 100%, 20% calc(100% - 5px),
     15% 100%, 10% calc(100% - 5px), 5% 100%, 0% calc(100% - 5px)
   );
+  clip-path: var(--torn-edge);
   /* Hidden (tucked up behind the slot) until the widget scrolls into view; then
      the `.printed` class slides it down out of the slot, once. */
   transform: translateY(-44px);
   transition: transform 1.05s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* The paper itself, inset by the 1px border on every side except the top — that
+   edge is tucked behind the printer body, and a rim there would read as a line
+   across the slot. */
+.pos-paper-sheet {
+  position: absolute;
+  top: 0;
+  right: 1px;
+  bottom: 1px;
+  left: 1px;
+  background: #fffdf6;
+  clip-path: var(--torn-edge);
 }
 .pos-printer.printed .pos-paper {
   transform: translateY(0); /* printed out, resting */
