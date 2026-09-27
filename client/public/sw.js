@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v79'; // bumped: versioned custom image urls
+const CACHE = 'shelfit-shell-v81'; // bumped: bigger modal logo, preloaded on detail
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

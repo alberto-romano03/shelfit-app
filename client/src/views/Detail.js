@@ -531,6 +531,10 @@ export default async function Detail(container, params) {
     if ('disabled' in node) node.disabled = true;
   }
 
+  // The options modal's heading uses the title's clear logo; warm it now so the
+  // modal never has to wait for it (see preloadLogo).
+  preloadLogo(d);
+
   // --- Hero + back ---
   const hero = el('div', { class: 'detail-hero' });
   setBg(hero, d.backdrop_url);
@@ -1175,6 +1179,50 @@ function openAddToListSheet(d) {
 }
 
 // --- "···" menu -----------------------------------------------------------
+// The options modal's heading: the title's clear logo when Fanart.tv has one,
+// otherwise the plain text title. The text is what renders first and the logo
+// fades in over it only once it has actually loaded, so a title with no logo
+// never flashes an empty box. Both live in a fixed-height row, so the swap
+// cannot move the bento cells below.
+function logoUrl(d) {
+  return withBase(`/api/logo/${d.tmdb_id}?type=${d.type}`);
+}
+
+// Warm the logo as soon as the detail page opens, so the options modal has it in
+// the browser cache the moment it is built and the heading is right on the first
+// frame instead of fading in a beat later. First visit to a title is also what
+// makes the server fetch and cache it; after that both caches answer instantly.
+// Fire and forget: a miss is a 404 and simply leaves the text title in place.
+function preloadLogo(d) {
+  if (!d || !d.tmdb_id) return;
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = logoUrl(d);
+}
+
+function menuHeading(d) {
+  const text = el('h3', { class: 'menu-title-text', text: d.title_it });
+  const head = el('div', { class: 'menu-title' }, [text]);
+
+  // Decorative: the <h3> is only faded out, not removed, so it stays the
+  // accessible name and the title is not announced twice.
+  const logo = el('img', {
+    class: 'menu-title-logo',
+    alt: '',
+    'aria-hidden': 'true',
+    src: logoUrl(d),
+  });
+  // A 404 means the title has no logo, which is the common case; nothing is
+  // logged and nothing changes on screen.
+  logo.addEventListener('error', () => logo.remove());
+  logo.addEventListener('load', () => head.classList.add('has-logo'));
+  head.append(logo);
+  // Already in the browser cache from preloadLogo(): mark it before the row is
+  // ever painted, so the logo is simply there rather than transitioning in.
+  if (logo.complete && logo.naturalWidth > 0) head.classList.add('has-logo');
+  return head;
+}
+
 function openMenu(d, reload) {
   openModal((modal, close) => {
     // Same bento language as the status selector: each action is a cell with a
@@ -1318,7 +1366,7 @@ function openMenu(d, reload) {
     grid.append(favCell);
 
     modal.append(
-      el('h3', { text: d.title_it }),
+      menuHeading(d),
       grid,
       el('hr', { class: 'status-sep' }),
       el('div', { class: 'modal-actions' }, [

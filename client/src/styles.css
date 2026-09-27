@@ -9797,3 +9797,54 @@ textarea.notes:focus,
   animation: imgflowSpin 0.7s linear infinite;
 }
 @keyframes imgflowSpin { to { transform: rotate(360deg); } }
+
+/* ============== Options modal heading (clear logo or text) ==============
+   One fixed-height row holding both the text title and, when Fanart.tv has one,
+   the title's clear logo. Fixed height because the logo arrives asynchronously:
+   if the row sized to its content the bento cells below would jump the moment it
+   loaded. The text is laid out normally and the logo is absolutely positioned
+   over it, so only one is ever visible and neither affects layout.
+
+   ALIGNMENT: left, matching the text title it replaces and every other modal
+   heading in the app. To centre it instead, change `align-items` and the logo's
+   `left` below to `center` / `0; right: 0; margin: 0 auto`. */
+.menu-title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  /* The logo is the heading, so it gets real presence; the row is fixed at the
+     logo's maximum so the text variant occupies exactly the same space. Raise or
+     lower both numbers together. */
+  height: 68px;
+  margin-bottom: 14px;
+}
+.menu-title-text {
+  margin: 0;
+  font-size: 18px;
+  /* A long title stays on one line rather than growing the fixed-height row. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity var(--dur-short) var(--ease-state);
+}
+.menu-title.has-logo .menu-title-text {
+  opacity: 0;
+}
+.menu-title-logo {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  max-height: 68px;
+  /* A very wide logo gives up height rather than running past the sheet. */
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  object-position: left center;
+  opacity: 0;
+  transition: opacity var(--dur-medium) var(--ease-out);
+}
+.menu-title.has-logo .menu-title-logo {
+  opacity: 1;
+}

@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { CACHE_DIR } from '../config.js';
-import { ensureFanartDisc } from '../fanart.js';
+import { ensureFanartDisc, ensureFanartLogo } from '../fanart.js';
 import { ensureAsset } from '../cache.js';
 
 // GET /api/fanart/:tmdbId?type=movie|show
@@ -62,5 +62,39 @@ export default async function fanartRoutes(fastify) {
 
     reply.code(404).header('X-Fanart', 'miss');
     return { error: 'no image available' };
+  });
+
+  // GET /api/logo/:tmdbId?type=movie|show
+  // The title's clear logo, used as the options modal's heading. 404 when the
+  // title has none, which is what tells the client to keep the text title.
+  // Unlike the disc there is no fallback image: a wrong picture in the heading
+  // would be worse than the text.
+  fastify.get('/api/logo/:tmdbId', async (request, reply) => {
+    const { tmdbId } = request.params;
+    const type = request.query.type === 'show' ? 'show' : 'movie';
+    if (!/^\d+$/.test(tmdbId)) {
+      reply.code(400);
+      return { error: 'invalid tmdb id' };
+    }
+
+    let result;
+    try {
+      result = await ensureFanartLogo(type, tmdbId, fastify.log);
+    } catch {
+      result = { hit: false, path: null };
+    }
+
+    if (result.hit && result.path && fs.existsSync(result.path)) {
+      const ext = path.extname(result.path).toLowerCase();
+      const mime = ext === '.webp' ? 'image/webp' : 'image/png';
+      reply
+        .header('Content-Type', mime)
+        .header('Cache-Control', 'public, max-age=31536000, immutable')
+        .header('X-Fanart', 'hit');
+      return reply.send(fs.createReadStream(result.path));
+    }
+
+    reply.code(404).header('X-Fanart', 'miss');
+    return { error: 'no logo available' };
   });
 }
