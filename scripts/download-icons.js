@@ -45,6 +45,10 @@ const ICONS = [
   'list-plus', // Add to list
   'refresh-cw', // Refresh metadata
   'eraser', // Clear cache
+  'images', // Customize metadata (the custom-artwork flow)
+  'image-up', // …and its "from your device" source
+  'zoom-out', // crop tool zoom slider ends
+  'zoom-in',
   'trash-2', // Remove from library
   // Cinema tickets (watched-in-cinema flag + ticket collection).
   'ticket', // Watched in Cinema button + ticket modal empty state

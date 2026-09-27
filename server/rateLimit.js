@@ -36,6 +36,11 @@ const RULES = [
   // Image upload.
   { method: 'POST', path: '/api/profile/photo', max: 10, windowMs: 60 * 60 * 1000 },
   { method: 'POST', id: 'person-photo', match: (p) => p.startsWith('/api/persons/') && p.endsWith('/photo'), max: 10, windowMs: 60 * 60 * 1000 },
+  // Custom artwork: the browse call hits TMDB or Fanart.tv, the save writes a
+  // megabyte-scale body through cwebp. Generous enough to set all three slots on
+  // several titles in a sitting, tight enough to bound both costs.
+  { method: 'GET', id: 'image-candidates', match: (p) => /^\/api\/media\/[^/]+\/\d+\/images\/[a-z]+$/.test(p), max: 60, windowMs: 60 * 60 * 1000 },
+  { method: 'PUT', id: 'image-set', match: (p) => /^\/api\/media\/[^/]+\/\d+\/images\/[a-z]+$/.test(p), max: 40, windowMs: 60 * 60 * 1000 },
 ];
 
 // Blanket default for every other /api/* request.

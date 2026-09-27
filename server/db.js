@@ -233,6 +233,13 @@ ensureColumn('items', 'watched_in_cinema', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('items', 'cinema_date', 'TEXT'); // ISO date 'YYYY-MM-DD', nullable
 ensureColumn('items', 'cinema_time', 'TEXT'); // 'HH:MM', nullable
 ensureColumn('items', 'cinema_name', 'TEXT'); // free text / from data/cinemas.txt, nullable
+// Artwork the user chose themselves (Detail options, "Change images"). Each
+// column holds the timestamp that slot was overridden; NULL means the image
+// still comes from TMDB / Fanart.tv and is replaced on every refresh. See
+// server/customImages.js.
+ensureColumn('items', 'custom_poster', 'TEXT');
+ensureColumn('items', 'custom_backdrop', 'TEXT');
+ensureColumn('items', 'custom_fanart', 'TEXT');
 // Denormalized copies of year + genres (genres as a JSON array string) so the
 // library list endpoint doesn't read every meta.json from disk. Backfilled
 // lazily from the cache on first read; NULL means "not yet populated".

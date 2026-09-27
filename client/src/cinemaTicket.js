@@ -184,11 +184,8 @@ export function renderTicket(ticketData, { onDateChange, onTimeChange, onCinemaC
     el('div', { class: 'cine-body' }, [title, adminRow, dateTimeRow, cinemaRow]),
   ]);
 
-  // --- Tear line (dashed rule + two semicircular notches biting the edges) ---
-  const tear = el('div', { class: 'cine-tear' }, [
-    el('span', { class: 'cine-notch cine-notch-left' }),
-    el('span', { class: 'cine-notch cine-notch-right' }),
-  ]);
+  // --- Tear line (dashed rule; the edge notches are masked out in CSS) ---
+  const tear = el('div', { class: 'cine-tear' });
 
   // --- Bottom stub (CSS-only barcode + decorative code) ---
   const stub = el('div', { class: 'cine-stub' }, [

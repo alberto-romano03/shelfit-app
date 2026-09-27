@@ -18,6 +18,7 @@ import {
 import { scheduleStatsRecompute } from '../stats.js';
 import { clientAbortSignal } from '../http.js';
 import { hasFanartDiscCached } from '../fanart.js';
+import { imageVersion } from '../customImages.js';
 
 const VALID_STATUS = [
   'watching',
@@ -30,6 +31,19 @@ const VALID_STATUS = [
 function assetBase(type, tmdbId) {
   const folder = type === 'movie' ? 'movies' : 'shows';
   return `/assets/${folder}/${tmdbId}`;
+}
+
+// Poster and backdrop URLs for a row, carrying a version when the user has
+// replaced that image. The file keeps its name, so without this the browser goes
+// on showing the copy it already has (assets are served `immutable`).
+function itemImageUrls(row) {
+  const base = assetBase(row.type, row.tmdb_id);
+  const pv = imageVersion(row, 'poster');
+  const bv = imageVersion(row, 'backdrop');
+  return {
+    poster_url: `${base}/poster.webp${pv ? `?v=${pv}` : ''}`,
+    backdrop_url: `${base}/backdrop.webp${bv ? `?v=${bv}` : ''}`,
+  };
 }
 
 // Parse a query-string integer, clamped to [min, max], falling back to `def`
@@ -153,7 +167,6 @@ function itemYearGenres(row) {
 // row. `lastWatched` is a Map(item_id -> {season,episode}) built once per request
 // so the list doesn't issue a per-show query (avoids the N+1).
 function enrichListItem(row, lastWatched) {
-  const base = assetBase(row.type, row.tmdb_id);
   const { year, genres } = itemYearGenres(row);
   const item = {
     id: row.id,
@@ -170,8 +183,7 @@ function enrichListItem(row, lastWatched) {
     updated_at: row.updated_at,
     year,
     genres,
-    poster_url: `${base}/poster.webp`,
-    backdrop_url: `${base}/backdrop.webp`,
+    ...itemImageUrls(row),
     last_watched: null,
   };
   if (row.type === 'show') {
@@ -415,7 +427,6 @@ export default async function mediaRoutes(fastify) {
       }
     }
 
-    const base = assetBase(row.type, row.tmdb_id);
     const result = {
       id: row.id,
       tmdb_id: row.tmdb_id,
@@ -437,8 +448,10 @@ export default async function mediaRoutes(fastify) {
       watch_date: row.watch_date || null,
       added_at: row.added_at,
       updated_at: row.updated_at,
-      poster_url: `${base}/poster.webp`,
-      backdrop_url: `${base}/backdrop.webp`,
+      ...itemImageUrls(row),
+      // The disc art lives behind /api/fanart, served `immutable` too, so the
+      // client appends this when the user has replaced it.
+      fanart_v: imageVersion(row, 'fanart'),
       // Whether a real Fanart disc is cached (movies only); else the client uses
       // the poster-based disc rendering. Never triggers a network fetch.
       disc_available: row.type === 'movie' && hasFanartDiscCached(row.tmdb_id),

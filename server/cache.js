@@ -11,6 +11,7 @@ import {
   downloadImage,
 } from './tmdb.js';
 import { toWebp, throwIfAborted } from './images.js';
+import { customSlots, clearAllCustom } from './customImages.js';
 import { getTmdbLanguage } from './language.js';
 import { ensureCollection } from './collections.js';
 import { imageRamCache } from './imageRamCache.js';
@@ -332,10 +333,17 @@ export async function cacheMovie(tmdbId, { force = false, signal } = {}) {
   // concurrently instead of three serial round-trips (poster/backdrop hit the
   // TMDB CDN and have no rate gate). Roughly halves the image latency of every
   // movie add / lazy rebuild.
+  // Artwork the user chose themselves is never overwritten by a refresh (see
+  // customImages.js); the meta always refreshes.
+  const custom = customSlots('movie', tmdbId);
   await Promise.all([
     writeJson(metaPath('movie', tmdbId), meta),
-    saveImage(dir, 'poster.webp', IMG_SIZES.poster, meta.poster_path, { signal, maxWidth: 500 }),
-    saveImage(dir, 'backdrop.webp', IMG_SIZES.backdrop, meta.backdrop_path, { signal, maxWidth: 900 }),
+    custom.poster
+      ? null
+      : saveImage(dir, 'poster.webp', IMG_SIZES.poster, meta.poster_path, { signal, maxWidth: 500 }),
+    custom.backdrop
+      ? null
+      : saveImage(dir, 'backdrop.webp', IMG_SIZES.backdrop, meta.backdrop_path, { signal, maxWidth: 900 }),
   ]);
   return meta;
 }
@@ -367,10 +375,15 @@ export async function cacheShow(tmdbId, { force = false, signal } = {}) {
   const raw = await getTv(tmdbId, { signal });
   const meta = normalizeShow(raw);
   const dir = itemDir('show', tmdbId);
+  const custom = customSlots('show', tmdbId);
   await Promise.all([
     writeJson(metaPath('show', tmdbId), meta),
-    saveImage(dir, 'poster.webp', IMG_SIZES.poster, meta.poster_path, { signal, maxWidth: 500 }),
-    saveImage(dir, 'backdrop.webp', IMG_SIZES.backdrop, meta.backdrop_path, { signal, maxWidth: 900 }),
+    custom.poster
+      ? null
+      : saveImage(dir, 'poster.webp', IMG_SIZES.poster, meta.poster_path, { signal, maxWidth: 500 }),
+    custom.backdrop
+      ? null
+      : saveImage(dir, 'backdrop.webp', IMG_SIZES.backdrop, meta.backdrop_path, { signal, maxWidth: 900 }),
   ]);
 
   for (const s of meta.seasons) {
@@ -647,6 +660,9 @@ export function clearItemCache(type, tmdbId) {
   if (fs.existsSync(dir)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+  // The user's own artwork lived in that directory, so the override flags would
+  // now claim images that no longer exist.
+  clearAllCustom(type, tmdbId);
   imageRamCache.invalidatePrefix(dir); // drop any RAM copies for this title
   invalidateMetaPrefix(dir); // …and its parsed meta
   invalidateStats();

@@ -93,6 +93,78 @@ function pickTvAsset(data) {
   return null;
 }
 
+// Where a title's disc art lives once cached. The "Customize metadata" flow
+// writes the user's own disc here, so /api/fanart/:tmdbId serves it unchanged.
+export function fanartImagePath(tmdbId) {
+  return webpPath(tmdbId);
+}
+
+// Drop every cached disc file for a title, including the "none found" marker, so
+// the next request re-fetches from Fanart.tv. Used when a custom disc is reset.
+export async function clearFanartCache(tmdbId) {
+  for (const p of [webpPath(tmdbId), rawPath(tmdbId), noneMarker(tmdbId)]) {
+    await fsp.rm(p, { force: true }).catch(() => {});
+  }
+}
+
+// Every disc / label Fanart.tv holds for a title, for the "Customize metadata"
+// picker. Same sources and the same ordering ensureFanartDisc picks its single
+// winner from, only returned in full rather than reduced to sorted[0].
+// Returns [] when the key is missing or the monthly budget is spent.
+export async function listFanartCandidates(type, tmdbId, logger) {
+  if (!FANART_API_KEY || !allowed('fanart')) return [];
+  try {
+    let data = null;
+    if (type === 'movie') {
+      record('fanart');
+      const res = await fetch(`${FANART_BASE}/movies/${tmdbId}?api_key=${FANART_API_KEY}`, {
+        signal: AbortSignal.timeout(20000),
+      });
+      if (res.ok) data = await res.json();
+    } else {
+      let tvdbId = null;
+      try {
+        const ext = await tmdbGet(`/tv/${tmdbId}/external_ids`);
+        tvdbId = ext && ext.tvdb_id ? ext.tvdb_id : null;
+      } catch {
+        /* ignore - no external id, no candidates */
+      }
+      if (tvdbId) {
+        record('fanart');
+        const res = await fetch(`${FANART_BASE}/tv/${tvdbId}?api_key=${FANART_API_KEY}`, {
+          signal: AbortSignal.timeout(20000),
+        });
+        if (res.ok) data = await res.json();
+      }
+    }
+    if (!data) return [];
+
+    const keys =
+      type === 'movie'
+        ? ['moviedisc']
+        : ['tvthumb', 'hdclearart', 'clearart', 'hdtvlogo', 'clearlogo', 'tvposter'];
+    const out = [];
+    for (const key of keys) {
+      const arr = data[key];
+      if (!Array.isArray(arr)) continue;
+      for (const a of arr) {
+        if (a && a.url) out.push({ url: a.url, lang: a.lang || null, likes: parseInt(a.likes || '0', 10) });
+      }
+    }
+    // English first, then most-liked - the order ensureFanartDisc already uses.
+    out.sort((a, b) => {
+      const la = a.lang === 'en' ? 1 : 0;
+      const lb = b.lang === 'en' ? 1 : 0;
+      if (la !== lb) return lb - la;
+      return b.likes - a.likes;
+    });
+    return out.slice(0, 40);
+  } catch (err) {
+    if (logger) logger.warn(`fanart list failed for ${type} ${tmdbId}: ${err.message}`);
+    return [];
+  }
+}
+
 // Ensure a Fanart disc/label image is cached (compressed) for a title.
 // Returns { hit, path, kind }: kind 'disc' (round movie disc) or 'thumb' (tv).
 export async function ensureFanartDisc(type, tmdbId, logger) {

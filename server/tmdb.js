@@ -188,6 +188,18 @@ export async function getSeason(tmdbId, seasonNumber, { signal } = {}) {
 
 // Genre list for movies ('movie') or TV ('tv'). Fetched in en-US so the names
 // are stable for the mood→genre mapping.
+// Every poster / backdrop TMDB holds for a title, for the "Customize metadata"
+// picker. include_image_language keeps the chosen language first but never hides
+// the language-neutral artwork (`null`), which is most of what TMDB has.
+export async function getImages(kind, tmdbId, { signal } = {}) {
+  const lang = getTmdbLanguage().split('-')[0];
+  return tmdbGet(
+    `/${kind}/${tmdbId}/images`,
+    { include_image_language: `${lang},en,null` },
+    { signal }
+  );
+}
+
 export async function getGenres(kind, { signal } = {}) {
   const data = await tmdbGet(`/genre/${kind}/list`, { language: 'en-US' }, { signal });
   return data.genres || [];

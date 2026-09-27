@@ -90,7 +90,7 @@ function buildPages() {
       desc: 'showcase.p4.desc',
       viz: `<div class="sc-viz"><div class="sc-ticket">
         <div class="sc-tk-top"><div class="sc-tk-banner"></div><div class="sc-tk-body"><div class="sc-tk-title">Dune: Part Two</div></div></div>
-        <div class="sc-tk-tear"><span class="sc-tk-notch sc-l"></span><span class="sc-tk-notch sc-r"></span></div>
+        <div class="sc-tk-tear"></div>
         <div class="sc-tk-stub"><div class="sc-tk-barcode"></div></div>
       </div></div>`,
     },

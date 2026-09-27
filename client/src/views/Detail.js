@@ -11,6 +11,7 @@ import { createRatingControls } from '../ratingControls.js';
 import { createStatusSelect } from '../statusSelect.js';
 import { isKodiActive, matchKodi } from '../kodi.js';
 import { collapsibleText } from '../collapsibleText.js';
+import { openImagePicker } from '../imagePicker.js';
 import { withBase } from '../basePath.js';
 import { confetti } from '../confetti.js';
 import { t, locale, getLang } from '../i18n.js';
@@ -564,8 +565,10 @@ export default async function Detail(container, params) {
   // poster-disc fallback). Outer element handles the slide-up entrance; the inner
   // element carries the endless slow spin so the two transforms never conflict.
   const discSpin = el('div', { class: 'detail-disc-spin' });
+  // fanart_v changes when the user replaces the disc art; the route serves it
+  // immutable, so without it the browser keeps showing the copy it already has.
   const discSrc = d.disc_available
-    ? withBase(`/api/fanart/${d.tmdb_id}?type=${d.type}`)
+    ? withBase(`/api/fanart/${d.tmdb_id}?type=${d.type}${d.fanart_v ? `&v=${d.fanart_v}` : ''}`)
     : withBase(d.poster_url);
   discSpin.style.backgroundImage = `url("${discSrc}")`;
   if (!d.disc_available) {
@@ -1177,13 +1180,15 @@ function openMenu(d, reload) {
     // Same bento language as the status selector: each action is a cell with a
     // Lucide icon top-left and label bottom-left. Destructive actions carry a
     // muted-red tint (icon + label only, no filled background).
+    // Three even rows: the two metadata actions, the two destructive ones, then
+    // the two library ones (the favourite cell is appended after this list).
     const actions = [
       {
-        icon: 'list-plus',
-        label: t('detail.addToList'),
+        icon: 'images',
+        label: t('detail.customizeMetadata'),
         onClick: (_c, cl) => {
           cl();
-          openAddToListSheet(d);
+          openImagePicker(d, api, reload);
         },
       },
       {
@@ -1232,6 +1237,14 @@ function openMenu(d, reload) {
           }
         },
       },
+      {
+        icon: 'list-plus',
+        label: t('detail.addToList'),
+        onClick: (_c, cl) => {
+          cl();
+          openAddToListSheet(d);
+        },
+      },
     ];
 
     const grid = el('div', { class: 'status-bento menu-bento' });
@@ -1243,8 +1256,9 @@ function openMenu(d, reload) {
       cell.addEventListener('click', () => a.onClick(cell, close));
       grid.append(cell);
     });
-    // Odd count → the last cell spans the full width so the grid stays balanced.
-    if (actions.length % 2 === 1) grid.lastChild.classList.add('full');
+    // The favourite cell is appended below, so the row count is actions + 1. An
+    // odd total would leave a gap, and the favourite cell spans to close it; the
+    // five actions above plus the favourite already fill three even rows.
 
     // "The Wall" favourite toggle — one cell, movie OR show depending on what
     // this page is showing. Always full width, below Clear cache / Remove, in
@@ -1253,7 +1267,9 @@ function openMenu(d, reload) {
     let isFav = false;
     const favIcon = lucideIcon('star', 'status-ico');
     const favLabel = el('span', { class: 'status-cell-label' });
-    const favCell = el('button', { class: 'status-cell full status-cell--fav' }, [favIcon, favLabel]);
+    const favCell = el('button', {
+      class: 'status-cell status-cell--fav' + ((actions.length + 1) % 2 ? ' full' : ''),
+    }, [favIcon, favLabel]);
     const setFavText = d.type === 'movie' ? t('detail.setFavoriteFilm') : t('detail.setFavoriteSeries');
     // First paint is instant (nothing to crossfade FROM); every later toggle
     // crossfades both the label and the star ⇄ star-off mask.

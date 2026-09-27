@@ -7979,10 +7979,15 @@ textarea.notes:focus,
   --ink-soft: #857a68;
   --paper-edge: rgba(42, 36, 29, 0.16);
   width: min(300px, 78vw);
-  background: var(--paper);
+  /* No background of its own: .cine-top, .cine-tear and .cine-stub each paint the
+     paper, so the notches cut out of the tear are real holes. drop-shadow, not
+     box-shadow, for the same reason — a box-shadow is a rounded rectangle drawn
+     behind the whole card, so it would show THROUGH the notches; a filter follows
+     the notched silhouette instead. */
+  background: transparent;
   color: var(--ink);
   border-radius: 20px;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+  filter: drop-shadow(0 14px 17px rgba(0, 0, 0, 0.45));
   overflow: visible;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   user-select: none;
@@ -8008,7 +8013,7 @@ textarea.notes:focus,
   object-fit: cover;
   display: block;
 }
-.cine-body { padding: 14px 18px 18px; }
+.cine-body { padding: 14px 18px 10px; } /* 10, not 18: .cine-tear is 18px tall */
 .cine-title {
   font-size: 21px;
   font-weight: 800;
@@ -8121,28 +8126,42 @@ textarea.notes:focus,
 }
 .cine-star { color: #c9a227; display: inline-flex; }
 .cine-star svg { width: 18px; height: 18px; }
-/* Tear line: dashed rule across the full width with a semicircular notch bitten
-   from each edge (circles in the sheet background colour overlapping the edges). */
+/* Tear line: a full-width band of paper, one notch-diameter tall, with the dashed
+   rule across its middle and a half-disc MASKED OUT of each edge. The notches used
+   to be opaque circles painted in the sheet colour and laid over the card's edges;
+   over the card's shadow they read as two bright dots rather than as cuts. Masking
+   removes paper instead of covering it, so whatever is behind the ticket — shadow
+   included — shows through, and the card's drop-shadow follows the cut. */
 .cine-tear {
   position: relative;
-  height: 0;
-  border-top: 2px dashed var(--paper-edge);
-  margin: 0 14px;
-}
-.cine-notch {
-  position: absolute;
-  top: -9px;
-  width: 18px;
   height: 18px;
-  border-radius: 50%;
-  background: var(--surface); /* matches the sheet behind the ticket → looks cut */
+  background: var(--paper);
+  -webkit-mask-image:
+    radial-gradient(circle 9px at left center, transparent 0 9px, #000 9.5px),
+    radial-gradient(circle 9px at right center, transparent 0 9px, #000 9.5px);
+  mask-image:
+    radial-gradient(circle 9px at left center, transparent 0 9px, #000 9.5px),
+    radial-gradient(circle 9px at right center, transparent 0 9px, #000 9.5px);
+  /* Each layer is opaque except for its own circle, so they must INTERSECT —
+     the default (add) would union them back into a solid block. */
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
 }
-.cine-notch-left { left: -23px; }
-.cine-notch-right { right: -23px; }
+/* The rule itself, inset from both edges so it never reaches the notches. Kept as
+   a real dashed border so the dash rhythm matches every other dashed rule. */
+.cine-tear::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 50%;
+  margin-top: -1px;
+  border-top: 2px dashed var(--paper-edge);
+}
 .cine-stub {
   background: var(--paper);
   border-radius: 0 0 20px 20px;
-  padding: 16px 18px 18px;
+  padding: 8px 18px 18px;
   text-align: center;
 }
 /* CSS-only decorative barcode: a fixed repeating pattern of varying-width bars. */
@@ -9078,14 +9097,17 @@ textarea.notes:focus,
   --sc-ink: #2a241d;
   --sc-edge: rgba(42, 36, 29, 0.16);
   width: 176px;
-  background: var(--sc-paper);
+  /* Same construction as .cine-ticket: the parts paint the paper, the card casts a
+     drop-shadow so the masked notches stay empty. */
+  background: transparent;
   color: var(--sc-ink);
   border-radius: 16px;
   margin-bottom: 8px;
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  filter: drop-shadow(0 14px 16px rgba(0, 0, 0, 0.45));
   animation: sc-float 4.2s var(--ease-in-out) infinite;
 }
 .sc-tk-top {
+  background: var(--sc-paper);
   border-radius: 16px 16px 0 0;
   overflow: hidden;
 }
@@ -9100,7 +9122,7 @@ textarea.notes:focus,
   inset: 0;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), transparent 55%);
 }
-.sc-tk-body { padding: 13px 16px 15px; }
+.sc-tk-body { padding: 13px 16px 8px; } /* 8, not 15: .sc-tk-tear is 16px tall */
 .sc-tk-title {
   font-size: 17px;
   font-weight: 400;
@@ -9110,21 +9132,31 @@ textarea.notes:focus,
 }
 .sc-tk-tear {
   position: relative;
-  height: 0;
-  border-top: 2px dashed var(--sc-edge);
-  margin: 0 10px;
-}
-.sc-tk-notch {
-  position: absolute;
-  top: -8px;
-  width: 16px;
   height: 16px;
-  border-radius: 50%;
-  background: var(--surface);
+  background: var(--sc-paper);
+  -webkit-mask-image:
+    radial-gradient(circle 8px at left center, transparent 0 8px, #000 8.5px),
+    radial-gradient(circle 8px at right center, transparent 0 8px, #000 8.5px);
+  mask-image:
+    radial-gradient(circle 8px at left center, transparent 0 8px, #000 8.5px),
+    radial-gradient(circle 8px at right center, transparent 0 8px, #000 8.5px);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
 }
-.sc-tk-notch.sc-l { left: -18px; }
-.sc-tk-notch.sc-r { right: -18px; }
-.sc-tk-stub { padding: 15px 16px 17px; }
+.sc-tk-tear::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 50%;
+  margin-top: -1px;
+  border-top: 2px dashed var(--sc-edge);
+}
+.sc-tk-stub {
+  background: var(--sc-paper);
+  border-radius: 0 0 16px 16px;
+  padding: 8px 16px 17px;
+}
 .sc-tk-barcode {
   height: 42px;
   border-radius: 2px;
@@ -9393,3 +9425,375 @@ textarea.notes:focus,
   .sc-spark,
   .sc-kodi-logo { animation: none !important; }
 }
+
+/* ============== Customize metadata (custom poster / backdrop / disc) ==============
+   The flow in client/src/imagePicker.js. Everything structural (.modal, .btn,
+   .status-bento, .status-cell) is reused as-is; these are only the pieces that
+   have no equivalent yet. */
+
+/* --- Step machinery ---------------------------------------------------
+   One modal, several steps. The outgoing step fades out while the incoming one
+   fades in, over the same durations the app already uses for content swaps. */
+.imgflow { position: relative; }
+.imgflow-step { animation: imgflowIn var(--dur-medium) var(--ease-out); }
+.imgflow-step.is-leaving {
+  position: absolute;
+  inset: 0;
+  animation: imgflowOut var(--dur-short) var(--ease-in-out) forwards;
+  pointer-events: none;
+}
+@keyframes imgflowIn {
+  from { opacity: 0; transform: translateX(10px); }
+}
+@keyframes imgflowOut {
+  to { opacity: 0; transform: translateX(-10px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .imgflow-step,
+  .imgflow-step.is-leaving { animation: none; }
+}
+
+/* --- Step header: back chevron + title -------------------------------- */
+.imgflow-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.imgflow-back {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-pill);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+.imgflow-back svg { width: 18px; height: 18px; }
+/* The TMDB mark is a real logo, not a glyph, so it keeps its own colours. */
+.imgsrc-logo {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+}
+/* The native file input is only ever opened by its cell. */
+.imgsrc-file { display: none; }
+/* Nothing to show, or the provider errored. */
+.imgflow-empty {
+  padding: 26px 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.imgflow-title {
+  font-size: 17px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imgflow-sub {
+  margin: -8px 0 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* --- Type selector: three illustrated cells --------------------------- */
+.imgtype-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.imgtype-cell {
+  transition: background-color var(--dur-short) var(--ease-state),
+    border-color var(--dur-short) var(--ease-state);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--surface-elevated);
+  border: 1.5px solid transparent;
+}
+.imgtype-cell:active { border-color: var(--accent); }
+.imgtype-label { font-size: 13px; font-weight: 600; }
+.imgtype-state {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: -6px;
+}
+.imgtype-state.is-custom { color: var(--accent); font-weight: 600; }
+
+/* The illustrations sit in a fixed-height stage so the three cells line up
+   whatever their shape. Same flat, two-tone language as the showcase art. */
+.imgart {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.imgart-shape {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+}
+/* Poster - an upright 2:3 card with a sliver of title block at the foot. */
+.imgart-poster {
+  width: 40px;
+  height: 60px;
+  border-radius: 5px;
+  background: linear-gradient(150deg, #1f9e6e, #0a3f2c);
+}
+.imgart-poster::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 7px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.55);
+}
+/* Backdrop - a 16:9 frame with a horizon and a low sun, so it reads as a wide
+   scene rather than just a rectangle. */
+.imgart-backdrop {
+  width: 64px;
+  height: 36px;
+  border-radius: 5px;
+  background: linear-gradient(165deg, #d9453f 0%, #e8892f 58%, #f0bb45 100%);
+}
+.imgart-backdrop::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 13px;
+  /* Dark, not pale: the band has to hold against a bright sky. */
+  background: rgba(0, 0, 0, 0.28);
+}
+.imgart-backdrop::after {
+  content: '';
+  position: absolute;
+  right: 11px;
+  bottom: 15px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fff1c2;
+}
+/* Fanart - the disc: a filled circle with a hub hole, matching the round disc
+   art the detail page shows for owned titles. The one vibrant shape of the
+   three: a disc catches light all the way round, so the sheen turns. Three
+   hues, not a full spectrum. */
+.imgart-disc {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: conic-gradient(from 210deg, #6b4fbf, #2f6fa8, #0e7c6b, #6b4fbf);
+}
+.imgart-disc::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+}
+/* Reset-to-default: one full-width row per overridden type, under the grid.
+   Rendered only while an override exists. */
+.imgreset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 11px 12px;
+  border-radius: var(--r-md);
+  background: var(--surface-elevated);
+  font-size: 13px;
+  font-weight: 600;
+  color: color-mix(in srgb, #e5484d 62%, var(--text-secondary));
+}
+.imgreset-ico {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* --- Source selector -------------------------------------------------- */
+.imgsrc-grid { grid-template-columns: repeat(2, 1fr); }
+.imgsrc-grid .status-cell { grid-column: span 1; min-height: 96px; }
+
+/* --- TMDB results grid ------------------------------------------------ */
+.imgpick-grid {
+  display: grid;
+  gap: 8px;
+  max-height: 52vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  /* The cut-off row at the bottom is the only cue that the list scrolls (the
+     app hides scrollbars), so fade it out rather than slicing a poster in half
+     against a hard edge. Same technique as the What's Next railway. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent 100%);
+}
+.imgpick-grid::-webkit-scrollbar {
+  display: none;
+}
+.imgpick-grid--poster { grid-template-columns: repeat(3, 1fr); }
+.imgpick-grid--backdrop { grid-template-columns: repeat(2, 1fr); }
+.imgpick-grid--fanart { grid-template-columns: repeat(3, 1fr); }
+.imgpick-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  /* Only ever seen while the image loads: a reserved border would show as a
+     grey ring around every poster once it has. The press state is an outline,
+     which is drawn over the artwork and costs no layout. */
+  background: var(--surface-elevated);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: outline-color var(--dur-short) var(--ease-state);
+  height: 0; /* the shape comes from padding-bottom, per slot, below */
+}
+.imgpick-item:active { outline-color: var(--accent); }
+/* The cell's shape comes from a percentage padding, not from aspect-ratio: a
+   percentage padding always resolves against the cell's own width, so the height
+   is definite before anything is laid out or loaded. aspect-ratio has to be
+   resolved during grid row sizing, and where that does not happen the rows
+   collapse and the images shingle over one another. The image is then pinned to
+   the box it created. */
+.imgpick-item img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.imgpick-grid--poster .imgpick-item { padding-bottom: 150%; } /* 2:3 */
+.imgpick-grid--backdrop .imgpick-item { padding-bottom: 56.25%; } /* 16:9 */
+.imgpick-grid--fanart .imgpick-item {
+  padding-bottom: 100%; /* 1:1 */
+  border-radius: 50%;
+}
+
+/* --- Crop tool -------------------------------------------------------- */
+/* The crop FRAME is the viewport: it is locked to the target ratio and the
+   image is panned and zoomed behind it, so there is no second rectangle to
+   drag and the result is always exactly the ratio the slot needs. */
+.crop-stage {
+  position: relative;
+  /* Height-capped, not width-driven: the Confirm / Cancel pair must stay on
+     screen without scrolling the sheet, so the frame gives up width first.
+     --crop-ar is set per type when the step is built. */
+  aspect-ratio: var(--crop-ar);
+  width: min(100%, calc(42vh * var(--crop-ar)));
+  margin: 0 auto;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: #101012;
+  touch-action: none;
+  cursor: grab;
+}
+.crop-stage:active { cursor: grabbing; }
+.crop-stage canvas { display: block; width: 100%; height: 100%; }
+.crop-stage--round { border-radius: 50%; }
+/* Rule-of-thirds guides, faint, over the frame. */
+.crop-guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, transparent calc(33.333% - 1px), rgba(255, 255, 255, 0.28) calc(33.333% - 1px) 33.333%, transparent 33.333%),
+    linear-gradient(to right, transparent calc(66.666% - 1px), rgba(255, 255, 255, 0.28) calc(66.666% - 1px) 66.666%, transparent 66.666%),
+    linear-gradient(to bottom, transparent calc(33.333% - 1px), rgba(255, 255, 255, 0.28) calc(33.333% - 1px) 33.333%, transparent 33.333%),
+    linear-gradient(to bottom, transparent calc(66.666% - 1px), rgba(255, 255, 255, 0.28) calc(66.666% - 1px) 66.666%, transparent 66.666%);
+}
+.crop-hint {
+  margin: 10px 0 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.crop-zoom-ico {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  background-color: var(--text-secondary);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.crop-range {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--surface-elevated);
+}
+.crop-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.crop-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* --- Busy state (compress / save) ------------------------------------- */
+.imgflow-busy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 34px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.imgflow-spin {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--surface-elevated);
+  border-top-color: var(--accent);
+  animation: imgflowSpin 0.7s linear infinite;
+}
+@keyframes imgflowSpin { to { transform: rotate(360deg); } }

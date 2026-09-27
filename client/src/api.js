@@ -126,6 +126,7 @@ function buildApi(signal) {
     post: (url, body) => request('POST', url, body),
     patch: (url, body) => request('PATCH', url, body),
     del: (url, body) => request('DELETE', url, body),
+    put: (url, body) => request('PUT', url, body),
 
     // Convenience helpers
     search: (q, type) =>
@@ -278,6 +279,16 @@ function buildApi(signal) {
     refreshItem: (type, tmdb_id) =>
       api.post(`/api/admin/cache/${type}/${tmdb_id}/refresh`),
     refreshOngoing: () => api.post('/api/admin/cache/refresh-ongoing'),
+
+    // Custom artwork (Detail options, "Customize metadata"). slot is one of
+    // poster | backdrop | fanart.
+    imageCandidates: (type, tmdb_id, slot) =>
+      api.get(`/api/media/${type}/${tmdb_id}/images/${slot}`),
+    // `image` is a data URL, already cropped to the slot's aspect ratio.
+    setCustomImage: (type, tmdb_id, slot, image) =>
+      api.put(`/api/media/${type}/${tmdb_id}/images/${slot}`, { image }),
+    resetCustomImage: (type, tmdb_id, slot) =>
+      api.del(`/api/media/${type}/${tmdb_id}/images/${slot}`),
 
     authStatus: () => api.get('/api/auth/status'),
     logout: () => api.post('/api/auth/logout'),
