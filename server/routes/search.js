@@ -1,7 +1,8 @@
 // Title search under /api/search: queries TMDB for movies and/or shows (or an
 // exact IMDb-id lookup), normalizing results and flagging which are already in
-// the library. /api/search/thumb proxies TMDB poster thumbnails so the client
-// never talks to the TMDB CDN directly.
+// the library. With `scope=library` it searches the user's own rows instead and
+// never calls TMDB. /api/search/thumb proxies TMDB poster thumbnails so the
+// client never talks to the TMDB CDN directly.
 
 import db from '../db.js';
 import {
@@ -11,11 +12,47 @@ import {
   imageUrl,
   IMG_SIZES,
 } from '../tmdb.js';
+import { imageVersion } from '../customImages.js';
 
 const IMDB_RE = /^tt\d+$/i;
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
 const allItemsStmt = db.prepare('SELECT id, tmdb_id, type FROM items');
+
+// The library half of the search box (the "my collection only" toggle). This
+// never touches TMDB: it reads the rows the user already owns, so the answer is
+// instant, costs nothing against the monthly budget, and still works offline.
+// LIKE is case-insensitive for ASCII in SQLite; accented letters still have to
+// match their own case.
+const libraryStmt = db.prepare(
+  `SELECT id, tmdb_id, type, title_it, title_orig, year,
+          custom_poster, custom_backdrop, custom_fanart
+     FROM items
+    WHERE title_it LIKE ? OR title_orig LIKE ?
+    ORDER BY title_it
+    LIMIT 60`
+);
+
+// Same shape the TMDB mappers produce, so the client renders one kind of result.
+// The poster is the cached file, carrying a version when the user replaced it
+// (assets are served immutable, so the URL has to change or the browser keeps
+// the copy it already has).
+function mapLibraryRow(row) {
+  const folder = row.type === 'movie' ? 'movies' : 'shows';
+  const v = imageVersion(row, 'poster');
+  return {
+    tmdb_id: String(row.tmdb_id),
+    type: row.type,
+    title: row.title_it || row.title_orig || '',
+    original_title: row.title_orig || '',
+    year: row.year || '',
+    overview: '',
+    poster_path: null,
+    thumb_url: `/assets/${folder}/${row.tmdb_id}/poster.webp${v ? `?v=${v}` : ''}`,
+    already_added: true,
+    item_id: row.id,
+  };
+}
 
 // Map a raw TMDB movie result to our normalized search shape.
 function mapMovie(r, addedMap) {
@@ -66,11 +103,21 @@ function buildAddedMap() {
 }
 
 export default async function searchRoutes(fastify) {
-  // GET /api/search?q=&type=movie|show|all
+  // GET /api/search?q=&type=movie|show|all&scope=library
   fastify.get('/api/search', async (request, reply) => {
     const q = (request.query.q || '').trim();
     const type = request.query.type || 'all';
     if (!q) return { results: [] };
+
+    // Library scope: answered entirely from the local rows.
+    if (request.query.scope === 'library') {
+      const like = `%${q}%`;
+      const rows = libraryStmt.all(like, like);
+      const results = rows
+        .filter((r) => type === 'all' || r.type === type)
+        .map(mapLibraryRow);
+      return { results };
+    }
 
     const addedMap = buildAddedMap();
     let results = [];

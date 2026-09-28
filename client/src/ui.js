@@ -86,6 +86,9 @@ export const icons = {
   sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
   moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  forward: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  // The poster-grid half of the search results view switch (`list` is the other).
+  grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
   chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
@@ -870,8 +873,10 @@ export function setLabel(node, text) {
 //   });
 //   parent.append(seg.el);
 //
-// Returns { el, set(value), value() }. `set()` moves the chip WITHOUT firing
-// onChange, for keeping the control in sync with state changed elsewhere.
+// Returns { el, set(value), value(), setLabel(i, text) }. `set()` moves the chip
+// WITHOUT firing onChange, for keeping the control in sync with state changed
+// elsewhere; `setLabel()` rewrites one option's text in place (the search
+// scopes carry their own result counts).
 // Scales past two options on its own — the chip's width and travel are both
 // derived from --seg-count, so nothing needs retuning.
 export function segmentedControl({
@@ -884,12 +889,15 @@ export function segmentedControl({
   let active = Math.max(0, options.findIndex(([v]) => v === value));
   const chip = el('div', { class: 'seg-chip', 'aria-hidden': 'true' });
   // A third tuple entry is an optional Lucide glyph shown left of the label.
-  const buttons = options.map(([, label, icon]) =>
-    el('button', { class: 'seg-opt', type: 'button', role: 'radio' }, [
+  const labels = [];
+  const buttons = options.map(([, label, icon]) => {
+    const span = el('span', { text: label });
+    labels.push(span);
+    return el('button', { class: 'seg-opt', type: 'button', role: 'radio' }, [
       icon ? lucideIcon(icon, 'seg-ico') : null,
-      el('span', { text: label }),
-    ])
-  );
+      span,
+    ]);
+  });
   const root = el(
     'div',
     {
@@ -927,6 +935,11 @@ export function segmentedControl({
     el: root,
     set: (v) => pick(options.findIndex(([val]) => val === v), false),
     value: () => (options[active] ? options[active][0] : undefined),
+    // Rewrite one option's text without rebuilding the control. The slots are
+    // equal-width (a grid of --seg-count), so the chip does not have to move.
+    setLabel: (i, text) => {
+      if (labels[i]) labels[i].textContent = text;
+    },
   };
 }
 

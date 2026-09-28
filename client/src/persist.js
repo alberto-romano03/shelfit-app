@@ -35,6 +35,9 @@ export const PK = {
   // Set true the first time the feature showcase auto-opens, so it only ever
   // shows itself once. The header "?" button reopens it on demand thereafter.
   showcaseSeen: 'showcase:seen',
+  // The last few search queries, newest first, shown as chips while the search
+  // field is empty.
+  recentSearches: 'search:recent',
 };
 
 // Plan-to-Watch titles are stored per library type: `plan:movie`, `plan:show`.

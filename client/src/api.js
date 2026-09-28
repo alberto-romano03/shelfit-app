@@ -129,8 +129,12 @@ function buildApi(signal) {
     put: (url, body) => request('PUT', url, body),
 
     // Convenience helpers
-    search: (q, type) =>
-      api.get(`/api/search?q=${encodeURIComponent(q)}&type=${type}`),
+    // `scope: 'library'` searches the user's own rows instead of TMDB.
+    search: (q, type, scope) =>
+      api.get(
+        `/api/search?q=${encodeURIComponent(q)}&type=${type}` +
+          (scope ? `&scope=${scope}` : '')
+      ),
     media: (query = '') => api.get(`/api/media${query}`),
     // Paginated library slice for the virtual poster grids (additive; the server
     // returns total/page/pageSize/totalPages, plus groups + genres on page 1).

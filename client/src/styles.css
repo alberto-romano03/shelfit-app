@@ -24,6 +24,10 @@
      extra pixels keep the room above the icon that the taller content would
      otherwise have eaten. Every "clear the navbar" calc reads this one number. */
   --nav-h: 60px;
+  /* The app header's height: 10px padding, a 44px icon button, 10px padding.
+     Anything that has to stick UNDER the header reads this one number, the way
+     every "clear the navbar" calc reads --nav-h. */
+  --header-h: 64px;
 
   /* ===== Motion tokens =====================================================
      Every state transition in the app draws its timing from here, so the whole
@@ -2357,6 +2361,7 @@ textarea.note-sheet-input:focus {
 }
 
 /* ============================= Search ============================= */
+/* The plain field kept for the pickers, which reuse the class. */
 .search-input {
   width: 100%;
   padding: 12px 14px;
@@ -2366,60 +2371,846 @@ textarea.note-sheet-input:focus {
   color: var(--text-primary);
   margin-bottom: 12px;
 }
-.result-card {
-  position: relative;
-}
-/* --- Search + Explore page ---------------------------------------------- */
-/* Keep the input pinned while the results / explore rows scroll under it. */
-.search-header {
+/* ============================ The counter ============================
+   The search chrome, sticky at the top of the view. One pill field with a
+   leading glyph and a trailing clear button, then the scope segmented
+   control. The whole block keeps the header's translucent treatment so
+   content scrolls under it without a hard band. */
+.fc {
   position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--bg);
-  padding-top: 2px;
+  /* Under the header, not behind it. */
+  top: calc(var(--header-h) + env(safe-area-inset-top));
+  z-index: 6;
+  margin: -12px -16px 14px;
+  padding: 12px 16px 10px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
 }
-/* Labelled result sections (Movies / Series). */
-.search-section {
-  margin-bottom: 20px;
-}
-.search-section-title,
-.explore-row-title {
-  font-size: 15px;
-  font-weight: 700;
-  margin: 0 0 10px;
-}
-/* Explore: stacked horizontally-scrolling poster rows. */
-.explore-row {
-  margin-bottom: 22px;
-}
-.explore-scroller {
+.fc-field {
   display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 14px;
+  min-height: 50px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  /* An interactive control, so it is a pill like every other one. */
+  border-radius: var(--r-pill);
+  transition: border-color var(--dur-short) var(--ease-state),
+    box-shadow var(--dur-short) var(--ease-state);
+}
+.fc-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.fc-ico {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  color: var(--text-secondary);
+  transition: color var(--dur-short) var(--ease-state);
+}
+.fc-field:focus-within .fc-ico {
+  color: var(--accent);
+}
+.fc-ico svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.fc-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* 16px so iOS does not zoom the page on focus. */
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1.4;
+  padding: 13px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+}
+.fc-input:focus {
+  outline: none;
+}
+.fc-input::placeholder {
+  color: var(--text-secondary);
+}
+.fc-input::-webkit-search-cancel-button {
+  display: none;
+}
+/* Clear button: 38px so the pill stays 50px tall, still a comfortable target
+   because the whole right end of the field is padding around it. */
+.fc-clear {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.fc-clear svg {
+  width: 18px;
+  height: 18px;
+}
+.fc-clear:active {
+  transform: scale(0.94);
+}
+.fc.has-query .fc-clear {
+  display: inline-flex;
+}
+
+/* The field and the library toggle share a row: the toggle is a scope, not a
+   filter over the answers, so it sits with the question rather than under it. */
+.fc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fc-row .fc-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* On / off, nothing else. Off it is a quiet outline; on it is the accent fill
+   every active control in the app uses. */
+.fc-mine {
+  flex: 0 0 auto;
+  /* 47, not the field's own 50: a filled disc reads larger than its box, so at
+     matching heights it optically outweighed the field beside it. Three pixels
+     off settles it, and the glyph stays at 20 so the disc reads lighter still. */
+  width: 47px;
+  height: 47px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--dur-short) var(--ease-state),
+    color var(--dur-short) var(--ease-state),
+    border-color var(--dur-short) var(--ease-state);
+}
+.fc-mine .lc {
+  width: 20px;
+  height: 20px;
+}
+.fc-mine:active {
+  transform: scale(0.94);
+}
+.fc-mine[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  /* Dark ink on the accent fill, the same as a primary button and an active
+     segmented chip. */
+  color: #000;
+}
+
+/* Scope row. It appears only once there is something to scope: while the page
+   is being browsed the counter is just the field, which keeps the sticky
+   chrome short and stops the page opening with a filter that filters nothing.
+   Each option carries its own count, so the filter says where the answers are
+   instead of making you try all three. */
+.fc-tools {
+  display: none;
+  align-items: center;
   gap: 10px;
+  margin-top: 10px;
+}
+.fc.has-query .fc-tools {
+  display: flex;
+}
+.fc-tools .seg {
+  flex: 1 1 auto;
+}
+
+/* The results toolbar: total on the left, the row/poster switch on the right.
+   It scrolls with the list rather than joining the sticky chrome. */
+.ht-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.ht-count {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.ht-view {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.ht-view svg {
+  width: 20px;
+  height: 20px;
+}
+.ht-view:active {
+  transform: scale(0.94);
+}
+
+/* ====================== Recent queries ======================
+   Shown only while the field is empty. Plain pills, each with its own
+   dismiss, in the app's chip language. */
+.fc-recent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 20px;
+  padding-bottom: 2px;
+}
+.fc-recent-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.fc-q {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.fc-q:active {
+  transform: scale(0.97);
+  background: var(--surface-elevated);
+}
+.fc-q-x {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.fc-q-x svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ============================== Aisles ==============================
+   A row of titles. The head carries an eyebrow that says what the row IS
+   (its source or its ordering), then the row name, then the desktop
+   arrows. Below the posters a thin board reads as the shelf they stand
+   on: the motif, at the cost of four pixels. */
+.ai {
+  margin-bottom: 26px;
+}
+.ai-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ai-heads {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ai-eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+.ai-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.2;
+}
+.ai-arrows {
+  display: none;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+/* Pointer-precise devices only: on touch the row is swiped, and the arrows
+   would just be two more things in the way. */
+@media (hover: hover) and (pointer: fine) {
+  .ai-arrows {
+    display: flex;
+  }
+}
+.ai-arrow {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: opacity var(--dur-short) var(--ease-state),
+    background var(--dur-short) var(--ease-state);
+}
+.ai-arrow svg {
+  width: 16px;
+  height: 16px;
+}
+.ai-arrow:hover {
+  background: var(--surface-elevated);
+}
+.ai-arrow[disabled] {
+  opacity: 0.3;
+  cursor: default;
+}
+.ai-rail {
+  display: flex;
+  gap: 12px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: x proximity;
-  padding-bottom: 4px;
-  scrollbar-width: none;
+  padding-bottom: 8px;
 }
-.explore-scroller::-webkit-scrollbar {
-  display: none;
+/* The arrows drive scrollTo, and mandatory-ish snapping fights a programmatic
+   scroll: the same reason the horizon railway disables it for pointer devices. */
+@media (hover: hover) and (pointer: fine) {
+  .ai-rail {
+    scroll-snap-type: none;
+  }
 }
-.explore-card {
-  position: relative;
+.ai-cell {
   flex: 0 0 auto;
-  width: 108px;
+  width: 116px;
   scroll-snap-align: start;
 }
-.added-badge {
+.ai-cell .poster-card {
+  cursor: pointer;
+}
+.ai-cell .poster-card:active {
+  transform: scale(0.97);
+}
+.ai-name {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 6px;
+  /* Two lines, always two lines: the row's baseline cannot move because one
+     title is longer than another. */
+  height: 30px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.ai-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+/* A masked Lucide glyph inline in a label. The app styles its own
+   (.btn-lucide, .seg-ico); this is the same four lines for the ones added
+   here. */
+.lc {
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+/* ===================== Added / status marks ===================== */
+/* The "in your library" mark. A solid success badge over artwork is a loud
+   thing to repeat forty times down a page, so it is a small tick in a dark
+   translucent disc, the same neutral pill language the rating badge uses. */
+.ai-mark {
   position: absolute;
   top: 6px;
   right: 6px;
-  background: var(--success);
-  color: #fff;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.62);
+  color: var(--success);
+}
+.ai-mark svg {
+  width: 14px;
+  height: 14px;
+}
+/* The user's own stars, bottom-left, only on titles they have rated. Reuses
+   the .rating-badge box from styles.css, so nothing new is invented here. */
+
+/* ======================= The clerk's picks =======================
+   The one editorial spot on the page: a full card per title with the
+   synopsis, so the top of Explore answers "what is this?" instead of
+   being another row of anonymous spines. */
+.pk-rail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+}
+.pk-card {
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  width: min(100%, 520px);
+  display: grid;
+  /* The poster and the title sit side by side; the synopsis and the actions
+     run the full width under them, so the text gets the whole card on a phone
+     instead of a 190px column. */
+  grid-template-columns: 96px 1fr;
+  grid-template-areas:
+    'art head'
+    'over over'
+    'act act';
+  gap: 12px 14px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.pk-card .poster-card {
+  grid-area: art;
+  width: 96px;
+  align-self: start;
+}
+.pk-head {
+  grid-area: head;
+  min-width: 0;
+}
+.pk-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.pk-title {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 6px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  /* Two lines, reserved: a one-line title must not make its card shorter than
+     the one next to it in the rail. */
+  height: 44px;
+}
+.pk-score {
+  color: var(--stars);
+  font-weight: 600;
+}
+.pk-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 0;
+}
+.pk-over {
+  grid-area: over;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  /* 3 lines at 13/1.45 - reserved, so a short synopsis leaves the card the
+     same height as a long one and the rail never steps. */
+  height: 57px;
+  margin: 0;
+}
+.pk-actions {
+  grid-area: act;
+  display: flex;
+  gap: 8px;
+}
+.pk-actions .btn {
+  flex: 1 1 auto;
+  min-height: 40px;
+  font-size: 14px;
+}
+/* Rail position dots. Small, muted, non-interactive: they say how many picks
+   there are, nothing more. */
+.pk-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.pk-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background var(--dur-short) var(--ease-state),
+    transform var(--dur-short) var(--ease-out);
+}
+.pk-dot.on {
+  background: var(--accent);
+  transform: scale(1.25);
+}
+
+/* ========================== Ranked row ==========================
+   Trending is the one row that genuinely IS ordered, so it is the one row
+   that gets numbers. An outlined numeral behind the spine, in the neutral,
+   so it never competes with the artwork. */
+.rk-cell {
+  position: relative;
+  flex: 0 0 auto;
+  width: 144px;
+  padding-left: 28px;
+  scroll-snap-align: start;
+}
+.rk-cell[data-wide='1'] {
+  width: 158px;
+  padding-left: 42px;
+}
+.rk-cell[data-wide='1'] .rk-num {
+  left: -40px;
+}
+.rk-art {
+  position: relative;
+}
+.rk-num {
+  position: absolute;
+  /* Out in the cell's left inset, so the spine covers only its right edge, and
+     anchored to the poster's bottom so it can never sit on the title. */
+  left: -26px;
+  bottom: 0;
+  z-index: 0;
+  font-size: 74px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -6px;
+  color: transparent;
+  -webkit-text-stroke: 2px color-mix(in srgb, var(--text-secondary) 65%, transparent);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+.rk-cell .poster-card {
+  position: relative;
+  z-index: 1;
+}
+
+/* ====================== Mood strip ======================
+   The four mood rows the page used to stack become one block: pick a
+   mood, the row under it changes. Each tile takes one of the named
+   palette triads already in the design system, and its own display face,
+   which is how the app labels categories elsewhere. */
+.mx {
+  margin-bottom: 26px;
+}
+.mx-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+@media (max-width: 380px) {
+  .mx-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.mx-tile {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--ink);
+  color: var(--pale);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform var(--dur-short) var(--ease-out),
+    border-color var(--dur-short) var(--ease-state);
+}
+.mx-tile:active {
+  transform: scale(0.97);
+}
+.mx-tile.on {
+  border-color: var(--mid);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mid) 55%, transparent);
+}
+.mx-name {
+  font-size: 15px;
+  line-height: 1.15;
+}
+/* One display face per mood, from local stacks only - the technique the app
+   already uses for category labels. */
+.mx-tile[data-mood='feel_good'] .mx-name {
+  font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  font-weight: 700;
+}
+.mx-tile[data-mood='edge'] .mx-name {
+  font-family: 'Haettenschweiler', 'Arial Narrow', 'Impact', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  font-size: 17px;
+}
+.mx-tile[data-mood='epic'] .mx-name {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+.mx-tile[data-mood='binge'] .mx-name {
+  font-family: 'Palatino Linotype', Palatino, Georgia, serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 16px;
+}
+.mx-tile[data-mood='mindbending'] .mx-name {
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  font-size: 14px;
+}
+.mx-tile[data-mood='easy'] .mx-name {
+  font-family: 'Segoe UI', -apple-system, sans-serif;
+  font-weight: 300;
+  letter-spacing: 0.4px;
+}
+
+/* ========================= Search hits =========================
+   Results are a list, not a grid: a poster thumb you can still recognise,
+   the title at reading size, the original title under it (the thing that
+   actually tells two versions apart), and one tap to add without leaving
+   the list. */
+.ht-list {
+  display: flex;
+  flex-direction: column;
+}
+.ht {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 2px;
+  cursor: pointer;
+}
+/* A rule between rows, not a card around each one: the list reads as one
+   object, and forty rounded panels down a page do not. */
+.ht + .ht {
+  border-top: 1px solid var(--border);
+}
+.ht:active .ht-title {
+  color: var(--accent);
+}
+/* The thumb IS a poster card (same shimmer, same fade-in, same corner); only
+   its size is a row's business. */
+.ht-thumb {
+  width: 52px;
+  border-radius: var(--r-sm);
+}
+.ht-main {
+  min-width: 0;
+}
+.ht-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ht-title mark {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.ht-orig {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ht-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.ht-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
-  padding: 3px 7px;
-  border-radius: 6px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.ht-kind .lc {
+  width: 11px;
+  height: 11px;
+}
+.ht-dot {
+  opacity: 0.5;
+}
+/* The one action on the row. Not a label, because the row itself already
+   opens the title: this adds it where it stands. */
+.ht-add {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--dur-short) var(--ease-state),
+    color var(--dur-short) var(--ease-state),
+    border-color var(--dur-short) var(--ease-state);
+}
+.ht-add svg {
+  width: 18px;
+  height: 18px;
+}
+.ht-add:active {
+  transform: scale(0.94);
+}
+.ht-add.on {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  color: var(--success);
+}
+
+/* Poster view of the same results, for when the artwork is the thing being
+   recognised. Same cells as the aisles, in the app's 3-up grid. */
+.ht-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.ht-grid .ai-cell {
+  width: auto;
+}
+
+/* Result skeleton: the exact box of a .ht row, so the list does not move
+   when the answers arrive. */
+.ht-skel {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 6px;
+}
+.ht-skel-thumb {
+  width: 52px;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--r-sm);
+}
+.ht-skel-add {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+/* ===================== Genre chips ===================== */
+.gc {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ===================== Reduced motion ===================== */
+@media (prefers-reduced-motion: reduce) {
+  .fc-field,
+  .fc-mine,
+  .ht-view,
+  .ai-arrow,
+  .mx-tile,
+  .ht-add,
+  .pk-dot {
+    transition: none;
+  }
+  .ai-cell .poster-card:active,
+  .mx-tile:active,
+  .fc-q:active,
+  .ht-add:active,
+  .ht-view:active,
+  .fc-mine:active,
+  .fc-clear:active {
+    transform: none;
+  }
+  .ai-rail,
+  .pk-rail {
+    scroll-behavior: auto;
+  }
 }
 
 /* ============================= Modal ============================= */

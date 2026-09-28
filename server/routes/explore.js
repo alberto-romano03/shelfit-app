@@ -76,11 +76,15 @@ async function buildSections(signal) {
     tmdbGet('/tv/popular', { language: 'it-IT' }, { signal }),
     tmdbGet('/movie/top_rated', { language: 'it-IT' }, { signal }),
     tmdbGet('/tv/on_the_air', { language: 'it-IT' }, { signal }),
-    // Mood rows (labelled by feeling, not genre).
+    // Mood rows (labelled by feeling, not genre). These six are the Search
+    // page's mood strip; the same definitions Dust It Off uses in
+    // routes/discover.js, so a mood means the same thing in both places.
     discover('movie', dParams({ with_genres: idsForNames(genres.movie, ['Comedy', 'Animation']).join('|'), 'vote_average.gte': 7 }), { signal }),
     discover('movie', dParams({ with_genres: idsForNames(genres.movie, ['Thriller', 'Horror']).join('|') }), { signal }),
     discover('movie', dParams({ with_genres: idsForNames(genres.movie, ['Action', 'Adventure']).join('|'), 'with_runtime.gte': 120 }), { signal }),
     discover('tv', dParams({ with_genres: idsForNames(genres.tv, ['Drama']).join('|'), 'vote_average.gte': 7 }), { signal }),
+    discover('movie', dParams({ with_genres: idsForNames(genres.movie, ['Science Fiction', 'Mystery']).join('|'), 'vote_average.gte': 7 }), { signal }),
+    discover('movie', dParams({ 'with_runtime.lte': 90 }), { signal }),
   ]);
 
   // If the whole batch was rejected by the monthly cap, propagate so the handler
@@ -103,6 +107,8 @@ async function buildSections(signal) {
     ['edge', 'Edge of your seat', val(7), 'movie'],
     ['epic', 'Something epic', val(8), 'movie'],
     ['binge', 'Bingeable drama', val(9), 'show'],
+    ['mindbending', 'Mind-bending', val(10), 'movie'],
+    ['easy', 'Easy watch', val(11), 'movie'],
   ];
 
   const seenPerRow = new Set();
