@@ -2576,20 +2576,25 @@ textarea.note-sheet-input:focus {
    Shown only while the field is empty. Plain pills, each with its own
    dismiss, in the app's chip language. */
 .fc-recent {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow-x: auto;
   margin-bottom: 20px;
-  padding-bottom: 2px;
 }
+/* The label heads the group rather than sharing the line with the chips, so a
+   long list of queries scrolls under it instead of pushing it off the left. */
 .fc-recent-label {
-  flex: 0 0 auto;
+  display: block;
+  margin-bottom: 8px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
   color: var(--text-secondary);
+}
+.fc-recent-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 .fc-q {
   flex: 0 0 auto;
@@ -2819,27 +2824,23 @@ textarea.note-sheet-input:focus {
 .pk-head {
   grid-area: head;
   min-width: 0;
-}
-.pk-kicker {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 4px;
+  /* Sits on the poster's bottom edge rather than its top: the title and its
+     meta line read as a caption to the artwork, and the row's spare height
+     (the poster is taller than this block) goes above instead of below. */
+  align-self: end;
 }
 .pk-title {
   font-size: 18px;
   font-weight: 700;
   line-height: 1.2;
-  margin: 0 0 6px;
+  /* No reserved second line: the title sits straight on top of its year and
+     score. Nothing depends on it any more, because the card's height comes
+     from the poster, which is taller than this whole block either way. */
+  margin: 0 0 4px;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  /* Two lines, reserved: a one-line title must not make its card shorter than
-     the one next to it in the rail. */
-  height: 44px;
 }
 .pk-score {
   color: var(--stars);
@@ -2956,7 +2957,10 @@ textarea.note-sheet-input:focus {
   gap: 8px;
   margin-bottom: 16px;
 }
-@media (max-width: 380px) {
+/* Two across on a phone. The breakpoint is 560, not 380: at 380 every handset
+   wider than an iPhone SE fell into the three-column case, where a tile is
+   about 115px and the longer mood names are cut off. */
+@media (max-width: 560px) {
   .mx-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -3069,12 +3073,6 @@ textarea.note-sheet-input:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.ht-title mark {
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
-  color: inherit;
-  border-radius: 3px;
-  padding: 0 1px;
 }
 .ht-orig {
   font-size: 12px;

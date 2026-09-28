@@ -205,10 +205,12 @@ export default async function Search(container) {
   // --- Shared pieces -------------------------------------------------------
   // A poster with the marks that belong ON the artwork: the collection tick,
   // and the TMDB score where we have one.
-  function posterOf(item) {
+  // `badge` off for a card that shows the score in its own text, so the same
+  // number is never printed twice on one card.
+  function posterOf(item, { badge = true } = {}) {
     const card = poster(item.thumb_url, item.title);
     if (item.already_added) card.append(el('div', { class: 'ai-mark', html: icons.check }));
-    else if (item.rating) {
+    else if (badge && item.rating) {
       card.append(
         el('div', { class: 'rating-badge' }, [
           el('span', { text: '★' }),
@@ -313,9 +315,8 @@ export default async function Search(container) {
         ]
       );
       const card = el('article', { class: 'pk-card' }, [
-        posterOf(item),
+        posterOf(item, { badge: false }),
         el('div', { class: 'pk-head' }, [
-          el('div', { class: 'pk-kicker', text: t('search.row.picks.kicker') }),
           el('h3', { class: 'pk-title', text: item.title }),
           meta,
         ]),
@@ -429,8 +430,10 @@ export default async function Search(container) {
   function recentRow() {
     const list = recentQueries();
     if (!list.length) return null;
+    const chips = el('div', { class: 'fc-recent-chips' });
     const row = el('div', { class: 'fc-recent' }, [
       el('span', { class: 'fc-recent-label', text: t('search.recent') }),
+      chips,
     ]);
     list.forEach((q) => {
       const x = el('span', {
@@ -453,7 +456,7 @@ export default async function Search(container) {
         );
         paintRecent();
       });
-      row.append(chip);
+      chips.append(chip);
     });
     return row;
   }
@@ -590,18 +593,6 @@ export default async function Search(container) {
   }
 
   // --- Results -------------------------------------------------------------
-  // The match, marked in the title. The only place the query itself appears in
-  // the answers, and the fastest way to see why a row came back.
-  function markTitle(text, q) {
-    const i = text.toLowerCase().indexOf(q.toLowerCase());
-    if (!q || i < 0) return el('div', { class: 'ht-title', text });
-    return el('div', { class: 'ht-title' }, [
-      el('span', { text: text.slice(0, i) }),
-      el('mark', { text: text.slice(i, i + q.length) }),
-      el('span', { text: text.slice(i + q.length) }),
-    ]);
-  }
-
   // The one action on a row: put it on the shelf without opening anything.
   // Plan to Watch, because that is what "I'll get to this" means, and the
   // status is changed from the detail page like any other.
@@ -647,7 +638,7 @@ export default async function Search(container) {
     return btn;
   }
 
-  function hitRow(r, q) {
+  function hitRow(r) {
     const meta = el('div', { class: 'ht-meta' }, [
       el('span', { class: 'ht-kind' }, [
         lucideIcon(r.type === 'movie' ? 'clapperboard' : 'tv', 'lc'),
@@ -660,7 +651,7 @@ export default async function Search(container) {
     const row = el('div', { class: 'ht', role: 'button', tabindex: '0' }, [
       thumb,
       el('div', { class: 'ht-main' }, [
-        markTitle(r.title, q),
+        el('div', { class: 'ht-title', text: r.title }),
         r.original_title && r.original_title !== r.title
           ? el('div', { class: 'ht-orig', text: r.original_title })
           : null,
@@ -710,7 +701,6 @@ export default async function Search(container) {
   function paintResults() {
     const list = state.results;
     if (!list) return;
-    const q = state.query.trim();
     const movies = list.filter((r) => r.type === 'movie');
     const shows = list.filter((r) => r.type === 'show');
     // The filter carries its own counts, so it says where the answers are
@@ -733,7 +723,7 @@ export default async function Search(container) {
       );
     } else if (state.view === 'rows') {
       const rows = el('div', { class: 'ht-list' });
-      for (const r of shown) rows.append(hitRow(r, q));
+      for (const r of shown) rows.append(hitRow(r));
       frag.append(rows);
     } else {
       const grid = el('div', { class: 'ht-grid' });
