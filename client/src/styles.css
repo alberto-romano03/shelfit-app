@@ -272,7 +272,8 @@ select {
   padding-top: calc(10px + env(safe-area-inset-top));
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
+  /* No hairline under the field: it blends into the page, and the blurred
+     translucent band alone separates it from content scrolling beneath. */
 }
 .brand {
   display: flex;
@@ -2385,7 +2386,8 @@ textarea.note-sheet-input:focus {
   padding: 12px 16px 10px;
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
+  /* No hairline under the field: it blends into the page, and the blurred
+     translucent band alone separates it from content scrolling beneath. */
 }
 .fc-field {
   display: flex;
@@ -2485,8 +2487,8 @@ textarea.note-sheet-input:focus {
   /* 47, not the field's own 50: a filled disc reads larger than its box, so at
      matching heights it optically outweighed the field beside it. Three pixels
      off settles it, and the glyph stays at 20 so the disc reads lighter still. */
-  width: 47px;
-  height: 47px;
+  width: 49px;
+  height: 49px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2729,18 +2731,17 @@ textarea.note-sheet-input:focus {
 .ai-cell .poster-card:active {
   transform: scale(0.97);
 }
+/* One line, ellipsed, with the year under it: two lines per cell, the same
+   shape the home screen's cards use. A title that runs long is cut rather
+   than allowed to step its year out of line with its neighbours'. */
 .ai-name {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.25;
   margin-top: 6px;
-  /* Two lines, always two lines: the row's baseline cannot move because one
-     title is longer than another. */
-  height: 30px;
+  white-space: nowrap;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
 }
 .ai-sub {
   font-size: 11px;
@@ -2786,29 +2787,40 @@ textarea.note-sheet-input:focus {
    the .rating-badge box from styles.css, so nothing new is invented here. */
 
 /* ======================= The clerk's picks =======================
-   The one editorial spot on the page: a full card per title with the
-   synopsis, so the top of Explore answers "what is this?" instead of
-   being another row of anonymous spines. */
+   The one editorial spot on the page: a card per title with the synopsis, so
+   the top of Explore answers "what is this?" instead of being another row of
+   anonymous spines. The poster sits on the left; the text (title, year, genre,
+   synopsis) is on the right, aligned to the FOOT of the poster so it reads as
+   a caption standing under the artwork's height. The score rides on the poster
+   in the badge the library grids use. */
 .pk-rail {
   display: flex;
   gap: 12px;
   overflow-x: auto;
+  /* Full-bleed: the negative margins cancel the view's 16px side padding so the
+     scroller runs edge to edge, and the matching padding keeps the resting card
+     at the content gutter. A card then slides off at the true screen border
+     instead of being clipped early against the 16px gutter. scroll-padding lines
+     the snap up with that gutter so a snapped card still sits inset. */
+  margin: 0 -16px 4px;
+  padding: 0 16px 8px;
+  scroll-padding-inline: 16px;
+  /* A paged carousel: mandatory snap to each card's LEFT edge, one card per
+     swipe. Center align on a full-width card put the snap target far from where
+     a fling ended, so the browser glided a long way to it, which felt slow;
+     start align lands where the swipe already stopped, and snap-stop keeps a
+     hard fling from skipping cards. */
   scroll-snap-type: x mandatory;
-  padding-bottom: 8px;
-  margin-bottom: 4px;
 }
 .pk-card {
   flex: 0 0 auto;
-  scroll-snap-align: center;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
   width: min(100%, 520px);
   display: grid;
-  /* The poster and the title sit side by side; the synopsis and the actions
-     run the full width under them, so the text gets the whole card on a phone
-     instead of a 190px column. */
   grid-template-columns: 96px 1fr;
   grid-template-areas:
-    'art head'
-    'over over'
+    'art body'
     'act act';
   gap: 12px 14px;
   padding: 14px;
@@ -2821,30 +2833,25 @@ textarea.note-sheet-input:focus {
   width: 96px;
   align-self: start;
 }
-.pk-head {
-  grid-area: head;
+/* The text column, bottom-aligned to the poster's foot: the poster is taller
+   than these few lines, so the spare height goes above the text, not below. */
+.pk-body {
+  grid-area: body;
   min-width: 0;
-  /* Sits on the poster's bottom edge rather than its top: the title and its
-     meta line read as a caption to the artwork, and the row's spare height
-     (the poster is taller than this block) goes above instead of below. */
   align-self: end;
+  display: flex;
+  flex-direction: column;
 }
 .pk-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1.2;
-  /* No reserved second line: the title sits straight on top of its year and
-     score. Nothing depends on it any more, because the card's height comes
-     from the poster, which is taller than this whole block either way. */
   margin: 0 0 4px;
+  /* At most two lines, then an ellipsis. */
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-}
-.pk-score {
-  color: var(--stars);
-  font-weight: 600;
 }
 .pk-meta {
   display: flex;
@@ -2853,21 +2860,18 @@ textarea.note-sheet-input:focus {
   gap: 6px;
   font-size: 12px;
   color: var(--text-secondary);
-  margin-bottom: 0;
+  margin-bottom: 6px;
 }
 .pk-over {
-  grid-area: over;
   font-size: 13px;
   line-height: 1.45;
   color: var(--text-secondary);
+  margin: 0;
+  /* Brief: three lines, then an ellipsis. */
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
-  /* 3 lines at 13/1.45 - reserved, so a short synopsis leaves the card the
-     same height as a long one and the rail never steps. */
-  height: 57px;
-  margin: 0;
 }
 .pk-actions {
   grid-area: act;
@@ -2879,8 +2883,6 @@ textarea.note-sheet-input:focus {
   min-height: 40px;
   font-size: 14px;
 }
-/* Rail position dots. Small, muted, non-interactive: they say how many picks
-   there are, nothing more. */
 .pk-dots {
   display: flex;
   justify-content: center;
@@ -2903,38 +2905,45 @@ textarea.note-sheet-input:focus {
 /* ========================== Ranked row ==========================
    Trending is the one row that genuinely IS ordered, so it is the one row
    that gets numbers. An outlined numeral behind the spine, in the neutral,
-   so it never competes with the artwork. */
+   so it never competes with the artwork.
+
+   The left inset is wide enough to show the whole numeral, with only its
+   right edge under the poster: at the original 28px only about 26px of a 38px
+   glyph cleared the spine, so 2, 3 and 5 read as partial shapes. The same
+   inset is what separates one title from the next in this row. */
 .rk-cell {
   position: relative;
   flex: 0 0 auto;
-  width: 144px;
-  padding-left: 28px;
+  width: 164px;
+  padding-left: 48px;
   scroll-snap-align: start;
 }
+/* Two digits are a wider drawing, so they get a wider inset: at the single
+   digit's 48px the second digit sat under the poster on a phone. */
 .rk-cell[data-wide='1'] {
-  width: 158px;
-  padding-left: 42px;
+  width: 186px;
+  padding-left: 70px;
 }
 .rk-cell[data-wide='1'] .rk-num {
-  left: -40px;
+  left: -66px;
 }
+/* The numeral's own box: not the poster card, which clips its overflow. */
 .rk-art {
   position: relative;
 }
 .rk-num {
   position: absolute;
   /* Out in the cell's left inset, so the spine covers only its right edge, and
-     anchored to the poster's bottom so it can never sit on the title. */
-  left: -26px;
-  bottom: 0;
+     anchored to the poster's bottom so it can never sit on the title. -10, not
+     0: the SVG reserves a little room under the baseline, so the numeral's own
+     foot lands on the poster's foot. */
+  left: -40px;
+  bottom: -10px;
   z-index: 0;
-  font-size: 74px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -6px;
-  color: transparent;
-  -webkit-text-stroke: 2px color-mix(in srgb, var(--text-secondary) 65%, transparent);
-  font-variant-numeric: tabular-nums;
+  /* The SVG inside fills with currentColor; a low-alpha neutral keeps the solid
+     number reading as a ghost behind the artwork rather than a hard block. */
+  color: color-mix(in srgb, var(--text-secondary) 34%, transparent);
+  line-height: 0;
   pointer-events: none;
   user-select: none;
 }
@@ -2965,71 +2974,74 @@ textarea.note-sheet-input:focus {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+/* A mood tile's box while the feed loads; the tile itself paints its own
+   palette, which a shimmer would fight. */
+.mx-skel {
+  min-height: 64px;
+  border-radius: var(--r-md);
+}
 .mx-tile {
   position: relative;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 64px;
+  /* Label at the foot of the tile, like a shelf tag. */
+  align-items: flex-end;
+  min-height: 66px;
   padding: 10px 12px;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: var(--r-md);
-  background: var(--ink);
-  color: var(--pale);
+  /* The palette's vibrant tone carries the tile, with its own light or dark
+     partner as the ink. */
+  background: var(--mid);
+  color: var(--fg);
+  /* One system font for every tile: six different display faces read as noise,
+     not personality. */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.15;
   text-align: left;
   cursor: pointer;
-  font-family: inherit;
+  /* An inset outline for the selected state, not a border plus a shadow: a
+     border changes the inner box and the shadow drew a second, softer ring
+     outside it, so the selected tile read as two mismatched edges. An outline
+     is outside layout and draws exactly once. */
+  outline: 2px solid transparent;
+  outline-offset: -2px;
   transition: transform var(--dur-short) var(--ease-out),
-    border-color var(--dur-short) var(--ease-state);
+    outline-color var(--dur-short) var(--ease-state);
 }
 .mx-tile:active {
   transform: scale(0.97);
 }
 .mx-tile.on {
-  border-color: var(--mid);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mid) 55%, transparent);
+  outline-color: var(--fg);
 }
 .mx-name {
-  font-size: 15px;
-  line-height: 1.15;
+  min-width: 0;
 }
-/* One display face per mood, from local stacks only - the technique the app
-   already uses for category labels. */
-.mx-tile[data-mood='feel_good'] .mx-name {
-  font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
-  font-weight: 700;
+/* The selected tick: the tile's own ink on a disc of that ink's colour, so it
+   reads on any of the six fills. */
+.mx-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--fg);
+  color: var(--mid);
 }
-.mx-tile[data-mood='edge'] .mx-name {
-  font-family: 'Haettenschweiler', 'Arial Narrow', 'Impact', sans-serif;
-  font-weight: 400;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  font-size: 17px;
+.mx-tile.on .mx-check {
+  display: flex;
 }
-.mx-tile[data-mood='epic'] .mx-name {
-  font-family: Georgia, 'Times New Roman', serif;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  font-size: 14px;
-}
-.mx-tile[data-mood='binge'] .mx-name {
-  font-family: 'Palatino Linotype', Palatino, Georgia, serif;
-  font-weight: 400;
-  font-style: italic;
-  font-size: 16px;
-}
-.mx-tile[data-mood='mindbending'] .mx-name {
-  font-family: 'Courier New', Courier, monospace;
-  font-weight: 700;
-  letter-spacing: -0.4px;
-  font-size: 14px;
-}
-.mx-tile[data-mood='easy'] .mx-name {
-  font-family: 'Segoe UI', -apple-system, sans-serif;
-  font-weight: 300;
-  letter-spacing: 0.4px;
+.mx-check svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* ========================= Search hits =========================

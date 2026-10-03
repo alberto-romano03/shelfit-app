@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v94'; // bumped: recent chips sit under their label
+const CACHE = 'shelfit-shell-v108'; // bumped: ask to shelve a series when finished
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

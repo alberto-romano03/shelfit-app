@@ -14,6 +14,7 @@ import { collapsibleText } from '../collapsibleText.js';
 import { openImagePicker } from '../imagePicker.js';
 import { withBase } from '../basePath.js';
 import { confetti } from '../confetti.js';
+import { offerShelve } from '../finishSeries.js';
 import { t, locale, getLang } from '../i18n.js';
 import {
   el,
@@ -927,6 +928,7 @@ export default async function Detail(container, params) {
               toast(t('detail.seasonMarked'), 'ok');
               if (res.caught_up) confetti.trigger(); // finished the last available episode
               reload();
+              offerShelve(res, { id, onShelved: reload });
             } catch (err) {
               toast(err.message, 'bad');
             }

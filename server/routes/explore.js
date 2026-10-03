@@ -25,13 +25,17 @@ const allItemsStmt = db.prepare('SELECT id, tmdb_id, type FROM items');
 // Normalize a raw TMDB result to the same shape as a search result (minus the
 // live "added" flags, which are overlaid per request). Returns null for people /
 // posterless entries so rows stay clean.
-function baseItem(r, forcedType) {
+function baseItem(r, forcedType, genreNames) {
   let mt = forcedType || r.media_type;
   if (mt === 'tv') mt = 'show';
   if (mt !== 'movie' && mt !== 'show') return null;
   if (!r.poster_path) return null;
   const isMovie = mt === 'movie';
   const date = isMovie ? r.release_date : r.first_air_date;
+  // Discover and trending results carry genre ids, not names; the id-to-name
+  // map is already loaded for the mood rows. Two is what a card shows.
+  const ids = Array.isArray(r.genre_ids) ? r.genre_ids : [];
+  const names = genreNames ? (isMovie ? genreNames.movie : genreNames.tv) : null;
   return {
     tmdb_id: String(r.id),
     type: mt,
@@ -41,6 +45,7 @@ function baseItem(r, forcedType) {
     // Include the synopsis so the add dialog shows a summary for Explore items
     // too (search results already carry one).
     overview: r.overview || '',
+    genres: names ? ids.map((id) => names.get(id)).filter(Boolean).slice(0, 2) : [],
     thumb_url: `/api/search/thumb?size=${IMG_SIZES.poster}&path=${encodeURIComponent(r.poster_path)}`,
   };
 }
@@ -111,13 +116,19 @@ async function buildSections(signal) {
     ['easy', 'Easy watch', val(11), 'movie'],
   ];
 
+  // The same lists the mood rows resolve by name, keyed the other way round.
+  const genreNames = {
+    movie: new Map(genres.movie.map((g) => [g.id, g.name])),
+    tv: new Map(genres.tv.map((g) => [g.id, g.name])),
+  };
+
   const seenPerRow = new Set();
   const sections = [];
   for (const [key, title, raw, forced] of defs) {
     const items = [];
     seenPerRow.clear();
     for (const r of arr(raw)) {
-      const it = baseItem(r, forced);
+      const it = baseItem(r, forced, genreNames);
       if (!it) continue;
       const dedupe = `${it.type}:${it.tmdb_id}`;
       if (seenPerRow.has(dedupe)) continue;

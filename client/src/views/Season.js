@@ -32,6 +32,7 @@ import {
 import { imageCache } from '../imageCache.js';
 import { isServerReachable, markDegraded } from '../network.js';
 import { confetti } from '../confetti.js';
+import { offerShelve } from '../finishSeries.js';
 import { withBase } from '../basePath.js';
 import { t } from '../i18n.js';
 
@@ -192,6 +193,7 @@ export default async function Season(container, params) {
           toast(t('season.allMarked'), 'ok');
           if (res.caught_up) confetti.trigger(); // finished the last available episode
           navigate(location.pathname, { replace: true }); // re-mount → scroll restored from memory
+          offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
         } catch (err) {
           toast(err.message, 'bad');
         }
@@ -529,6 +531,7 @@ export default async function Season(container, params) {
         if (res.caught_up) confetti.trigger(); // finished the last available episode
         const gap = (res.previous_unseen || []).length;
         if (gap > 0) promptCatchUp(ep, gap);
+        else offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
       } catch (err) {
         if (isAbortError(err)) return; // navigated away — leave the optimistic tick
         ep.watched = false;
@@ -571,6 +574,7 @@ export default async function Season(container, params) {
           close();
           if (res.caught_up) confetti.trigger(); // catching up finished the series
           toast(t('season.caughtUp', { n: count }), 'ok');
+          offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
           // Reconcile the affected episodes in place. Prefer the server-returned
           // list; fall back to re-fetching page 1 (where earlier episodes live).
           if (Array.isArray(res.marked_episodes)) {

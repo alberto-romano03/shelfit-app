@@ -49,6 +49,11 @@ const it = {
   'status.plan_to_watch': 'Da vedere',
   'status.watching': 'In visione',
   'status.completed': 'Sullo scaffale',
+  'finish.title': 'Serie finita!',
+  'finish.body': 'Hai visto tutti gli episodi di «{title}». La sposto sullo scaffale?',
+  'finish.shelve': 'Sullo scaffale',
+  'finish.keep': 'Continua a seguirla',
+  'finish.shelved': 'Spostata sullo scaffale',
   'status.paused': 'In pausa',
   'status.dropped': 'In soffitta',
 
@@ -940,6 +945,11 @@ const en = {
   'status.plan_to_watch': 'Plan to Watch',
   'status.watching': 'Watching',
   'status.completed': 'Shelved',
+  'finish.title': 'Series finished!',
+  'finish.body': 'You have watched every episode of "{title}". Move it to the shelf?',
+  'finish.shelve': 'Move to shelf',
+  'finish.keep': 'Keep watching',
+  'finish.shelved': 'Moved to the shelf',
   'status.paused': 'Paused',
   'status.dropped': 'Dropped',
 

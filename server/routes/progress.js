@@ -117,6 +117,19 @@ function isCaughtUp(item, cache = makeMetaCache()) {
   return aired.every((k) => watched.has(k));
 }
 
+// Terminal TMDB series statuses: the show will get no further episodes, so
+// having watched every aired one means the series is finished for good. A
+// returning series you have merely caught up on is NOT ended.
+const ENDED_STATUSES = new Set(['Ended', 'Canceled', 'Cancelled']);
+function finishInfo(item, cache) {
+  const meta = cache.show(item.tmdb_id);
+  return {
+    series_ended: !!(meta && ENDED_STATUSES.has(meta.status)),
+    item_status: item.status,
+    title: item.title_it || item.title_orig || '',
+  };
+}
+
 // Ordered list of a show's real episodes (season ≥ 1) across all seasons.
 function orderedEpisodes(item, cache = makeMetaCache()) {
   const meta = cache.show(item.tmdb_id);
@@ -212,6 +225,7 @@ export default async function progressRoutes(fastify) {
       watch_count: rowNow ? rowNow.watch_count : 1,
       previous_unseen,
       caught_up: isCaughtUp(item, metaCache), // → client confetti when the last aired ep lands
+      ...finishInfo(item, metaCache),
     };
   });
 
@@ -244,6 +258,7 @@ export default async function progressRoutes(fastify) {
       marked: gap.length,
       marked_episodes: gap,
       caught_up: isCaughtUp(item, metaCache),
+      ...finishInfo(item, metaCache),
     };
   });
 
@@ -380,7 +395,7 @@ export default async function progressRoutes(fastify) {
     });
     apply();
     // isCaughtUp reuses the season meta already read above via the shared cache.
-    return { ok: true, caught_up: isCaughtUp(item, metaCache) };
+    return { ok: true, caught_up: isCaughtUp(item, metaCache), ...finishInfo(item, metaCache) };
   });
 
   // DELETE /api/progress/season → remove an entire season from watched.

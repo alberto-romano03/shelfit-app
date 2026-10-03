@@ -63,13 +63,16 @@ const SHELVES = ['popular_tv', 'top_rated', 'popular_movies', 'on_the_air'];
 // The mood strip. Each tile takes one of the design system's named palette
 // triads (ink / mid / pale) and its own display face; the keys are the Explore
 // section keys, so a tile maps straight onto a row the server already sends.
+// One palette per shelf: the vibrant tone fills the tile, and `fg` is the
+// partner that reads on it. Amber is the light one of the six, so it takes its
+// palette's dark ink rather than the pale tone the others use.
 const MOODS = [
-  { key: 'feel_good', ink: 'espresso', mid: 'clementine', pale: 'oat-milk' },
-  { key: 'edge', ink: 'slate-ink', mid: 'harbor', pale: 'fog' },
-  { key: 'epic', ink: 'bark', mid: 'amber', pale: 'oat' },
-  { key: 'binge', ink: 'rose-ink', mid: 'rose', pale: 'shell' },
-  { key: 'mindbending', ink: 'plum-ink', mid: 'iris', pale: 'powder' },
-  { key: 'easy', ink: 'deepsea', mid: 'teal', pale: 'chalk' },
+  { key: 'feel_good', mid: 'clementine', fg: 'oat-milk' },
+  { key: 'edge', mid: 'harbor', fg: 'fog' },
+  { key: 'epic', mid: 'amber', fg: 'oat' },
+  { key: 'binge', mid: 'rose', fg: 'shell' },
+  { key: 'mindbending', mid: 'iris', fg: 'powder' },
+  { key: 'easy', mid: 'teal', fg: 'chalk' },
 ];
 
 // Examples for the typed placeholder. Titles are proper nouns, so they read the
@@ -175,7 +178,6 @@ export default async function Search(container) {
   const resultsEl = el('div', { class: 'search-results' });
   const exploreEl = el('div', { class: 'explore' });
   container.append(counter, resultsEl, exploreEl);
-  input.focus();
 
   // The results toolbar lives outside the sticky chrome, so the sticky block
   // stays short. One element, reused across renders.
@@ -300,12 +302,14 @@ export default async function Search(container) {
     const rail = el('div', { class: 'pk-rail' });
     const dots = el('div', { class: 'pk-dots' });
     items.forEach((item, i) => {
+      // The score rides on the artwork now, so this line is the year and the
+      // genre, which is what tells two similar titles apart at a glance.
       const meta = el('div', { class: 'pk-meta' }, [
         item.year ? el('span', { text: item.year }) : null,
-        item.rating
-          ? el('span', { class: 'pk-score', text: `★ ${item.rating}` })
-          : null,
       ]);
+      for (const g of (item.genres || []).slice(0, 2)) {
+        meta.append(el('span', { class: 'gc', text: g }));
+      }
       const open = el(
         'button',
         { class: 'btn btn-primary', type: 'button', onClick: () => openTitle(item) },
@@ -315,12 +319,12 @@ export default async function Search(container) {
         ]
       );
       const card = el('article', { class: 'pk-card' }, [
-        posterOf(item, { badge: false }),
-        el('div', { class: 'pk-head' }, [
+        posterOf(item),
+        el('div', { class: 'pk-body' }, [
           el('h3', { class: 'pk-title', text: item.title }),
           meta,
+          el('p', { class: 'pk-over', text: item.overview || '' }),
         ]),
-        el('p', { class: 'pk-over', text: item.overview || '' }),
         el('div', { class: 'pk-actions' }, [open]),
       ]);
       rail.append(card);
@@ -345,13 +349,43 @@ export default async function Search(container) {
   }
 
   // --- Trending: the one row that is genuinely ordered ---------------------
+  // The numeral is drawn as SVG, not as text with -webkit-text-stroke: on iOS
+  // the stroked glyph picks up its own internal contours, so a 2 comes out
+  // with a notch through its foot and a 6 with a slash across its bowl. A path
+  // stroke has none of that, and the two-digit pair is fitted to an exact
+  // width instead of relying on negative tracking that made the digits touch.
+  const NUM_FONT =
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  // Drawn as an SVG path stroke, not text-stroke: on iOS -webkit-text-stroke
+  // outlines every internal contour of the glyph, so a 2 came out notched
+  // through its foot and a 6 slashed across its bowl. No textLength: forcing a
+  // width squashes the glyph shapes ("10" stretched flat). The box is sized to
+  // the digits' own advance and the whole thing is allowed to overflow, so a
+  // heavy stroke is never clipped at the edges.
+  function rankNumeral(n) {
+    const text = String(n);
+    const w = 44 * text.length;
+    // SOLID fill, not a stroke. Stroking the glyph outlines its inner counters
+    // too, and on iOS where those counters nearly touch (the bar of a 2, the
+    // bowl of a 6) the strokes merge into a line across the digit. A fill has
+    // no such seam, and a solid ghost number is the real top-10 treatment. It
+    // reads as a ghost because the tone is a low-alpha neutral, set on .rk-num.
+    return el('span', {
+      class: 'rk-num',
+      'aria-hidden': 'true',
+      html:
+        `<svg viewBox="0 0 ${w} 80" width="${w}" height="80" ` +
+        `style="overflow:visible" focusable="false" aria-hidden="true">` +
+        `<text x="${w / 2}" y="70" text-anchor="middle" font-size="74" ` +
+        `font-weight="800" font-family="${NUM_FONT}" fill="currentColor">` +
+        `${text}</text></svg>`,
+    });
+  }
+
   function rankCell(item, i) {
     const n = i + 1;
     const c = el('div', { class: 'rk-cell', 'data-wide': n >= 10 ? '1' : '0' }, [
-      el('div', { class: 'rk-art' }, [
-        el('span', { class: 'rk-num', 'aria-hidden': 'true', text: String(n) }),
-        posterOf(item),
-      ]),
+      el('div', { class: 'rk-art' }, [rankNumeral(n), posterOf(item)]),
       el('div', { class: 'ai-name', text: item.title }),
       el('div', { class: 'ai-sub', text: item.year || '' }),
     ]);
@@ -385,11 +419,17 @@ export default async function Search(container) {
           'data-mood': m.key,
           'aria-pressed': String(m.key === state.mood),
         },
-        [el('span', { class: 'mx-name', text: sectionTitle(sec) })]
+        [
+          el('span', { class: 'mx-name', text: sectionTitle(sec) }),
+          el('span', {
+            class: 'mx-check',
+            'aria-hidden': 'true',
+            html: icons.check,
+          }),
+        ]
       );
-      tile.style.setProperty('--ink', `var(--color-${m.ink})`);
       tile.style.setProperty('--mid', `var(--color-${m.mid})`);
-      tile.style.setProperty('--pale', `var(--color-${m.pale})`);
+      tile.style.setProperty('--fg', `var(--color-${m.fg})`);
       tile.addEventListener('click', () => {
         state.mood = m.key;
         tiles.forEach((x) => {
@@ -474,20 +514,79 @@ export default async function Search(container) {
   // scope above, so it survives navigating away and back.
   let exploreLoaded = false;
 
+  // The loading state stands in the same boxes the real thing will: an eyebrow
+  // over a title, a picks card with its reserved synopsis, the ranked row's
+  // inset cells, the mood grid. Rows below these append under the fold when the
+  // data lands, so nothing already on screen moves.
+  const skelLine = (w, cls = '', style = {}) =>
+    el('div', { class: `skeleton skel-line ${cls}`.trim(), style: { width: w, ...style } });
+
+  function skelHead() {
+    return el('div', { class: 'ai-head' }, [
+      el('div', { class: 'ai-heads' }, [
+        skelLine('32%', 'sm', { margin: '2px 0 8px' }),
+        skelLine('54%', '', { height: '16px' }),
+      ]),
+    ]);
+  }
+
+  function skelCell(rank) {
+    return el('div', { class: rank ? 'rk-cell' : 'ai-cell' }, [
+      el('div', { class: 'poster-card skeleton' }),
+      el('div', { class: 'ai-name' }, [skelLine('86%')]),
+      el('div', { class: 'ai-sub' }, [skelLine('42%', 'sm', { height: '11px', margin: '2px 0' })]),
+    ]);
+  }
+
+  function skelRow(rank) {
+    const rail = el('div', { class: 'ai-rail' });
+    for (let i = 0; i < 6; i++) rail.append(skelCell(rank));
+    return el('section', { class: 'ai' }, [skelHead(), rail]);
+  }
+
+  function skelPicks() {
+    return el('section', { class: 'ai' }, [
+      skelHead(),
+      el('div', { class: 'pk-rail' }, [
+        el('article', { class: 'pk-card' }, [
+          el('div', { class: 'poster-card skeleton' }),
+          // display:block overrides the line-clamped boxes so the bars stack.
+          el('div', { class: 'pk-body' }, [
+            skelLine('82%', 'lg', { marginBottom: '6px' }),
+            skelLine('60%', 'lg', { marginBottom: '10px' }),
+            skelLine('44%', 'sm', { marginBottom: '10px' }),
+            skelLine('100%', '', { marginBottom: '7px' }),
+            skelLine('92%', '', { marginBottom: '7px' }),
+            skelLine('56%'),
+          ]),
+          el('div', { class: 'pk-actions' }, [
+            el('div', { class: 'skeleton skel-pill', style: { height: '44px', flex: '1 1 auto' } }),
+          ]),
+        ]),
+      ]),
+      el('div', { class: 'pk-dots' }, [
+        el('span', { class: 'pk-dot' }),
+        el('span', { class: 'pk-dot' }),
+        el('span', { class: 'pk-dot' }),
+        el('span', { class: 'pk-dot' }),
+      ]),
+    ]);
+  }
+
+  function skelMood() {
+    const grid = el('div', { class: 'mx-grid' });
+    for (let i = 0; i < 6; i++) grid.append(el('div', { class: 'mx-skel skeleton' }));
+    const rail = el('div', { class: 'ai-rail' });
+    for (let i = 0; i < 6; i++) rail.append(skelCell());
+    return el('section', { class: 'mx' }, [skelHead(), grid, rail]);
+  }
+
   function exploreSkeleton() {
     exploreEl.innerHTML = '';
-    for (let s = 0; s < 3; s++) {
-      const cards = [];
-      for (let i = 0; i < 6; i++) cards.push(el('div', { class: 'ai-cell skeleton poster-card' }));
-      exploreEl.append(
-        el('section', { class: 'ai' }, [
-          el('div', { class: 'ai-head' }, [
-            el('div', { class: 'ai-heads' }, [skelLineTitle()]),
-          ]),
-          el('div', { class: 'ai-rail' }, cards),
-        ])
-      );
-    }
+    // The chips come from storage, so they paint now rather than shimmering.
+    recentEl = null;
+    paintRecent();
+    exploreEl.append(skelPicks(), skelRow(true), skelMood());
   }
 
   function renderExplore(data) {
@@ -859,15 +958,6 @@ export default async function Search(container) {
     counter.classList.add('has-query');
     run();
   }
-}
-
-// A shimmer stand-in for a row's title line.
-function skelLineTitle() {
-  const n = el('div', { class: 'skeleton skel-line' });
-  n.style.width = '38%';
-  n.style.height = '16px';
-  n.style.margin = '0 0 10px';
-  return n;
 }
 
 // Shared "Add to library" dialog. Title + collapsible summary, a separator, then
