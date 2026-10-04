@@ -78,6 +78,28 @@ export function hasCustomPhoto(tmdbId) {
   return findCustomPhoto(tmdbId) !== null;
 }
 
+// A content version for the photo URL, derived from the modified time of the file
+// that would actually be served (custom upload first, else the cached TMDB image).
+// Stamping this onto the URL as ?v lets the photo be cached as hard as the posters
+// are — a re-upload or a new TMDB download changes the mtime, which changes the URL,
+// so the fresh image shows at once without a no-cache round-trip on every paint.
+// 0 when no image exists yet, so the URL stays versionless (and uncached) until one does.
+export function photoVersion(tmdbId) {
+  const custom = findCustomPhoto(tmdbId);
+  const file = custom ? custom.file : tmdbPhotoPath(tmdbId);
+  try {
+    return Math.floor(fs.statSync(file).mtimeMs);
+  } catch {
+    return 0;
+  }
+}
+
+// The photo URL for a person, versioned when an image is on disk.
+export function photoUrl(tmdbId) {
+  const v = photoVersion(tmdbId);
+  return `/api/persons/${tmdbId}/photo${v ? `?v=${v}` : ''}`;
+}
+
 // Shape a DB row into the API response (credits parsed back from JSON).
 function shape(row) {
   let credits = { cast: [], crew: [] };
@@ -96,7 +118,7 @@ function shape(row) {
     place_of_birth: row.place_of_birth || null,
     profile_path: row.profile_path || null,
     has_custom_photo: hasCustomPhoto(row.tmdb_id),
-    photo_url: `/api/persons/${row.tmdb_id}/photo`,
+    photo_url: photoUrl(row.tmdb_id),
     credits,
     cached_at: row.cached_at,
   };

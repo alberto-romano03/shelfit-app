@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v108'; // bumped: ask to shelve a series when finished
+const CACHE = 'shelfit-shell-v110'; // bumped: downscale the Wall person photo so the offline copy fits
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

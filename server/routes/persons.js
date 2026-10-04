@@ -139,12 +139,21 @@ export default async function personRoutes(fastify) {
       reply.code(400);
       return { error: 'invalid person id' };
     }
+    // A ?v stamp (added by photoUrl from the file's mtime) makes the URL identify
+    // its exact bytes, so it can be cached as hard as the posters under /assets.
+    // Without it we keep revalidating, so a re-upload to the bare URL still shows.
+    const versioned = Boolean(request.query && request.query.v);
+
     const custom = findCustomPhoto(id);
     if (custom) {
       // The stored format is served as itself — a WebP announced as image/jpeg
       // relies on the browser sniffing past the header to render at all.
-      // no-cache: the URL has no version buster, so a re-upload must show at once.
-      reply.header('Content-Type', custom.mime).header('Cache-Control', 'no-cache, must-revalidate');
+      reply
+        .header('Content-Type', custom.mime)
+        .header(
+          'Cache-Control',
+          versioned ? 'public, max-age=31536000, immutable' : 'no-cache, must-revalidate'
+        );
       return reply.send(fs.createReadStream(custom.file));
     }
     let file = tmdbPhotoPath(id);
@@ -162,7 +171,10 @@ export default async function personRoutes(fastify) {
     }
     reply
       .header('Content-Type', 'image/webp')
-      .header('Cache-Control', 'public, max-age=86400');
+      .header(
+        'Cache-Control',
+        versioned ? 'public, max-age=31536000, immutable' : 'public, max-age=86400'
+      );
     return reply.send(fs.createReadStream(file));
   });
 }

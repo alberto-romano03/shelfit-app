@@ -116,20 +116,59 @@ const MAX_CACHED_IMG_BYTES = 400 * 1024;
 // everything else is an app path that still needs the base prefix.
 const imgSrc = (u) => (typeof u === 'string' && u.startsWith('data:') ? u : withBase(u));
 
+// Read a blob as a data: URL (verbatim bytes). null on failure.
+function blobToDataUrl(blob) {
+  return new Promise((resolve) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(typeof fr.result === 'string' ? fr.result : null);
+    fr.onerror = () => resolve(null);
+    fr.readAsDataURL(blob);
+  });
+}
+
+// Downscale an image blob through a canvas and re-encode it compactly. A custom
+// person upload is stored at full size (unlike posters, which are recompressed to
+// a small WebP), so it can be several hundred KB to multiple MB — too big to inline
+// verbatim. The Wall paints this in a small framed portrait, so a 400px long edge
+// is ample. null if the image can't be decoded or drawn.
+async function downscaleToDataUrl(blob, maxDim = 400, quality = 0.82) {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bmp.close?.();
+      return null;
+    }
+    ctx.drawImage(bmp, 0, 0, w, h);
+    bmp.close?.();
+    // Prefer WebP; browsers without WebP canvas encoding return PNG, which bloats a
+    // photo, so fall back to JPEG in that case.
+    const webp = canvas.toDataURL('image/webp', quality);
+    return webp && webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', quality);
+  } catch {
+    return null;
+  }
+}
+
 // Fetch one image through the normal same-origin (authenticated) path and encode
-// it as a data URL. null on any failure — caching is entirely best-effort.
+// it as a data URL for the offline copy. Small images are inlined verbatim; one
+// larger than the store budget is downscaled first so it still fits (rather than
+// being dropped, which left the person slot blank offline). null on any failure —
+// caching is entirely best-effort.
 async function toDataUrl(url) {
   try {
     const res = await fetch(withBase(url), { credentials: 'same-origin' });
     if (!res.ok) return null;
     const blob = await res.blob();
-    if (!blob.size || blob.size > MAX_CACHED_IMG_BYTES) return null;
-    return await new Promise((resolve) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(typeof fr.result === 'string' ? fr.result : null);
-      fr.onerror = () => resolve(null);
-      fr.readAsDataURL(blob);
-    });
+    if (!blob.size) return null;
+    if (blob.size <= MAX_CACHED_IMG_BYTES) return await blobToDataUrl(blob);
+    return await downscaleToDataUrl(blob);
   } catch {
     return null;
   }
@@ -141,7 +180,9 @@ async function cacheWall(fav) {
     const [moviePic, showPic, personPic] = await Promise.all([
       fav.movie ? toDataUrl(fav.movie.poster_url) : null,
       fav.show ? toDataUrl(fav.show.poster_url) : null,
-      fav.person ? toDataUrl(`/api/persons/${fav.person.tmdb_id}/photo`) : null,
+      fav.person
+        ? toDataUrl(fav.person.photo_url || `/api/persons/${fav.person.tmdb_id}/photo`)
+        : null,
     ]);
     saveWall({
       movie: fav.movie
@@ -190,7 +231,7 @@ function posterSlot(kind, data, { onOpen, onPick }) {
   return slot;
 }
 
-function personSlot(person, { onOpen, onPick }) {
+function personSlot(person, { onOpen, onPick, fallbackSrc }) {
   const photo = person
     ? el('img', {
         class: 'wall-person-img',
@@ -199,12 +240,17 @@ function personSlot(person, { onOpen, onPick }) {
         loading: 'lazy',
       })
     : placeholder(t('wall.setPerson'));
-  // A missing photo (never cached / no TMDB image) falls back to the silhouette
-  // rather than a broken image icon.
+  // If the live photo fails to load (offline, a transient blip, or no TMDB image),
+  // try the stored offline copy first so a good picture isn't dropped for a
+  // silhouette over a momentary hiccup. Only when there's no usable copy at all do
+  // we settle on the silhouette, and never loop back onto a src that just failed.
   if (person) {
     photo.addEventListener('error', () => {
-      const ph = el('div', { class: 'wall-person-silhouette' });
-      photo.replaceWith(ph);
+      if (fallbackSrc && photo.getAttribute('src') !== fallbackSrc) {
+        photo.src = fallbackSrc;
+        return;
+      }
+      photo.replaceWith(el('div', { class: 'wall-person-silhouette' }));
     });
   }
   const box = el('div', { class: 'wall-person-photo' + (person ? '' : ' is-empty') }, [photo]);
@@ -251,8 +297,14 @@ export function createTheWall() {
   }
 
   // Repaint the three slots from a favourites payload — live, or the offline copy.
-  function paint(fav) {
+  // `fallback` is the previously stored copy (data URLs); the person photo falls
+  // back to it if the live one fails to load.
+  function paint(fav, fallback) {
     row.innerHTML = '';
+    const personFallback =
+      fallback && fallback.person && typeof fallback.person.photo_url === 'string'
+        ? imgSrc(fallback.person.photo_url)
+        : null;
     row.append(
       posterSlot('movie', fav.movie, {
         onOpen: (d) => openDetail(`/detail/${d.id}`),
@@ -261,6 +313,7 @@ export function createTheWall() {
       personSlot(fav.person, {
         onOpen: (p) => navigate(`/person/${p.tmdb_id}`),
         onPick: pickPerson,
+        fallbackSrc: personFallback,
       }),
       posterSlot('show', fav.show, {
         onOpen: (d) => openDetail(`/detail/${d.id}`),
@@ -282,7 +335,7 @@ export function createTheWall() {
       if (!cached) paint({ movie: null, show: null, person: null });
       return;
     }
-    paint(fav);
+    paint(fav, cached);
     cacheWall(fav);
   }
 
