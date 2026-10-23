@@ -587,7 +587,22 @@ export function mountPoster(container, url, alt, opts = {}) {
     if (img.parentNode) img.remove();
   });
   container.append(img);
-  lazyLoad(img, url);
+  if (opts.viaCache) {
+    // Load through imageCache instead of native lazy loading (cachedBlobImg's
+    // path). For a set the caller is already preloading (My Tickets warms every
+    // backdrop), this joins the preload's in-flight request instead of fetching
+    // the same file a second time, and doesn't wait on lazy-load intersection.
+    imageCache
+      .load(url)
+      .then((src) => {
+        img.src = src || withBase(url);
+      })
+      .catch(() => {
+        img.src = withBase(url);
+      });
+  } else {
+    lazyLoad(img, url);
+  }
   // Cache hit may have set src synchronously.
   if (img.complete && img.naturalWidth > 0) reveal();
   return container;

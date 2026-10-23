@@ -399,6 +399,7 @@ export function openCinemaTickets() {
     async function saveCinema(ticket, patch, key, val) {
       const prev = ticket[key];
       ticket[key] = val;
+      albumStale = true; // the miniature's date (and maybe its place) changed
       try {
         await api.updateCinema(ticket.id, patch);
       } catch (err) {
@@ -453,10 +454,21 @@ export function openCinemaTickets() {
         writeTicketSort(v);
         applySort();
         renderAlbum();
+        decodeFirstScreen(); // in view already: just get the new first rows painted
       },
     });
     const album = el('div', { class: 'cine-album' });
     const albumPage = el('div', {}, [el('div', { class: 'filter-bar' }, [sortPill.el]), album]);
+
+    // The album is built once and kept: going back to the collection only moves
+    // the "current" mark. It's rebuilt when the order or a ticket's details
+    // changed (sort pill, an edit in the single view, a fresh load).
+    let albumStale = true;
+    let albumMinis = [];
+    let albumToken = 0; // drops a stale showAlbum if the view switched back meanwhile
+    // Miniatures in the first screenful (3 columns x 4 rows): the only ones that
+    // deal in, and the ones decoded before the album is shown.
+    const FIRST_SCREEN = 12;
 
     // Every ticket as a miniature, a .grid-divider opening each group of the
     // current sort. The ticket last in view is marked; a tap opens that ticket.
@@ -464,34 +476,66 @@ export function openCinemaTickets() {
       const groupOf = TICKET_SORTS[sortKey].group;
       const nodes = [];
       let prevGroup = null;
-      tickets.forEach((tk, i) => {
+      albumMinis = tickets.map((tk, i) => {
         const g = groupOf(tk);
         if (g !== prevGroup) {
           nodes.push(el('div', { class: 'grid-divider' }, [el('span', { class: 'grid-divider-label', text: g })]));
           prevGroup = g;
         }
         const mini = renderMiniTicket(tk);
-        // Stagger the deal-in over the first screenful only.
-        mini.style.setProperty('--deal-i', String(Math.min(i, 14)));
-        mini.classList.toggle('is-current', i === index);
+        if (i < FIRST_SCREEN) mini.style.setProperty('--deal-i', String(i));
+        else mini.classList.add('is-still');
         mini.addEventListener('click', () => openFromAlbum(i, mini));
         nodes.push(mini);
+        return mini;
       });
       album.replaceChildren(...nodes);
+      markCurrent();
+      albumStale = false;
     }
 
-    function showAlbum() {
-      applySort(); // pick up any date edited in the single view
+    function markCurrent() {
+      albumMinis.forEach((mini, i) => mini.classList.toggle('is-current', i === index));
+    }
+
+    // Decode the first screenful's backdrops off-screen, in one batch, so the
+    // album appears with its images already painted instead of each one popping
+    // in on its own frame. Only images already in imageCache (blob URLs) can
+    // decode detached. Capped below the segmented chip's own slide, so a slow
+    // device (or a backgrounded tab, where decode() can stall) never holds the
+    // view back noticeably.
+    function decodeFirstScreen() {
+      const imgs = albumMinis
+        .slice(0, FIRST_SCREEN)
+        .map((mini) => mini.querySelector('.cine-mini-banner img'))
+        .filter((img) => img && img.decode && String(img.src).startsWith('blob:'));
+      if (!imgs.length) return Promise.resolve();
+      const decoded = Promise.all(imgs.map((img) => img.decode().catch(() => {})));
+      return Promise.race([decoded, new Promise((r) => window.setTimeout(r, 120))]);
+    }
+
+    async function showAlbum() {
+      const token = ++albumToken;
+      const rebuilt = albumStale;
+      if (albumStale) {
+        applySort(); // pick up any date edited in the single view
+        renderAlbum();
+      } else {
+        markCurrent();
+      }
+      // A kept album's images were decoded the first time it showed: no wait.
+      if (rebuilt) await decodeFirstScreen();
+      if (token !== albumToken || viewSeg.value() !== 'all') return; // switched back meanwhile
       body.classList.add('is-album');
       // No position in the collection; the album runs down to the footer rule.
       footer.classList.add('is-album');
       progress.style.display = 'none';
-      renderAlbum();
       body.replaceChildren(albumPage);
       body.scrollTop = 0; // always open at the top: the sort and the first group
     }
 
     function showOne() {
+      albumToken++; // cancels a showAlbum still decoding
       body.classList.remove('is-album');
       footer.classList.remove('is-album');
       progress.style.display = '';
@@ -542,6 +586,11 @@ export function openCinemaTickets() {
         index = 0;
         viewSeg.el.style.display = '';
         showOne();
+        // Warm every backdrop in display order at background priority (the same
+        // scheduler as the grid preloader, so it never delays a visible image).
+        // The collection then paints from RAM, and swiping in the single view
+        // lands on images that are already there.
+        imageCache.preload(tickets.map((tk) => tk.backdropPath).filter(Boolean));
       })
       .catch(() => showMessage(t('ticket.loadError')));
   });

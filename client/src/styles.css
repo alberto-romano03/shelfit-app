@@ -8850,6 +8850,11 @@ textarea.notes:focus,
   animation: cine-deal var(--dur-long) var(--ease-out) backwards;
   animation-delay: calc(var(--deal-i, 0) * 22ms);
 }
+/* Below the first screenful: no deal-in. They're out of view when it plays, and
+   animating every miniature's filtered layer at once is what costs frames. */
+.cine-mini.is-still {
+  animation: none;
+}
 @keyframes cine-deal {
   from {
     translate: 0 12px;
@@ -8875,9 +8880,14 @@ textarea.notes:focus,
   border-radius: 10px 10px 0 0;
   overflow: hidden;
 }
+/* The banner is a mountPoster container: the .skeleton shimmer shows until the
+   backdrop decodes. Its corners come from .cine-mini-top, so the shimmer's own
+   radius is dropped. */
 .cine-mini-banner {
   aspect-ratio: 16 / 9;
-  background: var(--paper-edge);
+}
+.cine-mini-banner.skeleton {
+  border-radius: 0;
 }
 .cine-mini-banner img {
   width: 100%;

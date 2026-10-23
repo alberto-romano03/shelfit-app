@@ -4,7 +4,7 @@
 // renderMiniTicket(). Pure CSS + vanilla DOM (see .cine-ticket / .cine-mini in
 // styles.css) — no canvas, no barcode library.
 
-import { el, cachedImg, lucideIcon } from './ui.js';
+import { el, cachedImg, lucideIcon, mountPoster } from './ui.js';
 import { withBase } from './basePath.js';
 import { t, locale } from './i18n.js';
 
@@ -205,11 +205,19 @@ export function renderTicket(ticketData, { onDateChange, onTimeChange, onCinemaC
 // notches and barcode at stub size, with the date the full ticket shows (the
 // screening date, else the release date it falls back to). A button: the
 // collection opens the full ticket on tap. Read-only, no fields.
+// The banner goes through mountPoster like every grid poster: a shimmer until
+// it decodes, and no fade at all when the backdrop is already in imageCache (My
+// Tickets warms them), so a screenful of miniatures doesn't pop in one by one.
+// autoDecode:false: the collection decodes the visible ones itself, in one batch.
+// viaCache: a miss joins that warm-up's request rather than downloading again.
 export function renderMiniTicket(ticketData) {
   const data = ticketData || {};
   return el('button', { class: 'cine-mini', type: 'button', 'aria-label': data.title || t('ticket.untitled') }, [
     el('div', { class: 'cine-mini-top' }, [
-      el('div', { class: 'cine-mini-banner' }, [cachedImg(data.backdropPath, { alt: '' })]),
+      mountPoster(el('div', { class: 'cine-mini-banner' }), data.backdropPath, '', {
+        autoDecode: false,
+        viaCache: true,
+      }),
       el('div', { class: 'cine-mini-body' }, [
         el('div', { class: 'cine-mini-title', text: data.title || t('ticket.untitled') }),
         el('div', { class: 'cine-mini-date', text: formatDate(data.cinemaDate || data.releaseDate) }),
