@@ -241,9 +241,18 @@ function normalizeMovie(raw) {
     budget: raw.budget || 0,
     revenue: raw.revenue || 0,
     original_language: raw.original_language || '',
+    // The flag on the Liner Notes language cell. TMDB's `origin_country` is the
+    // title's primary country, the same field shows use. `production_countries`
+    // is only a fallback: TMDB lists it alphabetically, so its first entry is any
+    // co-producer that sorts early (Super Mario Bros.: JP before US) and the cell
+    // showed a Japanese flag beside "EN".
     origin_country:
+      (raw.origin_country && raw.origin_country[0]) ||
       (raw.production_countries && raw.production_countries[0] && raw.production_countries[0].iso_3166_1) ||
       '',
+    // The full list, kept so metaMissingBento can tell a meta.json written before
+    // the fix above (which lacks it) and heal it on the next open.
+    origin_countries: Array.isArray(raw.origin_country) ? raw.origin_country : [],
     production_company:
       (raw.production_companies && raw.production_companies[0] && raw.production_companies[0].name) || '',
     certification: pickCertification(raw),
@@ -462,7 +471,10 @@ export function metaMissingBento(type, meta) {
   // Both types also self-heal the `tagline` field (added later) through the same
   // one-call lightweight refetch — no dedicated tagline API call.
   if (!('tagline' in meta)) return true;
-  return type === 'movie' ? !('director' in meta) : !('network' in meta);
+  // Movies cached before origin_country preferred TMDB's primary country carry
+  // a co-producer's flag; `origin_countries` arrived with that fix.
+  if (type === 'movie') return !('director' in meta) || !('origin_countries' in meta);
+  return !('network' in meta);
 }
 
 // Lightweight refresh: re-fetch ONLY the top-level metadata (one TMDB call) and
