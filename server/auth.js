@@ -7,10 +7,8 @@
 // signed HttpOnly cookie. No external dependencies — Node's crypto only.
 
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 import db from './db.js';
-import { CLIENT_DIST, PUBLIC_URL } from './config.js';
+import { PUBLIC_URL } from './config.js';
 import {
   createMagicLink,
   listMagicLinks,
@@ -327,24 +325,12 @@ const magicSweep = setInterval(() => {
 if (magicSweep.unref) magicSweep.unref();
 
 // --- login page (standalone, self-contained) -------------------------------
-// Embed the app icon as a data URI so the page needs no authenticated assets.
-let cachedLogo;
-function logoDataUri() {
-  if (cachedLogo !== undefined) return cachedLogo;
-  try {
-    const p = path.join(CLIENT_DIST, 'icons', 'shelf-iticon-browser.png');
-    cachedLogo = `data:image/png;base64,${fs.readFileSync(p).toString('base64')}`;
-  } catch {
-    cachedLogo = null;
-  }
-  return cachedLogo;
-}
-
+// The logo is the same file as the favicon, linked rather than inlined: /icons/*
+// is public (see isPublic), so it loads without a session, and as a separate URL
+// it is downloaded once and browser-cached (Caddy sends a week's max-age) instead
+// of riding along, base64-inflated, in every no-store copy of this page.
 function loginPageHtml() {
-  const logo = logoDataUri();
-  const logoTag = logo
-    ? `<img class="logo" src="${logo}" alt="" width="72" height="72">`
-    : '';
+  const logoTag = `<img class="logo" src="${BASE}/icons/shelf-iticon-browser.png" alt="" width="72" height="72">`;
   return `<!doctype html>
 <html lang="en">
 <head>
