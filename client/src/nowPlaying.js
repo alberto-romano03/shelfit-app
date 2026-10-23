@@ -1,14 +1,15 @@
 // Kodi "Now Playing" UI:
 //   • a small header indicator ("Now Playing") — tap to open the toast
 //   • the animated wavy avatar ring
-//   • a top-sliding toast (poster · title/episode/tracks), read-only: it shows
-//     only what Kodi reports as playing, with no library actions
+//   • a top-sliding toast (poster · Kodi instance · title · episode · audio and
+//     subtitle chips), read-only: it shows only what Kodi reports as playing,
+//     with no library actions
 // Everything reads the cached snapshot from kodi.js (getNowPlaying) and updates
 // on the shared `shelfit:kodi-nowplaying` event. Both the header indicator and
 // the profile avatar open the SAME toast; when nothing is playing they do
 // nothing. The toast never fetches on tap.
 
-import { el, cachedImg } from './ui.js';
+import { el, cachedImg, lucideIcon } from './ui.js';
 import { getNowPlaying } from './kodi.js';
 import { createWavyRing } from './wavyRing.js';
 import { t, onLangChange } from './i18n.js';
@@ -28,7 +29,10 @@ let autoCloseTimer = null; // dismisses an open toast after a short peek
 
 // The toast is a quick glance at what's playing — auto-dismiss it a few seconds
 // after it opens so it never lingers over the UI.
-const TOAST_AUTO_CLOSE_MS = 5000;
+const TOAST_AUTO_CLOSE_MS = 7000;
+
+// Header label: "Now playing", or "Paused" while Kodi is paused.
+const indicatorLabel = (np) => (np && np.paused ? t('nowPlaying.paused') : t('nowPlaying.label'));
 
 // --- Build (indicator + toast, once) --------------------------------------
 export function initNowPlaying(headerActionsEl) {
@@ -49,19 +53,22 @@ export function initNowPlaying(headerActionsEl) {
   indicator.append(glyph, el('span', { class: 'np-indicator-label' }, [t('nowPlaying.label')]));
   if (headerActionsEl) headerActionsEl.prepend(indicator);
 
-  // Toast (built once, reused): [poster] [ title / SxxExx / tracks ].
+  // Toast (built once, reused):
+  // [poster] [ tv · Kodi instance / title / SxxExx · episode / audio + subtitle chips ].
   const poster = el('div', { class: 'np-toast-poster' });
+  const sourceName = el('span', { class: 'np-toast-source-name' });
+  const source = el('div', { class: 'np-toast-source' }, [lucideIcon('tv', 'btn-lucide'), sourceName]);
   const title = el('div', { class: 'np-toast-title' });
   const meta = el('div', { class: 'np-toast-meta' });
-  const tracks = el('div', { class: 'np-toast-tracks' });
-  const text = el('div', { class: 'np-toast-text' }, [title, meta, tracks]);
+  const chips = el('div', { class: 'np-toast-chips' });
+  const text = el('div', { class: 'np-toast-text' }, [source, title, meta, chips]);
   const body = el('div', { class: 'np-toast-body' }, [text]);
   toastEl = el('div', { class: 'np-toast', role: 'dialog', 'aria-label': t('nowPlaying.label') }, [
     poster,
     body,
   ]);
   document.body.appendChild(toastEl);
-  els = { poster, title, meta, tracks };
+  els = { poster, source, sourceName, title, meta, chips };
 
   // Outside-tap dismiss.
   document.addEventListener('click', (e) => {
@@ -80,7 +87,7 @@ export function initNowPlaying(headerActionsEl) {
   // The indicator and toast outlive page renders — relabel them on a language switch.
   onLangChange(() => {
     indicator.setAttribute('aria-label', t('nowPlaying.indicatorAria'));
-    indicator.querySelector('.np-indicator-label').textContent = t('nowPlaying.label');
+    indicator.querySelector('.np-indicator-label').textContent = indicatorLabel(getNowPlaying());
     toastEl.setAttribute('aria-label', t('nowPlaying.label'));
     if (toastOpen) fillToast(getNowPlaying());
   });
@@ -139,7 +146,12 @@ function posterKey(np) {
 // --- Render (indicator + ring + live toast content) -----------------------
 function render(np) {
   const active = !!(np && np.active);
-  if (indicator) indicator.classList.toggle('active', active);
+  if (indicator) {
+    indicator.classList.toggle('active', active);
+    // Paused on Kodi: the indicator rests (no pulse, no light) and says so.
+    indicator.classList.toggle('paused', active && !!np.paused);
+    indicator.querySelector('.np-indicator-label').textContent = indicatorLabel(np);
+  }
   applyRing(np);
 
   if (toastOpen) {
@@ -149,8 +161,18 @@ function render(np) {
 }
 
 // --- Toast content --------------------------------------------------------
+// One audio / subtitle chip: a Lucide glyph and its text.
+function trackChip(icon, text) {
+  return el('span', { class: 'np-chip' }, [lucideIcon(icon, 'btn-lucide'), el('span', { text })]);
+}
+
 function fillToast(np) {
   const isEp = np.media_type === 'episode';
+  toastEl.classList.toggle('paused', !!np.paused);
+
+  // Which Kodi is playing: the instance's own name (absent → the line hides).
+  els.sourceName.textContent = np.instance || '';
+  els.source.style.display = np.instance ? '' : 'none';
 
   // Poster: local shelfIt TMDB cache first (matched titles); otherwise Kodi's own
   // artwork, proxied through the server; skeleton when neither is available.
@@ -177,26 +199,38 @@ function fillToast(np) {
     }
   }
 
-  // Title + season/episode (under the title) or year for a movie.
+  // Title, then season/episode plus the episode's own title, or the year for a movie.
   els.title.textContent = isEp ? np.show_title || t('nowPlaying.fallbackTitle') : np.title || t('nowPlaying.fallbackTitle');
-  let metaText = '';
+  const parts = [];
   if (isEp) {
     if (np.season > 0)
-      metaText = `S${String(np.season).padStart(2, '0')} · E${String(np.episode || 0).padStart(2, '0')}`;
-    else if (np.episode > 0) metaText = t('nowPlaying.episode', { episode: np.episode });
+      parts.push(`S${String(np.season).padStart(2, '0')} · E${String(np.episode || 0).padStart(2, '0')}`);
+    else if (np.episode > 0) parts.push(t('nowPlaying.episode', { episode: np.episode }));
+    // For an episode `title` is the episode's name; skip it when Kodi gave none
+    // beyond the show's name.
+    if (np.title && np.title !== np.show_title) parts.push(np.title);
   } else if (np.year) {
-    metaText = String(np.year);
+    parts.push(String(np.year));
   }
   // Drop the meta line when it would just repeat the heading (e.g. a bare
   // "Episode 7" with no show/season resolved).
+  let metaText = parts.join(' · ');
   if (metaText && metaText === els.title.textContent) metaText = '';
   els.meta.textContent = metaText;
   els.meta.style.display = metaText ? '' : 'none';
 
-  // Audio / subtitle ISO-639-1 codes on one compact line.
-  const audio = (np.audio && np.audio.language) || '—';
-  const sub = (np.subtitle && np.subtitle.language) || '—';
-  els.tracks.innerHTML = `${audio}<span class="sep">·</span>${t('nowPlaying.subtitles', { lang: sub })}`;
+  // Audio (language · codec) and subtitles as two small chips. The subtitle chip
+  // always shows, reading "none" when subtitles are off.
+  const audio = np.audio
+    ? [np.audio.language && np.audio.language.toUpperCase(), np.audio.codec].filter(Boolean).join(' · ')
+    : '';
+  const sub = np.subtitle && np.subtitle.language ? np.subtitle.language.toUpperCase() : t('nowPlaying.subtitlesOff');
+  els.chips.replaceChildren(
+    ...[
+      audio ? trackChip('volume-2', audio) : null,
+      trackChip('captions', sub),
+    ].filter(Boolean)
+  );
 }
 
 // --- Open / close ---------------------------------------------------------

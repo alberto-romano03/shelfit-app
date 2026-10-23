@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v118'; // bumped: My Tickets collection warms, reuses and batch-decodes its images
+const CACHE = 'shelfit-shell-v119'; // bumped: Now Playing light sweep + redesigned toast
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

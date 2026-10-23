@@ -54,6 +54,9 @@ const ICONS = [
   'ticket', // Watched in Cinema button + ticket modal empty state
   'popcorn', // ticket cinema-name field
   'wallet-cards', // My Tickets "Collection" view switch
+  // Kodi Now Playing toast.
+  'volume-2', // audio track chip
+  'captions', // subtitle track chip
   // Server offline/online toast icons.
   'globe-off', // offline
   'eject', // recovered

@@ -9300,14 +9300,50 @@ textarea.notes:focus,
   visibility: visible;
   opacity: 1;
 }
-.np-indicator-label { white-space: nowrap; }
-/* Pulsing filled play glyph (inline SVG, tinted via currentColor). */
+/* A slow light drifts across the label: a gradient clipped to the letters. The
+   highlight mixes toward the theme's text colour, so it brightens on dark and
+   deepens on light and the label always stays readable. Ambient only: one pass
+   over ~8s, then ~8s of rest, paused while pressed, still under reduced motion. */
+.np-indicator-label {
+  white-space: nowrap;
+  background: linear-gradient(
+    100deg,
+    #17b2e8 0%,
+    #17b2e8 40%,
+    color-mix(in srgb, #17b2e8 40%, var(--text-primary)) 50%,
+    #17b2e8 60%,
+    #17b2e8 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: np-sweep 16s ease-in-out infinite;
+}
+@keyframes np-sweep {
+  0% { background-position: 100% 0; }
+  50%, 100% { background-position: -150% 0; }
+}
+/* Pulsing filled play glyph (inline SVG, tinted via currentColor). A calm 4.8s
+   breath, so the indicator never blinks for attention. */
 .np-audio {
   width: 13px;
   height: 13px;
   flex-shrink: 0;
   display: inline-flex;
-  animation: np-audio-pulse 1.4s ease-in-out infinite;
+  animation: np-audio-pulse 4.8s ease-in-out infinite;
+}
+.np-indicator:active .np-audio,
+.np-indicator:active .np-indicator-label {
+  animation-play-state: paused;
+}
+/* Paused on Kodi: everything rests and the indicator dims. */
+.np-indicator.paused .np-audio,
+.np-indicator.paused .np-indicator-label {
+  animation: none;
+}
+.np-indicator.active.paused {
+  opacity: 0.75;
 }
 .np-audio svg {
   width: 100%;
@@ -9320,11 +9356,12 @@ textarea.notes:focus,
 }
 @media (prefers-reduced-motion: reduce) {
   .np-audio { animation: none; opacity: 1; }
+  .np-indicator-label { animation: none; }
 }
 
 /* --- Now Playing toast (slides down from above, settles below the header) --- */
 .np-toast {
-  --poster-w: 72px;
+  --poster-w: 84px;
   position: fixed;
   top: 72px; /* refined to the header's bottom on open (JS) */
   left: 0;
@@ -9336,6 +9373,7 @@ textarea.notes:focus,
   align-items: stretch;
   overflow: hidden; /* poster clipped by the toast radius */
   background: var(--surface-elevated);
+  border: 1px solid color-mix(in srgb, #17b2e8 22%, var(--border));
   border-radius: var(--r-lg); /* same family as cards / other toasts */
   box-shadow: 0 8px 28px var(--shadow);
   /* Vertical equivalent of the server toast: slide down from above. */
@@ -9352,11 +9390,13 @@ textarea.notes:focus,
 .np-toast.dismissing {
   transition: transform var(--dur-medium) var(--ease-in), opacity var(--dur-medium) var(--ease-in);
 }
+/* A true 2:3 poster (84 x 126) that sets the card's height. It used to stretch
+   to the text column and crop into a narrow strip. */
 .np-toast-poster {
   flex: 0 0 var(--poster-w);
   width: var(--poster-w);
-  aspect-ratio: 2 / 3; /* fixed 2:3, full height, flush left edges */
-  align-self: stretch;
+  aspect-ratio: 2 / 3; /* flush left edges */
+  align-self: flex-start;
   background: var(--surface);
   overflow: hidden;
 }
@@ -9371,8 +9411,7 @@ textarea.notes:focus,
   min-width: 0;
   display: flex;
   align-items: stretch;
-  gap: 12px;
-  padding: 10px 12px;
+  padding: 11px 14px;
 }
 .np-toast-text {
   flex: 1 1 auto;
@@ -9380,17 +9419,45 @@ textarea.notes:focus,
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 6px;
 }
+/* Which Kodi is playing: the tv glyph + the instance's name, in the app's
+   micro-label type. Grey while Kodi is paused. */
+.np-toast-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #17b2e8;
+}
+.np-toast-source .btn-lucide {
+  width: 14px;
+  height: 14px;
+}
+.np-toast-source-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-toast.paused .np-toast-source {
+  color: var(--text-secondary);
+}
+/* The content's name, large enough to fill the card beside the poster. */
 .np-toast-title {
   font-weight: 700;
-  font-size: 14px;
-  line-height: 1.25;
+  font-size: 18px;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .np-toast-meta {
+  margin-top: -3px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -9399,17 +9466,29 @@ textarea.notes:focus,
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.np-toast-tracks {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* Audio (language · codec) and subtitles: two small pills with their glyphs. */
+.np-toast-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.np-toast-tracks .sep {
-  opacity: 0.5;
-  margin: 0 5px;
+.np-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.np-chip .btn-lucide {
+  width: 13px;
+  height: 13px;
 }
 @media (prefers-reduced-motion: reduce) {
   .np-toast { transition: opacity var(--dur-short) var(--ease-state); }

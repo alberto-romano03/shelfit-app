@@ -542,6 +542,9 @@ export async function nowPlaying() {
 
   return {
     active: true,
+    // The name the user gave the Kodi instance that's playing (shown on the
+    // Now Playing toast). Just the label: never the host, port or credentials.
+    instance: inst.name || null,
     media_type: mediaType,
     title: mediaType === 'episode' ? itemTitle || '' : itemTitle || label,
     // Heading for an episode: the show name, or the label if Kodi gave none.
