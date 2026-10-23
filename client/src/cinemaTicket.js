@@ -1,6 +1,7 @@
 // Cinema ticket — the single source of truth for a ticket's data shape and its
 // DOM. No ticket markup is defined anywhere else; every ticket in the app is
-// produced by renderTicket(). Pure CSS + vanilla DOM (see .cine-ticket in
+// produced by renderTicket(), and its stub-sized collection form by
+// renderMiniTicket(). Pure CSS + vanilla DOM (see .cine-ticket / .cine-mini in
 // styles.css) — no canvas, no barcode library.
 
 import { el, cachedImg, lucideIcon } from './ui.js';
@@ -31,7 +32,11 @@ export function ticketFromApi(row) {
 const DEFAULT_TIME = '21:00';
 
 // Format an ISO 'YYYY-MM-DD' as a readable local date ("5 Aug 2026"). Parsed
-// component-wise so a plain date never shifts a day across time zones.
+// component-wise so a plain date never shifts a day across time zones. Exported
+// so labels beside a ticket (the new-ticket popup) read exactly like the ticket.
+export function formatTicketDate(iso) {
+  return formatDate(iso);
+}
 function formatDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
   if (!m) return iso || '';
@@ -194,4 +199,23 @@ export function renderTicket(ticketData, { onDateChange, onTimeChange, onCinemaC
   ]);
 
   return el('div', { class: 'cine-ticket' }, [top, tear, stub]);
+}
+
+// Miniature ticket for the My Tickets collection: the same paper, banner, tear
+// notches and barcode at stub size, with the date the full ticket shows (the
+// screening date, else the release date it falls back to). A button: the
+// collection opens the full ticket on tap. Read-only, no fields.
+export function renderMiniTicket(ticketData) {
+  const data = ticketData || {};
+  return el('button', { class: 'cine-mini', type: 'button', 'aria-label': data.title || t('ticket.untitled') }, [
+    el('div', { class: 'cine-mini-top' }, [
+      el('div', { class: 'cine-mini-banner' }, [cachedImg(data.backdropPath, { alt: '' })]),
+      el('div', { class: 'cine-mini-body' }, [
+        el('div', { class: 'cine-mini-title', text: data.title || t('ticket.untitled') }),
+        el('div', { class: 'cine-mini-date', text: formatDate(data.cinemaDate || data.releaseDate) }),
+      ]),
+    ]),
+    el('div', { class: 'cine-mini-tear' }),
+    el('div', { class: 'cine-mini-stub' }, [el('div', { class: 'cine-mini-barcode', 'aria-hidden': 'true' })]),
+  ]);
 }

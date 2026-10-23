@@ -15,6 +15,7 @@ import { openImagePicker } from '../imagePicker.js';
 import { withBase } from '../basePath.js';
 import { confetti } from '../confetti.js';
 import { offerShelve } from '../finishSeries.js';
+import { openNewTicketModal } from '../cinemaTickets.js';
 import { t, locale, getLang } from '../i18n.js';
 import {
   el,
@@ -679,9 +680,11 @@ export default async function Detail(container, params) {
     }
   });
 
-  // --- Watched in Cinema toggle (MOVIES ONLY; optimistic like Owned) ---
+  // --- Watched in Cinema toggle (MOVIES ONLY) ---
   // When active it illuminates in a warm popcorn red, distinct from the amber of
   // the Owned toggle. The flag rides the same PATCH /api/media/:id as `owned`.
+  // Turning it ON opens the "New ticket" popup and only lights up once the ticket
+  // is added (Cancel leaves it off); turning it OFF stays optimistic like Owned.
   const TICKET_ICON =
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg>';
   const cinemaBtn = el('button', { class: 'toggle-wide cinema-toggle' });
@@ -694,13 +697,32 @@ export default async function Detail(container, params) {
   if (d.type === 'movie') {
     renderCinema();
     cinemaBtn.addEventListener('click', async () => {
-      const next = !d.watched_in_cinema;
-      d.watched_in_cinema = next; // optimistic
+      if (!d.watched_in_cinema) {
+        openNewTicketModal({
+          movie: {
+            id,
+            tmdbId: d.tmdb_id,
+            title: d.title_it,
+            backdropPath: d.backdrop_url,
+            releaseDate: (d.meta && d.meta.release_date) || null,
+          },
+          // Screening details first, then the flag: if the flag fails, the
+          // movie is simply not a ticket yet and the popup stays open to retry.
+          onConfirm: async (screening) => {
+            await api.updateCinema(id, screening);
+            await api.updateMedia(id, { watched_in_cinema: true });
+            d.watched_in_cinema = true;
+            renderCinema();
+          },
+        });
+        return;
+      }
+      d.watched_in_cinema = false; // optimistic
       renderCinema();
       try {
-        await api.updateMedia(id, { watched_in_cinema: next });
+        await api.updateMedia(id, { watched_in_cinema: false });
       } catch (err) {
-        d.watched_in_cinema = !next; // revert on failure
+        d.watched_in_cinema = true; // revert on failure
         renderCinema();
         toast(err.message, 'bad');
       }

@@ -53,6 +53,7 @@ const ICONS = [
   // Cinema tickets (watched-in-cinema flag + ticket collection).
   'ticket', // Watched in Cinema button + ticket modal empty state
   'popcorn', // ticket cinema-name field
+  'wallet-cards', // My Tickets "Collection" view switch
   // Server offline/online toast icons.
   'globe-off', // offline
   'eject', // recovered
