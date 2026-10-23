@@ -347,9 +347,20 @@ function buildHorizonRailway(horizon) {
   return { node, init: updateArrows };
 }
 
+// The railway with no stops: the full-width rail stays, so the section keeps its
+// place on the page, and a label on the line says nothing new is airing yet.
+function emptyHorizonRailway() {
+  const track = el('div', { class: 'railway-track railway-track-empty' }, [
+    el('span', { class: 'railway-empty-label', text: t('upcoming.horizonEmpty') }),
+  ]);
+  return el('div', { class: 'railway-section' }, [
+    el('div', { class: 'railway-scroller' }, [track]),
+  ]);
+}
+
 // Build the whole What's Next view node from an upcoming() payload. Structure:
-// [On the Horizon railway] → [divider "Up Next"] → [episode cards]. The railway
-// (and its title) is omitted when nothing is on the horizon. Returns
+// [On the Horizon railway] → [divider "Up Next"] → [episode cards]. When nothing
+// is on the horizon the railway is an empty rail with a "nothing yet" label. Returns
 // { content, railway }, where railway (or null) exposes init() for the desktop
 // arrows once the node is mounted. Countdown labels are recomputed from each
 // air_date here, so a cached payload still shows the correct "in N days".
@@ -369,10 +380,12 @@ function buildUpcoming(data) {
   } else {
     content = el('div', { class: 'upcoming-view' });
 
+    content.append(el('h2', { class: 'section-heading', text: t('upcoming.horizon') }));
     if (horizon.length) {
-      content.append(el('h2', { class: 'section-heading', text: t('upcoming.horizon') }));
       railway = buildHorizonRailway(horizon);
       content.append(railway.node);
+    } else {
+      content.append(emptyHorizonRailway());
     }
 
     content.append(sectionDivider(t('upcoming.upNext')));

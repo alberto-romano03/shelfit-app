@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v111'; // bumped: Now Playing toast is read-only (action button removed)
+const CACHE = 'shelfit-shell-v112'; // bumped: On the Horizon rail spans the full width, empty-state rail
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

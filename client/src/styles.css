@@ -2189,7 +2189,28 @@ textarea.note-sheet-input:focus {
   display: flex;
   align-items: center;
   width: max-content;
+  /* Never shorter than the scroller: with only a stop or two the rail still runs
+     the full width of the view instead of stopping just past the last stop. */
+  min-width: 100%;
   padding-right: 12px;
+}
+/* Nothing on the horizon: the same full-width rail, shorter (no stop bands to
+   hold), with a label sitting on the line in place of the stops. */
+.railway-track-empty {
+  justify-content: center;
+  height: 64px;
+  padding-right: 0;
+}
+.railway-empty-label {
+  position: relative;
+  z-index: 1; /* above the rail line */
+  padding: 4px 12px;
+  border-radius: var(--r-pill);
+  background: var(--bg); /* interrupts the line, like the stop circles */
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
 }
 /* The rail: a subtle grey dashed line through the vertical centre. */
 .railway-track::before {
