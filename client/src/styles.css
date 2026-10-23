@@ -9103,7 +9103,7 @@ textarea.notes:focus,
   z-index: 300;
   display: flex;
   align-items: stretch;
-  overflow: hidden; /* poster + action clipped by the toast radius */
+  overflow: hidden; /* poster clipped by the toast radius */
   background: var(--surface-elevated);
   border-radius: var(--r-lg); /* same family as cards / other toasts */
   box-shadow: 0 8px 28px var(--shadow);
@@ -9179,53 +9179,6 @@ textarea.notes:focus,
 .np-toast-tracks .sep {
   opacity: 0.5;
   margin: 0 5px;
-}
-.np-toast-divider {
-  flex: 0 0 1px;
-  align-self: stretch;
-  background: var(--border);
-}
-/* Outlined action button — fills its allocated share, icon above the label,
-   HIGHLIGHTS (accent) when activated, mirroring the "mark as owned" toggle. */
-.np-toast-btn {
-  flex: 0 0 34%;
-  align-self: stretch;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 8px 10px;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color var(--dur-short) var(--ease-state), color var(--dur-short) var(--ease-state), background var(--dur-short) var(--ease-state);
-}
-.np-toast-btn span {
-  text-align: center;
-  line-height: 1.15;
-}
-.np-toast-btn:active {
-  transform: scale(0.97);
-}
-.np-toast-btn:disabled {
-  cursor: default;
-}
-.np-toast-btn.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-}
-.np-toast-btn svg {
-  width: 15px;
-  height: 15px;
-  flex: 0 0 auto;
 }
 @media (prefers-reduced-motion: reduce) {
   .np-toast { transition: opacity var(--dur-short) var(--ease-state); }

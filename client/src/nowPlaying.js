@@ -1,34 +1,27 @@
 // Kodi "Now Playing" UI:
 //   • a small header indicator ("Now Playing") — tap to open the toast
 //   • the animated wavy avatar ring
-//   • a top-sliding toast (poster · title/episode/tracks · mark-watched/add)
+//   • a top-sliding toast (poster · title/episode/tracks), read-only: it shows
+//     only what Kodi reports as playing, with no library actions
 // Everything reads the cached snapshot from kodi.js (getNowPlaying) and updates
 // on the shared `shelfit:kodi-nowplaying` event. Both the header indicator and
 // the profile avatar open the SAME toast; when nothing is playing they do
 // nothing. The toast never fetches on tap.
 
-import { el, cachedImg, toast } from './ui.js';
-import { api } from './api.js';
+import { el, cachedImg } from './ui.js';
 import { getNowPlaying } from './kodi.js';
 import { createWavyRing } from './wavyRing.js';
 import { t, onLangChange } from './i18n.js';
 
 const KODI_BLUE = '#17B2E8';
-const CHECK =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
-const PLUS =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>';
 const PLAY = // filled play glyph (inlined so it renders solid, no mask/caching)
   '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
-const ROTATE = // rewatch (refresh) glyph
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
 
 // --- Module state ---------------------------------------------------------
 let indicator = null;
 let toastEl = null;
 let els = {}; // cached toast sub-elements
 let toastOpen = false;
-let acting = false; // an action (mark/add) is running — don't clobber the button
 let currentRing = null; // ring attached to the currently-mounted avatar (or null)
 let currentWrap = null; // the .avatar-wrap element hosting the ring (or null)
 let autoCloseTimer = null; // dismisses an open toast after a short peek
@@ -56,25 +49,19 @@ export function initNowPlaying(headerActionsEl) {
   indicator.append(glyph, el('span', { class: 'np-indicator-label' }, [t('nowPlaying.label')]));
   if (headerActionsEl) headerActionsEl.prepend(indicator);
 
-  // Toast (built once, reused). Structure mirrors the reviewed prototype:
-  // [poster] [ text(title / SxxExx / tracks) | divider | outlined button ].
+  // Toast (built once, reused): [poster] [ title / SxxExx / tracks ].
   const poster = el('div', { class: 'np-toast-poster' });
   const title = el('div', { class: 'np-toast-title' });
   const meta = el('div', { class: 'np-toast-meta' });
   const tracks = el('div', { class: 'np-toast-tracks' });
-  const btn = el('button', { class: 'np-toast-btn' });
   const text = el('div', { class: 'np-toast-text' }, [title, meta, tracks]);
-  const body = el('div', { class: 'np-toast-body' }, [
-    text,
-    el('div', { class: 'np-toast-divider' }),
-    btn,
-  ]);
+  const body = el('div', { class: 'np-toast-body' }, [text]);
   toastEl = el('div', { class: 'np-toast', role: 'dialog', 'aria-label': t('nowPlaying.label') }, [
     poster,
     body,
   ]);
   document.body.appendChild(toastEl);
-  els = { poster, title, meta, tracks, btn };
+  els = { poster, title, meta, tracks };
 
   // Outside-tap dismiss.
   document.addEventListener('click', (e) => {
@@ -95,7 +82,7 @@ export function initNowPlaying(headerActionsEl) {
     indicator.setAttribute('aria-label', t('nowPlaying.indicatorAria'));
     indicator.querySelector('.np-indicator-label').textContent = t('nowPlaying.label');
     toastEl.setAttribute('aria-label', t('nowPlaying.label'));
-    if (toastOpen && !acting) fillToast(getNowPlaying());
+    if (toastOpen) fillToast(getNowPlaying());
   });
   render(getNowPlaying());
 }
@@ -157,7 +144,7 @@ function render(np) {
 
   if (toastOpen) {
     if (!active) closeToast();
-    else if (!acting) fillToast(np); // keep an open toast in sync, unless mid-action
+    else fillToast(np); // keep an open toast in sync
   }
 }
 
@@ -210,81 +197,6 @@ function fillToast(np) {
   const audio = (np.audio && np.audio.language) || '—';
   const sub = (np.subtitle && np.subtitle.language) || '—';
   els.tracks.innerHTML = `${audio}<span class="sep">·</span>${t('nowPlaying.subtitles', { lang: sub })}`;
-
-  // Button: Mark watched (in library) or Add (add + mark watched). Hidden only
-  // when neither a library match nor a TMDB id is available to act on.
-  const btn = els.btn;
-  btn.classList.remove('active');
-  btn.disabled = false;
-  if (np.match && np.match.seen) {
-    // Already watched in shelfIt → Add rewatch (increments the count by one).
-    const next = (np.match.plays || 0) + 1;
-    btn.style.display = '';
-    btn.innerHTML = ROTATE + `<span>${t('nowPlaying.addRewatch')}</span>`;
-    btn.onclick = (e) => runAction(e, np, () => addRewatch(np), `×${next}`);
-  } else if (np.match) {
-    btn.style.display = '';
-    btn.innerHTML = CHECK + `<span>${t('nowPlaying.markWatched')}</span>`;
-    btn.onclick = (e) => runAction(e, np, () => markWatched(np), t('common.watched'));
-  } else if (np.tmdb_id) {
-    btn.style.display = '';
-    btn.innerHTML = PLUS + `<span>${t('common.add')}</span>`;
-    btn.onclick = (e) => runAction(e, np, () => addAndWatch(np), t('nowPlaying.added'));
-  } else {
-    btn.style.display = 'none';
-    btn.onclick = null;
-  }
-}
-
-async function markWatched(np) {
-  const m = np.match;
-  if (m.type === 'movie') await api.updateMedia(m.item_id, { status: 'completed' });
-  else await api.markEpisode(m.item_id, m.season, m.episode);
-}
-
-// Local calendar date as 'YYYY-MM-DD' (no UTC shift) — the rewatch is "today".
-function localTodayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-async function addRewatch(np) {
-  const m = np.match;
-  if (m.type === 'movie') {
-    // A dated rewatch event (inserts a movie_rewatches row + bumps rewatch_count
-    // in one transaction), so it counts in this month's receipt.
-    await api.addRewatch(m.item_id, localTodayISO());
-  } else {
-    await api.rewatchEpisode(m.item_id, m.season, m.episode);
-  }
-}
-
-async function addAndWatch(np) {
-  const isEp = np.media_type === 'episode';
-  const type = isEp ? 'show' : 'movie';
-  const res = await api.addMedia(np.tmdb_id, type, isEp ? 'watching' : 'completed');
-  const id = res && (res.id || res.item_id);
-  if (isEp && id) await api.markEpisode(id, np.season, np.episode);
-}
-
-// Shared button flow: run the action, show inline confirmation, dismiss after 1s.
-async function runAction(e, np, fn, doneLabel) {
-  e.stopPropagation();
-  const btn = els.btn;
-  if (btn.disabled) return;
-  btn.disabled = true;
-  acting = true;
-  clearTimeout(autoCloseTimer); // the action's own confirmation flow closes the toast
-  try {
-    await fn();
-    btn.classList.add('active');
-    btn.innerHTML = CHECK + `<span>${doneLabel}</span>`;
-    setTimeout(closeToast, 1000);
-  } catch (err) {
-    acting = false;
-    btn.disabled = false;
-    toast((err && err.message) || t('nowPlaying.actionFailed'), 'bad');
-  }
 }
 
 // --- Open / close ---------------------------------------------------------
@@ -303,7 +215,7 @@ function openToast() {
   toastEl.classList.remove('dismissing');
   requestAnimationFrame(() => toastEl.classList.add('show'));
   toastOpen = true;
-  // Auto-dismiss after a brief peek (an in-progress action takes over the close).
+  // Auto-dismiss after a brief peek.
   clearTimeout(autoCloseTimer);
   autoCloseTimer = setTimeout(closeToast, TOAST_AUTO_CLOSE_MS);
 }
@@ -314,7 +226,6 @@ function closeToast() {
   toastEl.classList.add('dismissing');
   toastEl.classList.remove('show');
   toastOpen = false;
-  acting = false;
 }
 
 // Never overlap an open modal / bottom sheet.

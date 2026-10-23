@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v110'; // bumped: downscale the Wall person photo so the offline copy fits
+const CACHE = 'shelfit-shell-v111'; // bumped: Now Playing toast is read-only (action button removed)
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 
