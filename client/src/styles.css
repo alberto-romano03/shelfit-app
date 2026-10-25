@@ -928,7 +928,12 @@ body.grid-virtual-active .gc-scroller {
 .stat-card {
   min-width: 0;
   display: flex;
-  align-items: center;
+  /* Top-aligned, not centred: the two cells of a row are always equally tall, so
+     when one label wraps to two lines (narrow phones, the person page's longer
+     labels) a centred one-line neighbour would sit its glyph and number lower.
+     From the top, glyphs and numbers share one line across the row and a longer
+     label simply hangs further down. */
+  align-items: flex-start;
   justify-content: flex-start;
   gap: 11px;
   /* Left-aligned (not centred) so every glyph shares one left edge and every
