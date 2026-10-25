@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v127'; // bumped: stat cards top-aligned
+const CACHE = 'shelfit-shell-v128'; // bumped: spine titles trimmed to their caps
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

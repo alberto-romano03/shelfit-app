@@ -6959,6 +6959,13 @@ img.mood-emoji {
 .dvd-spine-label-text {
   white-space: nowrap;
   transform: rotate(-90deg); /* bottom-to-top */
+  /* Trim the line box to the glyphs themselves (cap height to baseline). Once
+     rotated, the box's height becomes its position ACROSS the spine, and an
+     untrimmed box carries the font's ascent/descent padding unevenly, so the
+     title drifted sideways whenever a fallback font with different metrics was
+     used: "Dust It Off" on iOS, which has no Rockwell and lands on Courier New.
+     Trimmed, the flex box centres the visible letters in every font. */
+  text-box: trim-both cap alphabetic;
 }
 /* Each spine gets a "movie title" typeface evoking its name (system font stacks
    only — no web fonts, so they render offline like the genre fonts). */
