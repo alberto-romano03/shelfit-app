@@ -14,6 +14,7 @@ import {
   lucideIcon,
 } from './ui.js';
 import { withBase } from './basePath.js';
+import { imageCache } from './imageCache.js';
 import { pget, pset, pequal, PK } from './persist.js';
 import { t, locale } from './i18n.js';
 import { collapsibleText } from './collapsibleText.js';
@@ -385,6 +386,95 @@ export function openDustItOff() {
       );
     }
 
+    // --- Pick queue -------------------------------------------------------
+    // Like Back to the Shelf's prefetch queue: PICK_AHEAD suggestions are kept
+    // ready (data fetched, poster + backdrop downloaded AND decoded), so "Suggest
+    // another" shows the next one instantly while the queue tops itself back up
+    // in the background. A new search (after Adjust filters) starts a fresh
+    // queue; `gen` drops any fill still in flight from the old one.
+    const PICK_AHEAD = 3;
+    const PICK_DECODE_CAP_MS = 1500; // never hold a pick back longer for its art
+    let picks = { gen: 0, ready: [], seen: new Set(), topping: null };
+
+    function resetPicks() {
+      picks = { gen: picks.gen + 1, ready: [], seen: new Set(), topping: null };
+    }
+
+    // Fetch + decode an image so it paints in the frame the pick is shown.
+    function decodeImage(url) {
+      if (!url) return Promise.resolve();
+      return imageCache
+        .load(url)
+        .then((src) => {
+          const probe = new Image();
+          probe.src = src || withBase(url);
+          return probe.decode ? probe.decode().catch(() => {}) : null;
+        })
+        .catch(() => {});
+    }
+    function warmPick(r) {
+      return Promise.race([
+        Promise.all([decodeImage(r.poster_url), decodeImage(r.backdrop_url)]),
+        new Promise((resolve) => setTimeout(resolve, PICK_DECODE_CAP_MS)),
+      ]);
+    }
+    function enqueue(list) {
+      for (const r of list) picks.ready.push({ r, warm: warmPick(r) });
+    }
+
+    // Up to `n` new picks for the current filters. The server skips titles
+    // already suggested this session while anything else matches; once every
+    // match has been seen it repeats them rather than coming up empty.
+    async function fetchPicks(n) {
+      const gen = picks.gen;
+      const res = await api.discover({
+        type: state.type,
+        genres: [...state.genres],
+        mood: state.mood,
+        duration: state.duration,
+        minRating: state.minRating,
+        era: state.era,
+        count: n,
+        exclude: [...picks.seen],
+      });
+      if (gen !== picks.gen) return []; // a new search started meanwhile
+      const list = (res && (res.results || (res.result ? [res.result] : []))) || [];
+      let fresh = list.filter((r) => !picks.seen.has(r.tmdb_id));
+      if (!fresh.length && list.length) {
+        picks.seen = new Set(); // every match seen: start the round again
+        fresh = list;
+      }
+      fresh.forEach((r) => picks.seen.add(r.tmdb_id));
+      return fresh;
+    }
+
+    // Refill to PICK_AHEAD in the background, one fill at a time.
+    function topUp() {
+      if (picks.topping || picks.ready.length >= PICK_AHEAD) return;
+      const p = picks;
+      p.topping = fetchPicks(PICK_AHEAD - p.ready.length)
+        .then((list) => {
+          if (p === picks) enqueue(list);
+        })
+        .catch(() => {}) // a failed refill just means the next tap fetches
+        .finally(() => {
+          p.topping = null;
+        });
+    }
+
+    // The next pick: from the queue (instant), else the fill already in flight,
+    // else a direct fetch (the first search, or a drained queue). Throws on a
+    // network error; resolves null when nothing matches at all.
+    async function nextPick() {
+      if (!picks.ready.length && picks.topping) await picks.topping;
+      if (!picks.ready.length) enqueue(await fetchPicks(PICK_AHEAD));
+      const entry = picks.ready.shift();
+      topUp();
+      if (!entry) return null;
+      await entry.warm;
+      return entry.r;
+    }
+
     // --- Run / result ---
     async function run() {
       typeToggle.style.display = 'none';
@@ -393,16 +483,10 @@ export function openDustItOff() {
       body.innerHTML = '';
       body.append(spinner());
       footer.innerHTML = '';
-      let res;
+      resetPicks();
+      let first;
       try {
-        res = await api.discover({
-          type: state.type,
-          genres: [...state.genres],
-          mood: state.mood,
-          duration: state.duration,
-          minRating: state.minRating,
-          era: state.era,
-        });
+        first = await nextPick();
       } catch (err) {
         body.innerHTML = '';
         body.append(
@@ -410,7 +494,7 @@ export function openDustItOff() {
         );
         return;
       }
-      if (!res || !res.result) {
+      if (!first) {
         body.innerHTML = '';
         body.append(
           el('div', { class: 'dust-empty' }, [
@@ -420,7 +504,7 @@ export function openDustItOff() {
         );
         return;
       }
-      renderResult(res.result);
+      renderResult(first);
     }
 
     // --- Result: the pick as a card. The backdrop opens it and the poster
@@ -494,7 +578,9 @@ export function openDustItOff() {
         current = r;
         // No backdrop → the card simply starts at the poster.
         card.classList.toggle('no-hero', !r.backdrop_url);
-        if (r.backdrop_url) heroImg.src = withBase(r.backdrop_url);
+        // The queue already holds the backdrop in memory: take it from there so
+        // it paints in the same frame as the rest of the card.
+        if (r.backdrop_url) heroImg.src = imageCache.get(r.backdrop_url) || withBase(r.backdrop_url);
         else heroImg.removeAttribute('src');
         posterHost.innerHTML = '';
         mountPoster(posterHost, r.poster_url, r.title);
@@ -556,24 +642,17 @@ export function openDustItOff() {
         lucideIcon('refresh-cw', 'btn-lucide'),
         el('span', { text: t('dust.suggestAnother') }),
       ]);
-      // Shuffle: the card slides out while the next pick loads, then the new one
-      // slides in (a tape pulled off the shelf, the next slotted in). Reduced
-      // motion keeps only the fade.
+      // Shuffle: the card slides out, the next pick (already waiting in the
+      // queue, art decoded) slides in: a tape pulled off the shelf, the next
+      // slotted in. Reduced motion keeps only the fade.
       async function suggestAnother() {
         if (againBtn.disabled) return;
         againBtn.disabled = true;
         againBtn.classList.add('is-loading');
-        let res;
+        let next;
         try {
-          [res] = await Promise.all([
-            api.discover({
-              type: state.type,
-              genres: [...state.genres],
-              mood: state.mood,
-              duration: state.duration,
-              minRating: state.minRating,
-              era: state.era,
-            }),
+          [next] = await Promise.all([
+            nextPick(),
             new Promise((resolve) => {
               card.classList.add('is-leaving');
               setTimeout(resolve, 180);
@@ -587,12 +666,12 @@ export function openDustItOff() {
           againBtn.disabled = false;
           againBtn.classList.remove('is-loading');
         }
-        if (!res || !res.result) {
-          card.classList.remove('is-leaving'); // nothing else matched — keep the current pick
+        if (!next) {
+          card.classList.remove('is-leaving'); // nothing else matched: keep the current pick
           toast(t('dust.empty'), 'bad');
           return;
         }
-        fill(res.result);
+        fill(next);
         body.scrollTop = 0;
         card.classList.remove('is-leaving');
         card.classList.add('is-entering'); // jump to the right, unanimated…

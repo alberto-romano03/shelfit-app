@@ -77,9 +77,16 @@ export default async function discoverRoutes(fastify) {
     }
   });
 
-  // POST /api/discover → one random suggestion matching the filters.
+  // POST /api/discover → random suggestions matching the filters.
+  //   count   (optional, 1-5, default 1): how many distinct picks to return in
+  //           `results`; the client keeps a few ready so "Suggest another" is
+  //           instant. `result` is always the first one (older clients).
+  //   exclude (optional): tmdb ids already suggested this session, skipped while
+  //           anything else matches (then repeats are allowed rather than none).
   fastify.post('/api/discover', async (request, reply) => {
     const b = request.body || {};
+    const count = Math.min(5, Math.max(1, parseInt(b.count, 10) || 1));
+    const exclude = new Set((Array.isArray(b.exclude) ? b.exclude : []).map(String));
     const type = b.type === 'show' ? 'show' : 'movie';
     const kind = type === 'movie' ? 'movie' : 'tv';
     const signal = clientAbortSignal(request, reply);
@@ -171,14 +178,22 @@ export default async function discoverRoutes(fastify) {
       ownedByTypeStmt.all(type).map((r) => String(r.tmdb_id))
     );
     const pool = results.filter((r) => r.poster_path && !owned.has(String(r.id)));
-    if (!pool.length) return { result: null };
+    if (!pool.length) return { result: null, results: [] };
 
-    const pick = pool[Math.floor(Math.random() * pool.length)];
+    // Distinct random picks, unseen ones first.
+    const fresh = pool.filter((r) => !exclude.has(String(r.id)));
+    const source = (fresh.length ? fresh : pool).slice();
+    const picks = [];
+    while (source.length && picks.length < count) {
+      picks.push(source.splice(Math.floor(Math.random() * source.length), 1)[0]);
+    }
     const gmap = new Map(genreList.map((g) => [g.id, g.name]));
-    const dateStr = (kind === 'movie' ? pick.release_date : pick.first_air_date) || '';
+    const shaped = picks.map((pick) => shapePick(pick));
+    return { result: shaped[0], results: shaped };
 
-    return {
-      result: {
+    function shapePick(pick) {
+      const dateStr = (kind === 'movie' ? pick.release_date : pick.first_air_date) || '';
+      return {
         tmdb_id: String(pick.id),
         type,
         title:
@@ -196,7 +211,7 @@ export default async function discoverRoutes(fastify) {
         // Opens the result card; null when TMDB has none (the card then starts
         // at the poster).
         backdrop_url: thumbUrl(pick.backdrop_path, IMG_SIZES.backdrop),
-      },
-    };
+      };
+    }
   });
 }
