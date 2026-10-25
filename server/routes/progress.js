@@ -28,11 +28,19 @@ const insertWatchedNoNotesStmt = db.prepare(
 const getWatchCountStmt = db.prepare(
   'SELECT watch_count FROM progress WHERE item_id = ? AND season = ? AND episode = ?'
 );
+// A rewatch re-dates the row: watched_at is the episode's latest viewing, which the
+// monthly receipt and Up Next's "left off" ordering both read.
 const incrementWatchCountStmt = db.prepare(
-  'UPDATE progress SET watch_count = watch_count + 1 WHERE item_id = ? AND season = ? AND episode = ?'
+  `UPDATE progress SET watch_count = watch_count + 1, watched_at = datetime('now')
+    WHERE item_id = ? AND season = ? AND episode = ?`
 );
+// Raising the count is a rewatch (re-dated); lowering it only corrects the count
+// and keeps the original date.
 const setWatchCountStmt = db.prepare(
-  'UPDATE progress SET watch_count = ? WHERE item_id = ? AND season = ? AND episode = ?'
+  `UPDATE progress
+      SET watched_at = CASE WHEN ? > watch_count THEN datetime('now') ELSE watched_at END,
+          watch_count = ?
+    WHERE item_id = ? AND season = ? AND episode = ?`
 );
 const insertWatchCountStmt = db.prepare(
   `INSERT INTO progress (item_id, season, episode, watch_count)
@@ -315,7 +323,7 @@ export default async function progressRoutes(fastify) {
         deleteEpisodeStmt.run(item_id, season, episode); // count 0 → fully unwatch
         result = 0;
       } else if (getWatchCountStmt.get(item_id, season, episode)) {
-        setWatchCountStmt.run(n, item_id, season, episode);
+        setWatchCountStmt.run(n, n, item_id, season, episode);
         result = n;
       } else {
         insertWatchCountStmt.run(item_id, season, episode, n);
