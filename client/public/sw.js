@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v122'; // bumped: List page redesign
+const CACHE = 'shelfit-shell-v123'; // bumped: profile modal pinned actions
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

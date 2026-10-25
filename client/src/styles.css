@@ -3414,8 +3414,11 @@ body.modal-open {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  /* Breathing room between the last control and the pinned rule below. */
-  padding-bottom: 14px;
+  /* A scroller clips sideways too: 4px of side padding (cancelled by the
+     negative margin, so nothing moves) keeps the inputs' 3px focus ring whole.
+     Plus breathing room between the last control and the pinned rule below. */
+  margin: 0 -4px;
+  padding: 0 4px 14px;
 }
 .modal--split .modal-foot {
   flex: 0 0 auto;

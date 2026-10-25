@@ -1028,26 +1028,33 @@ async function openProfileModal(profile, onSaved) {
       }
     });
 
+    // The photo, cover and badge grids make this a long form, so the actions are
+    // pinned (as in the Kodi instance form): the body scrolls under the rule.
+    modal.classList.add('modal--split');
     modal.append(
-      el('h3', { text: t('home.profile.edit') }),
-      el('div', { class: 'field-label', text: t('home.profile.displayName') }),
-      nameField,
-      el('div', { class: 'field-label', text: t('home.profile.photo') }),
-      uploadRow,
-      photoGrid,
-      photoCollapse.toggle,
-      el('div', { class: 'field-label', text: t('home.profile.cover') }),
-      coverGrid,
-      coverCollapse.toggle,
-      el('div', { class: 'field-label', text: t('home.profile.badge') }),
-      badgeGrid,
-      el('hr', { class: 'status-sep' }),
-      el('div', { class: 'modal-actions' }, [
-        el('button', { class: 'btn btn-secondary', onClick: close }, [
-      lucideIcon('x', 'btn-lucide'),
-      el('span', { text: t('common.cancel') }),
-    ]),
-        saveBtn,
+      el('div', { class: 'modal-body' }, [
+        el('h3', { text: t('home.profile.edit') }),
+        el('div', { class: 'field-label', text: t('home.profile.displayName') }),
+        nameField,
+        el('div', { class: 'field-label', text: t('home.profile.photo') }),
+        uploadRow,
+        photoGrid,
+        photoCollapse.toggle,
+        el('div', { class: 'field-label', text: t('home.profile.cover') }),
+        coverGrid,
+        coverCollapse.toggle,
+        el('div', { class: 'field-label', text: t('home.profile.badge') }),
+        badgeGrid,
+      ]),
+      el('div', { class: 'modal-foot' }, [
+        el('hr', { class: 'status-sep' }),
+        el('div', { class: 'modal-actions' }, [
+          el('button', { class: 'btn btn-secondary', onClick: close }, [
+            lucideIcon('x', 'btn-lucide'),
+            el('span', { text: t('common.cancel') }),
+          ]),
+          saveBtn,
+        ]),
       ])
     );
   });
