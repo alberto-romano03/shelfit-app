@@ -30,30 +30,31 @@ export function expiryMsFor(key) {
 
 // --- Prepared statements (compiled once at module load, reused thereafter) ---
 const insertLinkStmt = db.prepare(
-  `INSERT INTO magic_links (token, label, created_at, expires_at, use_count)
-   VALUES (?, ?, ?, ?, 0)`
+  `INSERT INTO magic_links (token, label, created_at, expires_at, use_count, user_id)
+   VALUES (?, ?, ?, ?, 0, ?)`
 );
 const listLinksStmt = db.prepare(
   `SELECT id, label, created_at, expires_at, last_used_at, use_count
      FROM magic_links
-    WHERE expires_at > ?
+    WHERE expires_at > ? AND user_id = ?
     ORDER BY created_at DESC`
 );
-const allTokensStmt = db.prepare('SELECT id, token, expires_at FROM magic_links');
+const allTokensStmt = db.prepare('SELECT id, token, expires_at, user_id FROM magic_links');
 const recordUseStmt = db.prepare(
   `UPDATE magic_links SET use_count = use_count + 1, last_used_at = ? WHERE id = ?`
 );
-const revokeLinkStmt = db.prepare('DELETE FROM magic_links WHERE id = ?');
+const revokeLinkStmt = db.prepare('DELETE FROM magic_links WHERE id = ? AND user_id = ?');
 const cleanupExpiredStmt = db.prepare('DELETE FROM magic_links WHERE expires_at <= ?');
 
-// Create a link. Returns the full row INCLUDING the token — the only time the
-// token is exposed. The caller turns it into a URL and never persists it again.
-export function createMagicLink({ label, expiresInMs } = {}) {
+// Create a link that signs in `userId`. Returns the full row INCLUDING the token,
+// the only time the token is exposed. The caller turns it into a URL and never
+// persists it again.
+export function createMagicLink({ userId, label, expiresInMs } = {}) {
   const token = crypto.randomBytes(TOKEN_BYTES).toString('hex');
   const now = Date.now();
   const expires_at = now + (Number.isFinite(expiresInMs) ? expiresInMs : DEFAULT_EXPIRY_MS);
   const cleanLabel = typeof label === 'string' && label.trim() ? label.trim().slice(0, 60) : null;
-  const info = insertLinkStmt.run(token, cleanLabel, now, expires_at);
+  const info = insertLinkStmt.run(token, cleanLabel, now, expires_at, userId);
   return {
     id: info.lastInsertRowid,
     token,
@@ -65,15 +66,15 @@ export function createMagicLink({ label, expiresInMs } = {}) {
   };
 }
 
-// All active (non-expired) links — WITHOUT the token (write-only after create).
-export function listMagicLinks() {
-  return listLinksStmt.all(Date.now());
+// One user's active (non-expired) links, WITHOUT the token (write-only after create).
+export function listMagicLinks(userId) {
+  return listLinksStmt.all(Date.now(), userId);
 }
 
 // Look up a token with a TIMING-SAFE comparison. Every stored token is compared
 // with crypto.timingSafeEqual and the loop never short-circuits, so the response
 // time doesn't leak which (if any) token matched or how far it matched. Returns
-// the matching, non-expired row, or null. Malformed input returns null cheaply
+// the matching, non-expired row ({ id, expires_at, user_id }), or null. Malformed input returns null cheaply
 // (the format is fixed and public, so rejecting it early leaks nothing).
 export function redeemToken(token) {
   if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null;
@@ -86,7 +87,7 @@ export function redeemToken(token) {
     const equal =
       stored.length === candidate.length && crypto.timingSafeEqual(stored, candidate);
     // No early break — keep the work constant regardless of where a match is.
-    if (equal && row.expires_at > now) match = { id: row.id, expires_at: row.expires_at };
+    if (equal && row.expires_at > now) match = { id: row.id, expires_at: row.expires_at, user_id: row.user_id };
   }
   return match;
 }
@@ -96,9 +97,10 @@ export function recordUse(id) {
   recordUseStmt.run(Date.now(), id);
 }
 
-// Revoke (hard-delete) a link by its database id. Returns true if a row went.
-export function revokeMagicLink(id) {
-  const info = revokeLinkStmt.run(id);
+// Revoke (hard-delete) one of `userId`'s links by its database id. Returns true
+// if a row went; another user's link id is simply not found.
+export function revokeMagicLink(id, userId) {
+  const info = revokeLinkStmt.run(id, userId);
   return info.changes > 0;
 }
 

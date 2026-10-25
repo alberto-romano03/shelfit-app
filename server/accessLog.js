@@ -20,8 +20,8 @@ const RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
 // --- Prepared statements (compiled once at module load, reused thereafter) ---
 const insertStmt = db.prepare(
-  `INSERT INTO access_log (event, ip_hash, user_agent_hash, success, created_at)
-   VALUES (?, ?, ?, ?, ?)`
+  `INSERT INTO access_log (event, ip_hash, user_agent_hash, success, created_at, user_id)
+   VALUES (?, ?, ?, ?, ?, ?)`
 );
 const recentStmt = db.prepare(
   `SELECT event, success, created_at
@@ -31,18 +31,20 @@ const recentStmt = db.prepare(
 );
 const pruneStmt = db.prepare('DELETE FROM access_log WHERE created_at < ?');
 
-// Record one event. Best-effort: any failure is swallowed so a logging hiccup
+// Record one event, attributed to the account it targeted (null when unknown).
+// Best-effort: any failure is swallowed so a logging hiccup
 // can never turn a successful (or failed) login into a 500. Not async — the
 // underlying insert is synchronous and sub-millisecond — but callers MUST NOT
 // await/return it, treating it as fire-and-forget.
-export function logAccess(event, request, success) {
+export function logAccess(event, request, success, userId = null) {
   try {
     insertStmt.run(
       String(event),
       hashValue(clientIp(request)),
       hashValue((request && request.headers && request.headers['user-agent']) || ''),
       success ? 1 : 0,
-      Date.now()
+      Date.now(),
+      userId
     );
   } catch {
     /* logging must never break the request path */

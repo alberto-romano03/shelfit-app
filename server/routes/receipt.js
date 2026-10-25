@@ -33,7 +33,7 @@ const monthEpisodesStmt = db.prepare(
      JOIN items i ON i.id = p.item_id
     WHERE i.type = 'show' AND p.season > 0 AND substr(p.watched_at, 1, 7) = ?`
 );
-const displayNameStmt = db.prepare('SELECT display_name FROM profile WHERE id = 1');
+const displayNameStmt = db.prepare('SELECT display_name FROM users WHERE id = ?');
 
 const MONTHS = [
   'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
@@ -112,7 +112,8 @@ function episodeMinutes(tmdbId, season, episode, seriesRun, seasonCache) {
 // `month` is a parseMonthKey() result; defaults to the current month. Every
 // query below is driven by `key`, and the labels/closing line by year+monthIndex,
 // so a past month builds exactly the receipt that month would have produced.
-async function buildReceipt(month = parseMonthKey(monthKey())) {
+// `userId` is the signed-in member, whose name gives the membership initials.
+async function buildReceipt(month = parseMonthKey(monthKey()), userId) {
   const { key, year, monthIndex } = month;
 
   // Map a movie row (first watch or rewatch) to a receipt line item.
@@ -200,7 +201,7 @@ async function buildReceipt(month = parseMonthKey(monthKey())) {
   // Deterministic "membership number" from lifetime stats + display name, so it
   // feels personal and stays stable between views.
   const stats = await getStats(db);
-  const nameRow = displayNameStmt.get();
+  const nameRow = displayNameStmt.get(userId);
   const initials =
     ((nameRow && nameRow.display_name) || 'SH')
       .replace(/[^A-Za-z]/g, '')
@@ -240,11 +241,11 @@ export default async function receiptRoutes(fastify) {
   // the local cache).
   fastify.get('/api/receipt', async (request, reply) => {
     const requested = request.query.month;
-    if (requested === undefined || requested === '') return buildReceipt();
+    if (requested === undefined || requested === '') return buildReceipt(undefined, request.user.id);
     const month = parseMonthKey(requested);
     if (!month) {
       return reply.code(400).send({ error: 'Invalid month: expected a past YYYY-MM' });
     }
-    return buildReceipt(month);
+    return buildReceipt(month, request.user.id);
   });
 }

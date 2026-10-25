@@ -1,20 +1,27 @@
-// Profile endpoints under /api/profile: read and update the display name, active
-// badge, and profile / cover images; upload, serve and delete the single custom
-// profile photo; and list rated titles, favourites and available badges for the
-// customization grids.
+// Profile endpoints under /api/profile, always for the signed-in member: read and
+// update the display name, active badge, and profile / cover images; upload,
+// serve and delete their custom profile photo; and list rated titles, favourites
+// and available badges for the customization grids. Profiles live in `users`.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import db from '../db.js';
-import { BADGES_DIR, PROFILE_DIR } from '../config.js';
+import { BADGES_DIR } from '../config.js';
 import { sniffMime } from '../images.js';
+import {
+  CUSTOM_AVATAR,
+  getUser,
+  customPhotoFile,
+  clearCustomPhoto,
+  writeCustomPhoto,
+  imageTokenUrl,
+} from '../users.js';
 
 // Hard cap for the single profile photo, independent of the global bodyLimit.
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
-const getProfileStmt = db.prepare('SELECT * FROM profile WHERE id = 1');
-const clearProfileImageStmt = db.prepare('UPDATE profile SET profile_image = NULL WHERE id = 1');
+const clearProfileImageStmt = db.prepare('UPDATE users SET profile_image = NULL WHERE id = ?');
 const ratedItemsStmt = db.prepare(
   'SELECT id, tmdb_id, type, title_it, rating FROM items WHERE rating IS NOT NULL ORDER BY rating DESC, updated_at DESC'
 );
@@ -23,10 +30,6 @@ const favoriteItemsStmt = db.prepare(
 );
 
 const BADGE_EXT = new Set(['.png', '.svg', '.jpg', '.jpeg', '.webp', '.gif']);
-
-// Sentinel stored in profile.profile_image when the user uploaded a custom photo.
-const CUSTOM = 'custom';
-const AVATAR_BASE = 'avatar';
 
 const MIME_TO_EXT = {
   'image/jpeg': '.jpg',
@@ -41,42 +44,6 @@ const EXT_TO_MIME = {
   '.webp': 'image/webp',
   '.gif': 'image/gif',
 };
-
-// Resolve a 'movie:123' / 'show:123' token to an asset url.
-function resolveImageToken(token, kind) {
-  if (!token) return null;
-  const [type, tmdbId] = token.split(':');
-  if (!type || !tmdbId) return null;
-  const folder = type === 'movie' ? 'movies' : 'shows';
-  const file = kind === 'cover' ? 'backdrop.webp' : 'poster.webp';
-  return `/assets/${folder}/${tmdbId}/${file}`;
-}
-
-// Return the absolute path of the single stored custom photo, or null.
-function customPhotoFile() {
-  try {
-    const files = fs
-      .readdirSync(PROFILE_DIR)
-      .filter((f) => f.startsWith(`${AVATAR_BASE}.`));
-    if (files.length) return path.join(PROFILE_DIR, files[0]);
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-// Remove any existing avatar file so only one photo is ever kept.
-function clearCustomPhoto() {
-  try {
-    for (const f of fs.readdirSync(PROFILE_DIR)) {
-      if (f.startsWith(`${AVATAR_BASE}.`)) {
-        fs.rmSync(path.join(PROFILE_DIR, f), { force: true });
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-}
 
 function listBadges() {
   let files = [];
@@ -94,8 +61,8 @@ function listBadges() {
 // rated-title token) and cover to their URLs.
 function buildProfileResponse(row) {
   let profileUrl = null;
-  if (row.profile_image === CUSTOM) {
-    const f = customPhotoFile();
+  if (row.profile_image === CUSTOM_AVATAR) {
+    const f = customPhotoFile(row.id);
     if (f) {
       // The readdir + stat are two syscalls; the file can vanish in between
       // (concurrent delete). Fall back to no cache-buster rather than throwing
@@ -109,7 +76,7 @@ function buildProfileResponse(row) {
       profileUrl = `/api/profile/photo?v=${v}`;
     }
   } else {
-    profileUrl = resolveImageToken(row.profile_image, 'profile');
+    profileUrl = imageTokenUrl(row.profile_image, 'profile');
   }
   return {
     display_name: row.display_name,
@@ -118,18 +85,19 @@ function buildProfileResponse(row) {
     profile_image: row.profile_image,
     profile_image_url: profileUrl,
     cover_image: row.cover_image,
-    cover_image_url: resolveImageToken(row.cover_image, 'cover'),
-    has_custom_photo: customPhotoFile() !== null,
+    cover_image_url: imageTokenUrl(row.cover_image, 'cover'),
+    has_custom_photo: customPhotoFile(row.id) !== null,
   };
 }
 
-function getProfileRow() {
-  return getProfileStmt.get();
+// The signed-in member's row.
+function getProfileRow(request) {
+  return getUser(request.user.id);
 }
 
 export default async function profileRoutes(fastify) {
   // GET /api/profile
-  fastify.get('/api/profile', async () => buildProfileResponse(getProfileRow()));
+  fastify.get('/api/profile', async (request) => buildProfileResponse(getProfileRow(request)));
 
   // PATCH /api/profile
   fastify.patch('/api/profile', async (request, reply) => {
@@ -169,12 +137,13 @@ export default async function profileRoutes(fastify) {
     }
 
     if (fields.length) {
-      db.prepare(`UPDATE profile SET ${fields.join(', ')} WHERE id = 1`).run(
-        ...params
+      db.prepare(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`).run(
+        ...params,
+        request.user.id
       );
     }
 
-    return buildProfileResponse(getProfileRow());
+    return buildProfileResponse(getProfileRow(request));
   });
 
   // POST /api/profile/photo → upload a custom profile photo (raw image body).
@@ -212,18 +181,16 @@ export default async function profileRoutes(fastify) {
       return { error: 'file content does not match the declared image type' };
     }
 
-    clearCustomPhoto();
-    fs.mkdirSync(PROFILE_DIR, { recursive: true });
-    fs.writeFileSync(path.join(PROFILE_DIR, `${AVATAR_BASE}${ext}`), buf);
+    writeCustomPhoto(request.user.id, ext, buf);
 
     reply.code(201);
-    return buildProfileResponse(getProfileRow());
+    return buildProfileResponse(getProfileRow(request));
   });
 
   // GET /api/profile/photo → serve the stored custom photo (no long caching;
   // the URL carries a ?v mtime buster so updates show immediately).
   fastify.get('/api/profile/photo', async (request, reply) => {
-    const f = customPhotoFile();
+    const f = customPhotoFile(request.user.id);
     if (!f || !fs.existsSync(f)) {
       reply.code(404);
       return { error: 'no custom photo' };
@@ -236,13 +203,13 @@ export default async function profileRoutes(fastify) {
   });
 
   // DELETE /api/profile/photo → remove the custom photo and deselect it.
-  fastify.delete('/api/profile/photo', async () => {
-    clearCustomPhoto();
-    const row = getProfileRow();
-    if (row.profile_image === CUSTOM) {
-      clearProfileImageStmt.run();
+  fastify.delete('/api/profile/photo', async (request) => {
+    clearCustomPhoto(request.user.id);
+    const row = getProfileRow(request);
+    if (row.profile_image === CUSTOM_AVATAR) {
+      clearProfileImageStmt.run(row.id);
     }
-    return buildProfileResponse(getProfileRow());
+    return buildProfileResponse(getProfileRow(request));
   });
 
   // GET /api/profile/rated → rated titles for the customization grids.

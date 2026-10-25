@@ -1,12 +1,19 @@
-// Single-user authentication for shelfIt.
+// Household authentication for shelfIt.
 //
-// One password gates the whole app. It's set once via APP_PASSWORD in .env,
-// hashed with scrypt on first boot, and stored in the `settings` table — the
-// plaintext is never persisted and .env is ignored afterwards. Sessions are
-// random tokens kept in memory (a Set) for the process lifetime, carried in a
-// signed HttpOnly cookie. No external dependencies — Node's crypto only.
+// Every member has an account in the `users` table with their own password; one
+// of them is the master, created on first boot from APP_PASSWORD in .env (hashed
+// with scrypt, the plaintext is never persisted and .env is ignored afterwards).
+// The login page is a profile picker: choose your tile, type your password.
+//
+// Sessions are random tokens carried in an HttpOnly cookie and stored in the
+// `sessions` table as a SHA-256 hash, so they survive a restart and a copy of the
+// database can't be replayed as a login. The gate attaches the signed-in account
+// to every request as `request.user` ({ id, role }). No external dependencies:
+// Node's crypto only.
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import db from './db.js';
 import { PUBLIC_URL } from './config.js';
 import {
@@ -19,9 +26,10 @@ import {
 } from './magicLinks.js';
 import { clientIp } from './security.js';
 import { logAccess, getRecentAccess, EVENTS } from './accessLog.js';
+import { getUser, getMaster, pickerUsers, isPickable, avatarFile, fileVersion } from './users.js';
 
 // The app is served under this sub-path by the reverse proxy (see Caddyfile),
-// which STRIPS the prefix before forwarding — so incoming request paths are at
+// which STRIPS the prefix before forwarding, so incoming request paths are at
 // root and the auth gate matches them unchanged. Only URLs we hand back to the
 // BROWSER (the login redirect, the login page's own asset/API refs, the session
 // cookie scope) must carry the prefix. Keep in sync with Caddy / client BASE.
@@ -31,38 +39,46 @@ const BASE = '/shelfit';
 // LEGACY_SCRYPT verifies hashes written by older builds (stored as `salt:hash`).
 // New/reset passwords use SCRYPT (raised toward current OWASP guidance) and
 // embed their own parameters in the stored value (`s2:N:r:p:salt:hash`), so the
-// work factor can be tuned later without ever locking out an existing hash.
+// work factor can be tuned later without ever locking out an existing hash. A
+// legacy hash is rewritten in the new format the next time its owner signs in.
 const LEGACY_SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const SCRYPT = { N: 1 << 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 const KEYLEN = 64;
 const SALT_BYTES = 32;
-const PW_KEY = 'auth:password_hash';
 
 const COOKIE = 'shelfit_session';
 const YEAR_SECONDS = 365 * 24 * 60 * 60;
+const YEAR_MS = YEAR_SECONDS * 1000;
+const TOKEN_RE = /^[a-f0-9]{64}$/;
 
-// Per-process secret used only to sign the session cookie. Regenerated on every
-// restart, which (together with the in-memory session Set) invalidates all
-// existing sessions on restart — acceptable for a single-user self-hosted app.
-const COOKIE_SECRET = crypto.randomBytes(32);
-
-// --- settings helpers ------------------------------------------------------
-// Prepared once at module load and reused (better-sqlite3 compiles on prepare).
-const getSettingStmt = db.prepare('SELECT value FROM settings WHERE key = ?');
-const setSettingStmt = db.prepare(
-  `INSERT INTO settings (key, value) VALUES (?, ?)
-   ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+// --- Prepared statements (compiled once at module load, reused thereafter) ---
+const setPasswordStmt = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+const setLastLoginStmt = db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?');
+const bumpGenerationStmt = db.prepare(
+  'UPDATE users SET session_generation = session_generation + 1 WHERE id = ?'
 );
-function getSetting(key) {
-  const row = getSettingStmt.get(key);
-  return row ? row.value : null;
-}
-function setSetting(key, value) {
-  setSettingStmt.run(key, value);
-}
+const insertSessionStmt = db.prepare(
+  `INSERT INTO sessions (token_hash, user_id, generation, created_at, last_seen_at, label)
+   SELECT ?, id, session_generation, ?, ?, ? FROM users WHERE id = ?`
+);
+const getSessionStmt = db.prepare(
+  `SELECT s.user_id, s.generation, s.last_seen_at, u.role, u.session_generation, u.disabled
+     FROM sessions s JOIN users u ON u.id = s.user_id
+    WHERE s.token_hash = ?`
+);
+const touchSessionStmt = db.prepare('UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?');
+const deleteSessionStmt = db.prepare('DELETE FROM sessions WHERE token_hash = ?');
+const deleteUserSessionsStmt = db.prepare('DELETE FROM sessions WHERE user_id = ?');
+const pruneSessionsStmt = db.prepare('DELETE FROM sessions WHERE last_seen_at < ?');
+const countPasswordUsersStmt = db.prepare(
+  'SELECT COUNT(*) AS c FROM users WHERE disabled = 0 AND password_hash IS NOT NULL'
+);
+const onlyPasswordUserStmt = db.prepare(
+  'SELECT * FROM users WHERE disabled = 0 AND password_hash IS NOT NULL LIMIT 1'
+);
 
 // --- password hashing ------------------------------------------------------
-function hashPassword(password, salt, params = SCRYPT) {
+function scrypt(password, salt, params) {
   return crypto.scryptSync(password, salt, KEYLEN, {
     N: params.N,
     r: params.r,
@@ -71,47 +87,17 @@ function hashPassword(password, salt, params = SCRYPT) {
   });
 }
 
-// Boot-time password init / reset. Returns { configured } — when false, auth is
-// left DISABLED so the operator isn't locked out until they set APP_PASSWORD.
-export function initAuthPassword(logger) {
-  const existing = getSetting(PW_KEY);
-  const resetFlag = String(process.env.APP_PASSWORD_RESET || '').toLowerCase() === 'true';
-  const pw = process.env.APP_PASSWORD || '';
-
-  // Already initialized and not resetting → DB is the source of truth.
-  if (existing && !resetFlag) return { configured: true };
-
-  if (!pw) {
-    if (existing) {
-      logger.warn('AUTH: APP_PASSWORD_RESET set but APP_PASSWORD is empty — keeping the existing password.');
-      return { configured: true };
-    }
-    logger.warn(
-      'AUTH DISABLED: no password is configured. Set APP_PASSWORD in .env and restart to require login.'
-    );
-    return { configured: false };
-  }
-
+// A new stored value for `password` in the current self-describing format.
+export function hashPassword(password) {
   const salt = crypto.randomBytes(SALT_BYTES);
-  const hash = hashPassword(pw, salt);
-  setSetting(
-    PW_KEY,
-    `s2:${SCRYPT.N}:${SCRYPT.r}:${SCRYPT.p}:${salt.toString('hex')}:${hash.toString('hex')}`
-  );
-  logger.info(
-    existing
-      ? 'AUTH: password reset from APP_PASSWORD — stored hash overwritten. You can now remove APP_PASSWORD/APP_PASSWORD_RESET from .env.'
-      : 'AUTH: password initialized from APP_PASSWORD and hashed into the database. You can now remove APP_PASSWORD from .env.'
-  );
-  return { configured: true };
+  const hash = scrypt(password, salt, SCRYPT);
+  return `s2:${SCRYPT.N}:${SCRYPT.r}:${SCRYPT.p}:${salt.toString('hex')}:${hash.toString('hex')}`;
 }
 
-// Constant-time verification of a submitted password against the stored hash.
-// Supports both the self-describing `s2:N:r:p:salt:hash` format (params read
-// from the stored value) and the legacy `salt:hash` format (verified with the
-// original work factor), so an already-configured password keeps working.
-function verifyPassword(password) {
-  const stored = getSetting(PW_KEY);
+// Constant-time verification of a submitted password against a stored hash in
+// either the `s2:N:r:p:salt:hash` format (params read from the value) or the
+// legacy `salt:hash` format (verified with the original work factor).
+function verifyPassword(stored, password) {
   if (!stored || typeof password !== 'string') return false;
   let salt;
   let expected;
@@ -132,7 +118,7 @@ function verifyPassword(password) {
   }
   let actual;
   try {
-    actual = hashPassword(password, salt, params);
+    actual = scrypt(password, salt, params);
   } catch {
     return false;
   }
@@ -140,82 +126,158 @@ function verifyPassword(password) {
   return crypto.timingSafeEqual(actual, expected);
 }
 
+// True when a stored hash should be rewritten with the current parameters.
+function needsRehash(stored) {
+  if (!stored || !stored.startsWith('s2:')) return true;
+  const [, N, r, p] = stored.split(':');
+  return parseInt(N, 10) !== SCRYPT.N || parseInt(r, 10) !== SCRYPT.r || parseInt(p, 10) !== SCRYPT.p;
+}
+
+// Boot-time master password init / reset. Returns { configured }: when false,
+// auth is left DISABLED so the operator isn't locked out until they set
+// APP_PASSWORD. Resetting also signs the master out of every device.
+export function initAuthPassword(logger) {
+  const master = getMaster();
+  if (!master) throw new Error('AUTH: no master account in the database');
+  const existing = master.password_hash;
+  const resetFlag = String(process.env.APP_PASSWORD_RESET || '').toLowerCase() === 'true';
+  const pw = process.env.APP_PASSWORD || '';
+
+  // Already initialized and not resetting: the database is the source of truth.
+  if (existing && !resetFlag) return { configured: true };
+
+  if (!pw) {
+    if (existing) {
+      logger.warn('AUTH: APP_PASSWORD_RESET set but APP_PASSWORD is empty, keeping the existing password.');
+      return { configured: true };
+    }
+    logger.warn(
+      'AUTH DISABLED: no password is configured. Set APP_PASSWORD in .env and restart to require login.'
+    );
+    return { configured: false };
+  }
+
+  setPasswordStmt.run(hashPassword(pw), master.id);
+  if (existing) revokeAllSessions(master.id);
+  logger.info(
+    existing
+      ? 'AUTH: master password reset from APP_PASSWORD and its sessions signed out. You can now remove APP_PASSWORD/APP_PASSWORD_RESET from .env.'
+      : 'AUTH: master password initialized from APP_PASSWORD and hashed into the database. You can now remove APP_PASSWORD from .env.'
+  );
+  return { configured: true };
+}
+
 // --- sessions --------------------------------------------------------------
-// Sessions live only in memory (cleared on restart, as before). Each token is
-// tagged with the "session generation" it was minted under; a session is valid
-// only while its generation matches the current one. Bumping the generation
-// (see logoutAllSessions) therefore invalidates every outstanding session at
-// once — the mechanism behind "Sign out all devices" — without a restart. The
-// generation is persisted in settings so an invalidation survives a restart too.
-const GEN_KEY = 'auth:session_generation';
-function loadGeneration() {
-  const n = parseInt(getSetting(GEN_KEY), 10);
-  return Number.isInteger(n) && n > 0 ? n : 1;
+// A session is valid while its row exists, its generation matches the user's
+// current session_generation and the user isn't disabled. Bumping the generation
+// (sign out all devices, password reset) invalidates every session of that user
+// at once; the rows are deleted too so they don't linger.
+//
+// last_seen_at is refreshed at most every few minutes (not on every request), and
+// sessions idle for longer than the cookie lifetime are pruned daily.
+const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
-let sessionGeneration = loadGeneration();
-if (getSetting(GEN_KEY) == null) setSetting(GEN_KEY, String(sessionGeneration));
 
-const sessions = new Map(); // token -> generation it was minted under
-// Tokens are only removed on explicit logout, so without a bound the map would
-// grow for every login for the life of the process. The cap is far above any
-// real device count (and cookies die with the process anyway, since COOKIE_SECRET
-// is per-boot), so evicting the oldest can never sign out a live device in
-// practice — it just stops the map from being unbounded.
-const MAX_SESSIONS = 500;
+// Coarse "Browser on OS" description for the sessions list, never the raw
+// user-agent string.
+function deviceLabel(ua) {
+  const s = String(ua || '');
+  const os = /iPad/.test(s)
+    ? 'iPad'
+    : /iPhone|iPod/.test(s)
+      ? 'iPhone'
+      : /Android/.test(s)
+        ? 'Android'
+        : /Windows/.test(s)
+          ? 'Windows'
+          : /Macintosh|Mac OS X/.test(s)
+            ? 'Mac'
+            : /Linux/.test(s)
+              ? 'Linux'
+              : '';
+  const browser = /Edg\//.test(s)
+    ? 'Edge'
+    : /Firefox\//.test(s)
+      ? 'Firefox'
+      : /Chrome\//.test(s)
+        ? 'Chrome'
+        : /Safari\//.test(s)
+          ? 'Safari'
+          : '';
+  return [browser, os].filter(Boolean).join(' on ') || null;
+}
 
-function createSession() {
+function createSession(userId, request) {
   const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, sessionGeneration);
-  while (sessions.size > MAX_SESSIONS) sessions.delete(sessions.keys().next().value);
+  const now = Date.now();
+  insertSessionStmt.run(hashToken(token), now, now, deviceLabel(request.headers['user-agent']), userId);
   return token;
-}
-function destroySession(token) {
-  if (token) sessions.delete(token);
-}
-function isValidSession(token) {
-  if (!token) return false;
-  const gen = sessions.get(token);
-  return gen !== undefined && gen === sessionGeneration;
-}
-// Invalidate ALL sessions everywhere: advance (and persist) the generation so no
-// existing token can match again, and drop the in-memory set. The caller also
-// clears the current device's own cookie.
-function logoutAllSessions() {
-  sessionGeneration += 1;
-  setSetting(GEN_KEY, String(sessionGeneration));
-  sessions.clear();
 }
 
-// --- cookie signing / parsing ---------------------------------------------
-function sign(token) {
-  const mac = crypto.createHmac('sha256', COOKIE_SECRET).update(token).digest('base64url');
-  return `${token}.${mac}`;
+function sessionTokenFrom(request) {
+  const value = parseCookies(request.headers.cookie)[COOKIE];
+  return value && TOKEN_RE.test(value) ? value : null;
 }
-function unsign(value) {
-  if (!value) return null;
-  const dot = value.lastIndexOf('.');
-  if (dot < 0) return null;
-  const token = value.slice(0, dot);
-  const mac = value.slice(dot + 1);
-  const expected = crypto.createHmac('sha256', COOKIE_SECRET).update(token).digest('base64url');
-  const a = Buffer.from(mac);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  return token;
+
+// The account behind the request's session cookie ({ id, role }), or null.
+function sessionUser(request) {
+  const token = sessionTokenFrom(request);
+  if (!token) return null;
+  const hash = hashToken(token);
+  const row = getSessionStmt.get(hash);
+  if (!row || row.disabled || row.generation !== row.session_generation) return null;
+  const now = Date.now();
+  if (now - row.last_seen_at > TOUCH_INTERVAL_MS) touchSessionStmt.run(now, hash);
+  return { id: row.user_id, role: row.role };
 }
+
+function destroySession(request) {
+  const token = sessionTokenFrom(request);
+  if (token) deleteSessionStmt.run(hashToken(token));
+}
+
+// Sign `userId` out everywhere: no existing token can match again.
+export function revokeAllSessions(userId) {
+  db.transaction(() => {
+    bumpGenerationStmt.run(userId);
+    deleteUserSessionsStmt.run(userId);
+  })();
+}
+
+// Prune idle sessions now (boot) and once daily. The interval is unref'd so it
+// never keeps the process alive on its own.
+export function startSessionCleanup(logger) {
+  const sweep = () => {
+    try {
+      const n = pruneSessionsStmt.run(Date.now() - YEAR_MS).changes;
+      if (n && logger) logger.info(`sessions: pruned ${n} idle session(s)`);
+    } catch (err) {
+      if (logger) logger.warn(`session cleanup failed: ${err.message}`);
+    }
+  };
+  sweep();
+  const timer = setInterval(sweep, 24 * 60 * 60 * 1000);
+  if (timer.unref) timer.unref();
+  return timer;
+}
+
+// --- cookies ---------------------------------------------------------------
 function parseCookies(header) {
   const out = {};
   if (!header) return out;
   for (const part of header.split(';')) {
     const eq = part.indexOf('=');
     if (eq < 0) continue;
-    out[part.slice(0, eq).trim()] = decodeURIComponent(part.slice(eq + 1).trim());
+    try {
+      out[part.slice(0, eq).trim()] = decodeURIComponent(part.slice(eq + 1).trim());
+    } catch {
+      /* malformed escape: ignore that cookie */
+    }
   }
   return out;
-}
-function sessionTokenFrom(request) {
-  const cookies = parseCookies(request.headers.cookie);
-  return unsign(cookies[COOKIE]);
 }
 // Behind Caddy the app sees HTTP; the Secure flag must follow the *external*
 // scheme, which Caddy reports via X-Forwarded-Proto.
@@ -237,6 +299,12 @@ function buildSessionCookie(value, { maxAge, secure }) {
   if (maxAge != null) parts.push(`Max-Age=${maxAge}`);
   if (secure) parts.push('Secure');
   return parts.join('; ');
+}
+function setSessionCookie(reply, request, token) {
+  reply.header('Set-Cookie', buildSessionCookie(token, { maxAge: YEAR_SECONDS, secure: isHttps(request) }));
+}
+function clearSessionCookie(reply, request) {
+  reply.header('Set-Cookie', buildSessionCookie('', { maxAge: 0, secure: isHttps(request) }));
 }
 
 // --- rate limiting (per IP, 5 failures / 15 min, in-memory) ----------------
@@ -261,12 +329,31 @@ function clearFailures(ip) {
   attempts.delete(ip);
 }
 
+// Per-account limit (10 failures / 15 min), independent of the source IP, so
+// one member's password can't be guessed from many addresses. Like the per-IP
+// limit it only counts failures, so a correct password is never slowed.
+const USER_RL_MAX = 10;
+const userAttempts = new Map(); // user id -> { count, resetAt }
+function isUserLocked(userId) {
+  const e = userAttempts.get(userId);
+  return !!e && Date.now() < e.resetAt && e.count >= USER_RL_MAX;
+}
+function recordUserFailure(userId) {
+  const now = Date.now();
+  let e = userAttempts.get(userId);
+  if (!e || now >= e.resetAt) {
+    e = { count: 0, resetAt: now + RL_WINDOW };
+    userAttempts.set(userId, e);
+  }
+  e.count += 1;
+}
+
 // Global, IP-independent throttle. The per-IP limiter above can be sidestepped
 // by rotating X-Forwarded-For (LAN/direct mode) or by using many source IPs
 // (distributed guessing). This adds a small, escalating delay to every FAILED
 // attempt across all IPs, so aggregate guessing rate is capped regardless of
 // source. The delay is bounded (never a hard lock) and only ever applies to a
-// wrong password, so the legitimate owner's correct login is always instant.
+// wrong password, so a member's correct login is always instant.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const GLOBAL_WINDOW = 15 * 60 * 1000;
 const GLOBAL_DELAY_STEP_MS = 150; // added latency per recent global failure
@@ -289,10 +376,11 @@ function clearGlobalFailures() {
   globalFails = 0;
 }
 
-// Periodically drop expired windows so the map can't grow without bound.
+// Periodically drop expired windows so the maps can't grow without bound.
 const attemptsSweep = setInterval(() => {
   const now = Date.now();
   for (const [ip, e] of attempts) if (now >= e.resetAt) attempts.delete(ip);
+  for (const [id, e] of userAttempts) if (now >= e.resetAt) userAttempts.delete(id);
 }, RL_WINDOW);
 if (attemptsSweep.unref) attemptsSweep.unref();
 
@@ -325,12 +413,31 @@ const magicSweep = setInterval(() => {
 if (magicSweep.unref) magicSweep.unref();
 
 // --- login page (standalone, self-contained) -------------------------------
+// The profiles a visitor can choose from, rendered into the page so the picker
+// paints at once with no extra request. Names only, plus an avatar URL served by
+// the public avatar route below; never anything from a library.
+function pickerProfiles() {
+  return pickerUsers().map((u) => {
+    const f = avatarFile(u);
+    return {
+      id: u.id,
+      name: u.display_name,
+      avatar: f ? `/api/auth/profiles/${u.id}/avatar?v=${fileVersion(f)}` : null,
+    };
+  });
+}
+
+// JSON safe to place inside a <script> element.
+function scriptJson(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
 // The logo is the same file as the favicon, linked rather than inlined: /icons/*
 // is public (see isPublic), so it loads without a session, and as a separate URL
 // it is downloaded once and browser-cached (Caddy sends a week's max-age) instead
 // of riding along, base64-inflated, in every no-store copy of this page.
-function loginPageHtml() {
-  const logoTag = `<img class="logo" src="${BASE}/icons/shelf-iticon-browser.png" alt="" width="72" height="72">`;
+function loginPageHtml(profiles) {
+  const logoTag = `<img class="logo" src="${BASE}/icons/shelf-iticon-browser.png" alt="" width="56" height="56">`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -378,65 +485,111 @@ function loginPageHtml() {
     }
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
+  html,body{margin:0;min-height:100%}
   body{
     background:var(--bg);color:var(--text-primary);
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
-    display:flex;align-items:center;justify-content:center;padding:24px;
+    min-height:100vh;min-height:100dvh;
+    display:flex;align-items:center;justify-content:center;padding:24px 16px;
   }
-  .card{width:100%;max-width:320px;text-align:center}
-  .logo{border-radius:var(--r-lg);margin-bottom:14px}
-  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.5px}
+  .card{width:100%;max-width:560px;text-align:center}
+  .logo{border-radius:var(--r-md);margin-bottom:10px}
+  h1{font-size:22px;margin:0 0 28px;letter-spacing:-.5px}
   h1 span{color:var(--accent)}
-  .sub{color:var(--text-secondary);font-size:14px;margin:0 0 24px}
-  form{display:flex;flex-direction:column;gap:12px}
+  h2{font-size:20px;font-weight:600;margin:0 0 24px}
+  .view[hidden]{display:none}
+  /* Profile tiles: the app's avatar (84px circle on surface-elevated, initial in
+     the accent colour), with the name underneath. */
+  .profiles{display:flex;flex-wrap:wrap;justify-content:center;gap:24px 20px;margin:0;padding:0;list-style:none}
+  .profile{
+    display:flex;flex-direction:column;align-items:center;gap:10px;width:100px;padding:0;
+    background:none;border:none;color:var(--text-secondary);font:inherit;font-size:14px;cursor:pointer;
+    transition:color var(--dur-short) var(--ease-state);
+  }
+  .profile .name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .profile:hover,.profile:focus-visible{color:var(--text-primary);outline:none}
+  .avatar{
+    width:84px;height:84px;border-radius:50%;overflow:hidden;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--surface-elevated);color:var(--accent);font-size:34px;font-weight:700;
+    box-shadow:0 0 0 0 transparent;
+    transition:box-shadow var(--dur-short) var(--ease-state),transform var(--dur-short) var(--ease-state);
+  }
+  .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+  .profile:hover .avatar,.profile:focus-visible .avatar{box-shadow:0 0 0 3px var(--accent)}
+  .profile:active .avatar{transform:scale(.96)}
+  .who{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:6px}
+  .who .avatar{width:96px;height:96px;font-size:38px}
+  .who .name{font-size:20px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sub{color:var(--text-secondary);font-size:14px;margin:0 0 20px}
+  form{display:flex;flex-direction:column;gap:12px;max-width:320px;margin:0 auto}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
   /* The app's text field: 12px radius, focus as a border swap + outside ring so
      nothing shifts. */
-  input{
+  input[type=password]{
     width:100%;padding:13px 14px;font:inherit;font-size:16px;border-radius:var(--r-md);
     border:1px solid var(--border);background:var(--surface);color:var(--text-primary);
     transition:border-color var(--dur-short) var(--ease-state),box-shadow var(--dur-short) var(--ease-state);
   }
-  input:focus{
+  input[type=password]:focus{
     outline:none;border-color:var(--accent);
     box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent);
   }
   /* The app's primary .btn: a pill with the verb's glyph left of the label. */
-  button{
+  .primary{
     display:inline-flex;align-items:center;justify-content:center;gap:8px;
     width:100%;min-height:48px;padding:13px;font:inherit;font-size:16px;font-weight:600;
     border:none;border-radius:var(--r-pill);background:var(--accent);color:#000;cursor:pointer;
     transition:opacity var(--dur-short) var(--ease-state),transform var(--dur-short) var(--ease-state);
   }
-  button svg{width:18px;height:18px;flex-shrink:0}
-  button:active:not(:disabled){transform:scale(.97)}
-  button:disabled{opacity:.4;cursor:default}
-  button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  .primary svg{width:18px;height:18px;flex-shrink:0}
+  .primary:active:not(:disabled){transform:scale(.97)}
+  .primary:disabled{opacity:.4;cursor:default}
+  .primary:focus-visible,.link:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  .link{
+    align-self:center;min-height:44px;padding:10px 16px;border:none;border-radius:var(--r-pill);
+    background:none;color:var(--text-secondary);font:inherit;font-size:14px;cursor:pointer;
+    transition:color var(--dur-short) var(--ease-state);
+  }
+  .link:hover{color:var(--text-primary)}
+  .link[hidden]{display:none}
   .error{color:var(--danger);font-size:14px;min-height:18px;margin-top:4px}
 </style>
 </head>
 <body>
-  <div class="card">
+  <main class="card">
     ${logoTag}
     <h1>shelf<span>it</span></h1>
-    <p class="sub" data-it="Inserisci la password per continuare" data-en="Enter your password to continue">Enter your password to continue</p>
-    <form id="f" autocomplete="off">
-      <input id="pw" type="password" placeholder="Password" autocomplete="current-password"
-        autofocus aria-label="Password">
-      <button id="btn" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7"/></svg><span data-it="Entra" data-en="Come inside">Come inside</span></button>
-      <div class="error" id="err" role="alert"
-        data-it-magic="Questo link di accesso non è più valido. Inserisci la password."
-        data-en-magic="That sign-in link is no longer valid. Enter your password."
-        data-it-limit="Troppi tentativi. Riprova più tardi."
-        data-en-limit="Too many attempts. Try again later."
-        data-it-wrong="Password errata"
-        data-en-wrong="Wrong password"
-        data-it-network="Errore di rete. Riprova."
-        data-en-network="Network error. Try again."></div>
-    </form>
-  </div>
+
+    <section class="view" id="picker" hidden>
+      <h2 data-it="Chi sta guardando?" data-en="Who's watching?">Who's watching?</h2>
+      <ul class="profiles" id="profiles"></ul>
+    </section>
+
+    <section class="view" id="signin" hidden>
+      <div class="who" id="who"></div>
+      <p class="sub" data-it="Inserisci la password per continuare" data-en="Enter your password to continue">Enter your password to continue</p>
+      <form id="f" autocomplete="on">
+        <input id="uname" class="sr-only" type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
+        <input id="pw" type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
+        <button id="btn" class="primary" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7"/></svg><span data-it="Entra" data-en="Come inside">Come inside</span></button>
+        <div class="error" id="err" role="alert"
+          data-it-magic="Questo link di accesso non è più valido. Inserisci la password."
+          data-en-magic="That sign-in link is no longer valid. Enter your password."
+          data-it-limit="Troppi tentativi. Riprova più tardi."
+          data-en-limit="Too many attempts. Try again later."
+          data-it-wrong="Password errata"
+          data-en-wrong="Wrong password"
+          data-it-network="Errore di rete. Riprova."
+          data-en-network="Network error. Try again."></div>
+        <button id="back" class="link" type="button" data-it="Non sei tu?" data-en="Not you?" hidden>Not you?</button>
+      </form>
+    </section>
+  </main>
 <script>
   (function(){
+    var BASE='${BASE}';
+    var PROFILES=${scriptJson(profiles)};
     // Language: the app's stored choice, else the browser's. Both languages ship
     // in data attributes; fill every translatable node from its own.
     var lang='en';
@@ -445,25 +598,85 @@ function loginPageHtml() {
     document.documentElement.setAttribute('lang',lang);
     var nodes=document.querySelectorAll('[data-'+lang+']');
     for(var i=0;i<nodes.length;i++)nodes[i].textContent=nodes[i].getAttribute('data-'+lang);
-    var f=document.getElementById('f'),pw=document.getElementById('pw'),
-        btn=document.getElementById('btn'),err=document.getElementById('err');
+
+    var picker=document.getElementById('picker'),signin=document.getElementById('signin'),
+        list=document.getElementById('profiles'),who=document.getElementById('who'),
+        f=document.getElementById('f'),pw=document.getElementById('pw'),uname=document.getElementById('uname'),
+        btn=document.getElementById('btn'),back=document.getElementById('back'),err=document.getElementById('err');
+    var selected=null;
     function msg(key){return err.getAttribute('data-'+lang+'-'+key)||'';}
-    // Generic message when arriving from an invalid/expired magic link — never
+
+    // An avatar circle: the chosen image, else the name's first letter. Names are
+    // only ever set as text, never as HTML.
+    function avatar(p){
+      var el=document.createElement('span');
+      el.className='avatar';
+      el.setAttribute('aria-hidden','true');
+      function initial(){el.textContent=(Array.from(p.name||'?')[0]||'?').toUpperCase();}
+      if(p.avatar){
+        var img=document.createElement('img');
+        img.alt='';img.decoding='async';
+        img.onerror=function(){img.remove();initial();};
+        img.src=BASE+p.avatar;
+        el.appendChild(img);
+      }else initial();
+      return el;
+    }
+    function nameEl(p){
+      var n=document.createElement('span');
+      n.className='name';n.textContent=p.name;
+      return n;
+    }
+
+    function showPicker(){
+      selected=null;err.textContent='';
+      signin.hidden=true;picker.hidden=false;
+      var first=list.querySelector('button');
+      if(first)first.focus();
+    }
+    function choose(p){
+      selected=p;err.textContent='';pw.value='';
+      who.textContent='';who.appendChild(avatar(p));who.appendChild(nameEl(p));
+      uname.value=p.name; // lets password managers keep one entry per member
+      back.hidden=PROFILES.length<2;
+      picker.hidden=true;signin.hidden=false;
+      pw.focus();
+    }
+
+    PROFILES.forEach(function(p){
+      var li=document.createElement('li');
+      var b=document.createElement('button');
+      b.type='button';b.className='profile';
+      b.appendChild(avatar(p));b.appendChild(nameEl(p));
+      b.addEventListener('click',function(){choose(p);});
+      li.appendChild(b);list.appendChild(li);
+    });
+    back.addEventListener('click',showPicker);
+    document.addEventListener('keydown',function(ev){
+      if(ev.key==='Escape'&&!signin.hidden&&PROFILES.length>1)showPicker();
+    });
+
+    if(PROFILES.length===1)choose(PROFILES[0]);else showPicker();
+
+    // Generic message when arriving from an invalid/expired magic link: never
     // says why (expired vs unknown vs revoked vs rate-limited).
     try{
       if(/[?&]error=/.test(window.location.search)){
+        if(signin.hidden&&PROFILES.length)choose(PROFILES[0]);
         err.textContent=msg('magic');
-        history.replaceState(null,'','${BASE}/login');
+        history.replaceState(null,'',BASE+'/login');
       }
     }catch(e){}
+
     f.addEventListener('submit',function(ev){
       ev.preventDefault();
+      if(!selected)return;
       err.textContent='';btn.disabled=true;
-      fetch('${BASE}/api/auth/login',{
+      fetch(BASE+'/api/auth/login',{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({password:pw.value})
+        body:JSON.stringify({user_id:selected.id,password:pw.value})
       }).then(function(r){
-        if(r.ok){window.location.replace('${BASE}/');return;}
+        if(r.ok){window.location.replace(BASE+'/');return;}
         btn.disabled=false;
         err.textContent = r.status===429 ? msg('limit') : msg('wrong');
         pw.focus();pw.select();
@@ -477,15 +690,36 @@ function loginPageHtml() {
 </html>`;
 }
 
+const AVATAR_MIME = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+};
+
+// Which account a login attempt targets. Without a user_id the request is
+// accepted only while a single account can sign in (the single-user case, and
+// API clients written before profiles existed); otherwise it is ambiguous.
+function loginTarget(userId) {
+  if (userId === undefined || userId === null || userId === '') {
+    if (countPasswordUsersStmt.get().c !== 1) return { ambiguous: true };
+    return { user: onlyPasswordUserStmt.get() };
+  }
+  return { user: getUser(userId) };
+}
+
 // --- registration ----------------------------------------------------------
 // Registers the global auth gate, the /login page, and the auth API routes.
 export function registerAuth(fastify, { configured }) {
+  fastify.decorateRequest('user', null);
+
   // Paths reachable WITHOUT a session (login page + login submit + logout).
   function isPublic(request) {
     const p = (request.raw.url || '').split('?')[0];
     if (request.method === 'GET' && (p === '/login' || p === '/login.html')) return true;
     if (request.method === 'GET' && p === '/api/health') return true; // liveness probe
-    // PWA branding shell — pure static assets, no user data. These MUST be
+    // PWA branding shell: pure static assets, no user data. These MUST be
     // reachable without a session: iOS fetches the apple-touch-icon (often
     // cookieless) when adding to the home screen, and 302-ing it to the HTML
     // login page makes iOS fall back to a blank/generic icon.
@@ -495,6 +729,8 @@ export function registerAuth(fastify, { configured }) {
     ) {
       return true;
     }
+    // The picker's avatars, shown before anyone has signed in.
+    if (request.method === 'GET' && /^\/api\/auth\/profiles\/\d+\/avatar$/.test(p)) return true;
     if (request.method === 'POST' && p === '/api/auth/login') return true;
     if (request.method === 'POST' && p === '/api/auth/logout') return true; // just clears a cookie
     // The magic-link REDEEM endpoint is itself an auth mechanism, so it must be
@@ -510,9 +746,19 @@ export function registerAuth(fastify, { configured }) {
   }
 
   fastify.addHook('onRequest', async (request, reply) => {
-    if (!configured) return; // no password set → auth disabled (operator warned at boot)
+    if (!configured) {
+      // No password set: auth disabled (operator warned at boot), and every
+      // request acts as the master account.
+      const master = getMaster();
+      request.user = master ? { id: master.id, role: master.role } : null;
+      return;
+    }
     if (isPublic(request)) return;
-    if (isValidSession(sessionTokenFrom(request))) return;
+    const user = sessionUser(request);
+    if (user) {
+      request.user = user;
+      return;
+    }
 
     const p = (request.raw.url || '').split('?')[0];
     if (p.startsWith('/api/') || p.startsWith('/assets/') || p.startsWith('/badges/')) {
@@ -523,55 +769,85 @@ export function registerAuth(fastify, { configured }) {
     return reply; // halt the pipeline
   });
 
-  // Standalone login page.
+  // Standalone login page: the profile picker.
   fastify.get('/login', async (_request, reply) => {
     reply
       .header('Content-Type', 'text/html; charset=utf-8')
       .header('Cache-Control', 'no-store')
-      .send(loginPageHtml());
+      .send(loginPageHtml(pickerProfiles()));
   });
 
-  // GET /api/auth/status → whether login is enabled (and the caller is in).
-  fastify.get('/api/auth/status', async (request) => ({
-    enabled: configured,
-    authenticated: configured ? isValidSession(sessionTokenFrom(request)) : true,
-  }));
+  // GET /api/auth/profiles/:id/avatar: a picker tile's image. Public, but only
+  // for accounts the picker shows, and only their avatar (an uploaded photo or
+  // the poster of the title they chose). The URL is versioned by the page.
+  fastify.get('/api/auth/profiles/:id/avatar', async (request, reply) => {
+    const user = getUser(request.params.id);
+    const file = isPickable(user) ? avatarFile(user) : null;
+    if (!file) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    reply
+      .header('Content-Type', AVATAR_MIME[path.extname(file).toLowerCase()] || 'application/octet-stream')
+      .header('Cache-Control', 'private, max-age=86400');
+    return reply.send(fs.createReadStream(file));
+  });
 
-  // POST /api/auth/login  { password }
+  // GET /api/auth/status: whether login is enabled, and who is signed in.
+  fastify.get('/api/auth/status', async (request) => {
+    const u = request.user ? getUser(request.user.id) : null;
+    return {
+      enabled: configured,
+      authenticated: !!request.user,
+      user: u ? { id: u.id, display_name: u.display_name, role: u.role } : null,
+    };
+  });
+
+  // POST /api/auth/login  { user_id, password }
   fastify.post('/api/auth/login', async (request, reply) => {
     const ip = clientIp(request);
     if (isRateLimited(ip)) {
       reply.code(429);
       return { error: 'Too many attempts. Try again later.' };
     }
-    const password = request.body && request.body.password;
-    if (!verifyPassword(password)) {
+    const body = request.body || {};
+    const target = loginTarget(body.user_id);
+    if (target.ambiguous) {
+      reply.code(400);
+      return { error: 'user_id is required' };
+    }
+    const user = target.user;
+    if (user && isUserLocked(user.id)) {
+      reply.code(429);
+      return { error: 'Too many attempts. Try again later.' };
+    }
+    if (!user || user.disabled || !verifyPassword(user.password_hash, body.password)) {
       recordFailure(ip);
       recordGlobalFailure();
-      logAccess(EVENTS.LOGIN, request, false); // fire-and-forget audit entry
+      if (user) recordUserFailure(user.id);
+      logAccess(EVENTS.LOGIN, request, false, user ? user.id : null); // fire-and-forget audit entry
       const delay = globalDelayMs(); // escalating, capped; wrong-password path only
       if (delay) await sleep(delay);
       reply.code(401);
-      return { error: 'Invalid credentials' }; // generic — no existence hint
+      return { error: 'Invalid credentials' }; // generic: no existence hint
     }
     clearFailures(ip);
     clearGlobalFailures();
-    const token = createSession();
-    logAccess(EVENTS.LOGIN, request, true);
-    reply.header(
-      'Set-Cookie',
-      buildSessionCookie(sign(token), { maxAge: YEAR_SECONDS, secure: isHttps(request) })
-    );
+    userAttempts.delete(user.id);
+    if (needsRehash(user.password_hash)) setPasswordStmt.run(hashPassword(body.password), user.id);
+    setLastLoginStmt.run(Date.now(), user.id);
+    const token = createSession(user.id, request);
+    logAccess(EVENTS.LOGIN, request, true, user.id);
+    setSessionCookie(reply, request, token);
     return { ok: true };
   });
 
-  // POST /api/auth/logout-all → invalidate every active session on every device
-  // (including this one). Behind the auth gate, so only an authenticated caller
-  // can trigger it. Records an audit entry and clears the current cookie.
+  // POST /api/auth/logout-all → sign the caller out on every device (including
+  // this one). Other members' sessions are untouched.
   fastify.post('/api/auth/logout-all', async (request, reply) => {
-    logoutAllSessions();
-    logAccess(EVENTS.LOGOUT_ALL, request, true);
-    reply.header('Set-Cookie', buildSessionCookie('', { maxAge: 0, secure: isHttps(request) }));
+    revokeAllSessions(request.user.id);
+    logAccess(EVENTS.LOGOUT_ALL, request, true, request.user.id);
+    clearSessionCookie(reply, request);
     return { ok: true };
   });
 
@@ -581,20 +857,20 @@ export function registerAuth(fastify, { configured }) {
 
   // POST /api/auth/logout
   fastify.post('/api/auth/logout', async (request, reply) => {
-    destroySession(sessionTokenFrom(request));
-    reply.header('Set-Cookie', buildSessionCookie('', { maxAge: 0, secure: isHttps(request) }));
+    destroySession(request);
+    clearSessionCookie(reply, request);
     return { ok: true };
   });
 
   // --- Magic links ---------------------------------------------------------
-  // GET /api/auth/magic/:token — the passwordless login itself. Public (see
+  // GET /api/auth/magic/:token: the passwordless login itself. Public (see
   // isPublic), rate limited per IP, and redirects (never returns JSON) so a
   // real browser navigation lands on the app or the login page.
   fastify.get('/api/auth/magic/:token', async (request, reply) => {
     const ip = clientIp(request);
-    // Redirect (302) to a generic login error on ANY failure — never reveal why.
-    const fail = () => {
-      logAccess(EVENTS.MAGIC_LINK, request, false); // fire-and-forget audit entry
+    // Redirect (302) to a generic login error on ANY failure: never reveal why.
+    const fail = (userId = null) => {
+      logAccess(EVENTS.MAGIC_LINK, request, false, userId); // fire-and-forget audit entry
       return reply.redirect(`${BASE}/login?error=magic`);
     };
 
@@ -606,28 +882,28 @@ export function registerAuth(fastify, { configured }) {
       recordMagicFailure(ip); // only failures count toward the brute-force limit
       return fail();
     }
+    const user = getUser(match.user_id);
+    if (!user || user.disabled) return fail(match.user_id);
     clearMagicFailures(ip);
     recordUse(match.id);
-    logAccess(EVENTS.MAGIC_LINK, request, true);
+    logAccess(EVENTS.MAGIC_LINK, request, true, user.id);
 
-    // Mint a session cookie IDENTICAL to a normal password login (same maxAge,
-    // same signing, same scope) — no reduced permissions or shorter lifetime.
-    const sessionToken = createSession();
-    reply.header(
-      'Set-Cookie',
-      buildSessionCookie(sign(sessionToken), { maxAge: YEAR_SECONDS, secure: isHttps(request) })
-    );
+    // A session IDENTICAL to a password login for the link's account (same
+    // lifetime, same cookie): no reduced permissions.
+    setLastLoginStmt.run(Date.now(), user.id);
+    setSessionCookie(reply, request, createSession(user.id, request));
     return reply.redirect(`${BASE}/`);
   });
 
-  // GET /api/auth/magic — list active links (never the token value).
-  fastify.get('/api/auth/magic', async () => ({ links: listMagicLinks() }));
+  // GET /api/auth/magic: the caller's active links (never the token value).
+  fastify.get('/api/auth/magic', async (request) => ({ links: listMagicLinks(request.user.id) }));
 
-  // POST /api/auth/magic { label?, expiry? } — create a link, return its URL ONCE.
+  // POST /api/auth/magic { label?, expiry? }: create a link that signs in the
+  // caller, and return its URL ONCE.
   fastify.post('/api/auth/magic', async (request, reply) => {
     const body = request.body || {};
     const label = typeof body.label === 'string' ? body.label : null;
-    const link = createMagicLink({ label, expiresInMs: expiryMsFor(body.expiry) });
+    const link = createMagicLink({ userId: request.user.id, label, expiresInMs: expiryMsFor(body.expiry) });
     // `url` logs the visiting device in instantly and 302s into the app.
     const url = magicLinkUrl(request, link.token);
     // Return the URL once; the token itself is never echoed again.
@@ -643,14 +919,14 @@ export function registerAuth(fastify, { configured }) {
     };
   });
 
-  // DELETE /api/auth/magic/:id — revoke (hard-delete) a link.
+  // DELETE /api/auth/magic/:id: revoke (hard-delete) one of the caller's links.
   fastify.delete('/api/auth/magic/:id', async (request, reply) => {
     const id = parseInt(request.params.id, 10);
     if (!Number.isInteger(id)) {
       reply.code(400);
       return { error: 'invalid id' };
     }
-    const removed = revokeMagicLink(id);
+    const removed = revokeMagicLink(id, request.user.id);
     if (!removed) {
       reply.code(404);
       return { error: 'not found' };

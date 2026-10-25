@@ -3,6 +3,7 @@ import db from './db.js'; // opens DB, creates dirs, runs migrations on import
 import { migrateCacheToWebp } from './cache.js';
 import { startMagicCleanup } from './magicLinks.js';
 import { startAccessLogCleanup } from './accessLog.js';
+import { startSessionCleanup } from './auth.js';
 import { startKodiScheduler } from './kodiSync.js';
 import { startPushScheduler } from './push.js';
 import { imageRamCache } from './imageRamCache.js';
@@ -46,6 +47,9 @@ startMagicCleanup(fastify.log);
 
 // Access-log retention: prune entries older than 90 days now (boot) and daily.
 startAccessLogCleanup(fastify.log);
+
+// Sessions idle for longer than the cookie lifetime (a year): prune now and daily.
+startSessionCleanup(fastify.log);
 
 // --- Graceful shutdown ----------------------------------------------------
 // On `docker stop` (SIGTERM) or Ctrl-C (SIGINT), drain in-flight requests and

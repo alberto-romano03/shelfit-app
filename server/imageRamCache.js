@@ -138,17 +138,16 @@ export const imageRamCache = {
       }
       for (const it of watching) paths.add(posterPath(it.type, it.tmdb_id));
 
-      // Profile avatar + cover (poster/backdrop of the chosen title token).
+      // Every member's avatar + cover (poster/backdrop of the chosen title token).
       try {
-        const p = db.prepare('SELECT profile_image, cover_image FROM profile WHERE id = 1').get();
-        if (p) {
+        for (const p of db.prepare('SELECT profile_image, cover_image FROM users WHERE disabled = 0').all()) {
           const avatar = tokenToPath(p.profile_image, 'poster');
           if (avatar) paths.add(avatar);
           const cover = tokenToPath(p.cover_image, 'backdrop');
           if (cover) paths.add(cover);
         }
       } catch {
-        /* no profile row — skip */
+        /* no users table yet: skip */
       }
 
       // What's Next episode stills (next unwatched aired episode per started show).

@@ -44,8 +44,9 @@ describe('single-user baseline', () => {
     if (h) await h.close();
   });
 
-  it('starts at schema version 0 with no migrations pending', () => {
-    assert.equal(h.db.pragma('user_version', { simple: true }), 0);
+  it('starts fully migrated', async () => {
+    const { MIGRATIONS } = await import('../server/migrations.js');
+    assert.equal(h.db.pragma('user_version', { simple: true }), MIGRATIONS.length);
   });
 
   it('gates the API and pages behind the session', async () => {
@@ -60,7 +61,9 @@ describe('single-user baseline', () => {
     assert.equal(wrong.status, 401);
 
     const status = await api.get('/api/auth/status');
-    assert.deepEqual(status.json, { enabled: true, authenticated: true });
+    assert.equal(status.json.enabled, true);
+    assert.equal(status.json.authenticated, true);
+    assert.equal(status.json.user.role, 'master');
   });
 
   it('adds titles from cached metadata', async () => {
