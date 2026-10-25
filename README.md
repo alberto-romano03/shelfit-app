@@ -30,11 +30,13 @@ It is deliberately **not** a multi-tenant service: there is one library, guarded
 a single app password (or magic-link login), and all data lives in a single SQLite
 database and cache folder that you own.
 
-> **In a hurry?** Jump to [Running shelfIt](#running-shelfit). There are exactly two
-> supported setups — [**A. localhost / LAN only**](#a--localhost--lan-only-no-reverse-proxy)
-> (five small edits, no proxy) and [**B. behind a reverse proxy with DDNS + HTTPS**](#b--dynamic-dns--https-behind-a-reverse-proxy-recommended)
-> (keep the defaults, add Caddy). Read [The `/shelfit/` base path](#the-shelfit-base-path-read-this-first)
-> first — it is the one thing that trips up every new deployment.
+> **In a hurry?** Jump to [Running shelfIt](#running-shelfit). There are three
+> supported setups: [**A. localhost / LAN only**](#a-localhost--lan-only-no-reverse-proxy)
+> (five small edits, no proxy), [**B. Tailscale + HTTPS behind a reverse proxy**](#b-tailscale--https-behind-a-reverse-proxy-recommended)
+> (keep the defaults, add Caddy, reach it over your tailnet) and
+> [**C. Dynamic DNS + port forwarding**](#c-dynamic-dns--port-forwarding) (the
+> same proxy, exposed to the internet). Read [The `/shelfit/` base path](#the-shelfit-base-path-read-this-first)
+> first: it is the one thing that trips up every new deployment.
 
 ## Contents
 
@@ -44,8 +46,9 @@ database and cache folder that you own.
 - [Prerequisites](#prerequisites)
 - [The `/shelfit/` base path](#the-shelfit-base-path-read-this-first)
 - [Running shelfIt](#running-shelfit)
-  - [A. localhost / LAN only](#a--localhost--lan-only-no-reverse-proxy)
-  - [B. Dynamic DNS + HTTPS behind a reverse proxy](#b--dynamic-dns--https-behind-a-reverse-proxy-recommended)
+  - [A. localhost / LAN only](#a-localhost--lan-only-no-reverse-proxy)
+  - [B. Tailscale + HTTPS behind a reverse proxy](#b-tailscale--https-behind-a-reverse-proxy-recommended)
+  - [C. Dynamic DNS + port forwarding](#c-dynamic-dns--port-forwarding)
   - [Serving it under a different sub-path](#serving-it-under-a-different-sub-path)
 - [Configuration](#configuration)
 - [Data layout](#data-layout)
@@ -301,8 +304,9 @@ built on Node and browser primitives.
 - _Optional_ **Fanart.tv API key** for higher-quality logos and disc art —
   [fanart.tv/get-an-api-key](https://fanart.tv/get-an-api-key/).
 - _Optional_ **Kodi** instance on your LAN for remote playback and sync.
-- _Optional_ a **DDNS hostname** and a router that can forward ports 80/443, for
-  setup B.
+- _Optional_ **Tailscale** on the host and on every device that should reach the
+  app, for setup B; or a **DDNS hostname** and a router that can forward ports
+  80/443, for setup C.
 - For local (non-Docker) development only: **Node.js 22** — the `better-sqlite3`
   native addon does not build cleanly on newer Node without the right toolchain.
 
@@ -322,17 +326,19 @@ The practical consequence, and the single most common setup mistake:
 > reports something like `Unexpected token '<'` — a blank page. This is not a
 > bug; it means the app is being served at a path its bundle was not built for.
 
-So you must pick one of two consistent arrangements:
+So you must pick one of these consistent arrangements:
 
 | | Base path | Reached at | Reverse proxy | Edits needed |
 | --- | --- | --- | --- | --- |
 | **A** | `/` (root) | `http://<host>:3000/` | none | 5 files, once |
-| **B** | `/shelfit/` (default) | `https://<ddns>/shelfit/` and `http://localhost/shelfit/` | required | none |
+| **B** | `/shelfit/` (default) | `https://<machine>.<tailnet>.ts.net/shelfit/` and `http://localhost/shelfit/` | required | none |
+| **C** | `/shelfit/` (default) | `https://<ddns>/shelfit/` and `http://localhost/shelfit/` | required | none |
 
 Setup **A** is the shortest path to a working app on one machine or a home LAN.
-Setup **B** is what this repository ships configured for: it gives you automatic
-HTTPS, a public DDNS address, LAN access and `http://localhost/shelfit/` all at
-once, and lets other apps live beside shelfIt on the same hostname.
+Setup **B** is what this repository ships configured for: automatic HTTPS on
+every device in your tailnet, nothing exposed to the internet, no router
+configuration, and other apps beside shelfIt on the same hostname. Setup **C**
+uses the same proxy but publishes it on a public DDNS address instead.
 
 ## Running shelfIt
 
@@ -355,7 +361,7 @@ Everything else is optional — see [Configuration](#configuration).
 
 ---
 
-### A — localhost / LAN only (no reverse proxy)
+### A. localhost / LAN only (no reverse proxy)
 
 Serve the app at the root of a published port: `http://localhost:3000/`, and
 `http://<lan-ip>:3000/` from any other device in the house.
@@ -470,26 +476,29 @@ No trailing slash, no sub-path. Restart with `docker compose up -d` afterwards.
 
 ---
 
-### B — Dynamic DNS + HTTPS behind a reverse proxy (recommended)
+### B. Tailscale + HTTPS behind a reverse proxy (recommended)
 
-Keep every default (base path `/shelfit/`, no published port) and put Caddy in
-front. You get, with one configuration:
+Keep every default (base path `/shelfit/`, no published port), put Caddy in
+front, and let [Tailscale](https://tailscale.com/) carry the traffic. You get,
+with one configuration:
 
-- `https://yourname.ddns.net/shelfit/` from anywhere, with automatic Let's
-  Encrypt certificates and renewals;
+- `https://<machine>.<tailnet>.ts.net/shelfit/` on every device signed in to
+  your tailnet, with a certificate Tailscale issues and renews;
 - `http://localhost/shelfit/` on the host machine;
-- `http://<lan-ip>/shelfit/` from other devices in the house;
+- nothing reachable from the internet or the LAN: no DDNS hostname and no router
+  port forwarding;
 - room for other apps beside shelfIt under their own prefixes.
 
-#### B1. Point a hostname at your home
+The examples below use `myserver.tail1234.ts.net`; replace it with your host's
+own Tailscale name (shown on the Machines page of the admin console).
 
-1. Create a DDNS hostname (No-IP, DuckDNS, your router's built-in provider …) and
-   let it track your home IP address — e.g. `yourname.ddns.net`.
-2. On your router, **forward TCP 80 and 443** (and UDP 443 if you want HTTP/3) to
-   the machine that will run Caddy. Port 80 must be reachable: Let's Encrypt uses
-   it for the HTTP challenge.
-3. Give that machine a static or reserved LAN address, so the forward keeps
-   pointing at it.
+#### B1. Prepare Tailscale
+
+1. Install Tailscale on the host and on each phone, tablet or laptop that should
+   reach the app, all signed in to the same tailnet.
+2. In the Tailscale admin console, under **DNS**, enable **MagicDNS** and
+   **HTTPS Certificates**. HTTPS is not optional here: home-screen installation,
+   the service worker and push notifications all need a secure context.
 
 #### B2. Create the shared Docker network (once)
 
@@ -519,13 +528,12 @@ services:
     image: caddy:2-alpine
     container_name: caddy
     restart: unless-stopped
+    # Loopback only: Tailscale (B5) is the one way in from other devices.
     ports:
-      - "80:80"        # ACME HTTP challenge + HTTP→HTTPS redirect
-      - "443:443"      # HTTPS
-      - "443:443/udp"  # HTTP/3 (QUIC)
+      - "127.0.0.1:80:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./data:/data       # persistent certificates / ACME state
+      - ./data:/data
       - ./config:/config
     networks:
       - webproxy
@@ -535,19 +543,32 @@ networks:
     external: true
 ```
 
-`~/caddy/Caddyfile` — the minimum that works:
+`~/caddy/Caddyfile`, the minimum that works:
 
 ```caddyfile
-# Replace the hostname with your DDNS name, and the 192.168.x.x with this
-# machine's LAN address (drop it if you don't need access from other devices).
-# The localhost / IP entries MUST carry the http:// scheme: Caddy would
-# otherwise try to obtain a certificate for a name no CA can validate.
-yourname.ddns.net, http://localhost, http://127.0.0.1, http://192.168.1.50 {
+{
+	servers {
+		# Requests from `tailscale serve` arrive through Docker's port forward,
+		# i.e. from a private address, carrying the real scheme (https) and the
+		# device's Tailscale IP in X-Forwarded-* headers. Trust them. This is safe
+		# only because Caddy listens on 127.0.0.1 alone, so nobody else can
+		# forge those headers.
+		trusted_proxies static private_ranges
+		trusted_proxies_strict
+	}
+}
+
+# Every entry carries http://: TLS is done by Tailscale, not by Caddy.
+http://myserver.tail1234.ts.net, http://localhost, http://127.0.0.1 {
 
 	# handle_path STRIPS /shelfit before forwarding, so the app still serves
-	# everything at its own root — which is exactly what it expects.
+	# everything at its own root, which is exactly what it expects.
 	handle_path /shelfit/* {
-		reverse_proxy shelfit:3000
+		reverse_proxy shelfit:3000 {
+			# Give shelfIt the device's Tailscale IP (rate limiting, access log)
+			# instead of the Docker gateway Caddy would otherwise append last.
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 
 	# Bare path → trailing slash, so the PWA scope and the SPA router agree.
@@ -591,7 +612,9 @@ Recommended additions — security headers and cache policy:
 
 		# Do NOT set Cache-Control for /assets/* or /api/* here — the app already
 		# sends the right headers per endpoint and `header` would clobber them.
-		reverse_proxy shelfit:3000
+		reverse_proxy shelfit:3000 {
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 ```
 
@@ -610,32 +633,78 @@ docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile
 docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
-#### B5. Tell the app its public origin
+#### B5. Publish it on your tailnet
+
+On the host:
+
+```bash
+tailscale serve --bg http://127.0.0.1:80
+```
+
+Tailscale now answers on `https://myserver.tail1234.ts.net/` (port 443, tailnet
+devices only), terminates TLS with its own certificate and forwards plain HTTP to
+Caddy. The setting survives reboots. Check it with `tailscale serve status`;
+remove it with `tailscale serve reset`. It touches only this machine's own node.
+
+> **Several Tailscale accounts on one host?** `serve` belongs to the account that
+> was active when you ran it, and answers only while that account is the active
+> one. Switch the host to another tailnet and the app is unreachable until you
+> switch back.
+
+#### B6. Tell the app its public origin
 
 ```ini
-PUBLIC_URL=https://yourname.ddns.net
+PUBLIC_URL=https://myserver.tail1234.ts.net
 ```
 
-**No trailing slash and no `/shelfit` suffix** — shelfIt appends the sub-path
-itself. This value is used to build magic-link URLs that must work off the LAN,
-and it is the one non-localhost origin allowed by CORS. Restart with
+**No trailing slash and no `/shelfit` suffix**: shelfIt appends the sub-path
+itself. This value is used to build magic-link URLs that must work on your other
+devices, and it is the one non-localhost origin allowed by CORS. Restart with
 `docker compose up -d` after changing it.
 
-Open **`https://yourname.ddns.net/shelfit/`**, or `http://localhost/shelfit/` on
-the host itself. Both serve the same container.
+Open **`https://myserver.tail1234.ts.net/shelfit/`** from any device with
+Tailscale connected, or `http://localhost/shelfit/` on the host itself. Both
+serve the same container.
 
-#### Adding more devices or hostnames later
+#### Adding more apps later
 
-Add them to the site line in the `Caddyfile`, keeping `http://` on anything that
-cannot get a certificate (localhost, bare IPs), then reload Caddy:
+Copy the `handle_path` block (with its `header_up` line), change the prefix,
+container name and port, then reload Caddy, provided that app is also built for
+its own sub-path. Tailscale needs no change: it forwards everything to Caddy.
 
-```caddyfile
-yourname.ddns.net, http://localhost, http://127.0.0.1, http://192.168.1.50 {
-```
+---
 
-Adding another app is a matter of copying the `handle_path` block, changing the
-prefix, container name and port — provided that app is also built for its own
-sub-path.
+### C. Dynamic DNS + port forwarding
+
+The same reverse proxy as setup B, but facing the internet with its own Let's
+Encrypt certificate instead of sitting behind Tailscale. Anyone can reach the
+login page, so keep `APP_PASSWORD` strong.
+
+1. Create a DDNS hostname (No-IP, DuckDNS, your router's built-in provider …) and
+   let it track your home IP address, e.g. `yourname.ddns.net`.
+2. On your router, **forward TCP 80 and 443** (and UDP 443 if you want HTTP/3) to
+   the machine that will run Caddy. Port 80 must be reachable: Let's Encrypt uses
+   it for the HTTP challenge. Give that machine a static or reserved LAN address,
+   so the forward keeps pointing at it.
+3. Follow B2 to B4 with three differences:
+   - publish Caddy on every interface:
+     ```yaml
+         ports:
+           - "80:80"        # ACME HTTP challenge + HTTP→HTTPS redirect
+           - "443:443"      # HTTPS
+           - "443:443/udp"  # HTTP/3 (QUIC)
+     ```
+   - drop the global `servers { trusted_proxies … }` block and the `header_up`
+     lines: Caddy talks to browsers directly, so its own view of the client IP is
+     already the right one, and trusting forwarded headers from the LAN would let
+     anyone there fake their address;
+   - name the DDNS host on the site line (no `http://`, so Caddy fetches a
+     certificate for it), plus this machine's LAN address if other devices in the
+     house should use plain HTTP:
+     ```caddyfile
+     yourname.ddns.net, http://localhost, http://127.0.0.1, http://192.168.1.50 {
+     ```
+4. Skip B5, and set `PUBLIC_URL=https://yourname.ddns.net` as in B6.
 
 ---
 
@@ -660,7 +729,6 @@ All variables are read from `.env` at container startup. Only `TMDB_API_KEY` and
 | `ALLOW_NO_AUTH` | Run with no login gate (trusted LAN only). Without it the server refuses to start in production with no password. | No | `false` |
 | `PORT` | Port the Node server listens on inside the container. | No | `3000` |
 | `PUBLIC_URL` | External origin the app is reached at — no trailing slash, **no sub-path**. Used for magic-link URLs and as the only non-localhost CORS origin. | No | request host |
-| `DDNS_HOSTNAME` | Documentation only — the real value is consumed by the `Caddyfile`. | No | — |
 | `FANART_API_KEY` | Fanart.tv key for clear logos / disc art. | No | — |
 | `CACHE_MAX_AGE_DAYS_MOVIES` | Days before cached movie metadata is refreshed. | No | `180` |
 | `CACHE_MAX_AGE_DAYS_SHOWS` | Days before cached show metadata is refreshed. | No | `7` |
@@ -819,7 +887,7 @@ One convention worth knowing before you write UI:
 `/shelfit/static/…`.**
 The base path and the URL disagree. Either you are hitting the container port
 directly with the default `/shelfit/` build (use the proxy, or switch to
-[setup A](#a--localhost--lan-only-no-reverse-proxy)), or only some of the five
+[setup A](#a-localhost--lan-only-no-reverse-proxy)), or only some of the five
 files were changed. See [The `/shelfit/` base path](#the-shelfit-base-path-read-this-first).
 
 **`502 Bad Gateway` from Caddy.**
@@ -827,7 +895,20 @@ The proxy cannot reach the container: make sure both are on the `webproxy`
 network (`docker network create webproxy`, then recreate both projects) and that
 the `reverse_proxy` target matches shelfIt's `container_name` and port.
 
-**The site loads over HTTP but the certificate never appears.**
+**The `ts.net` address does not load (setup B).**
+Check that the device has Tailscale connected, that `tailscale serve status` on
+the host lists the proxy to `http://127.0.0.1:80`, and that the host is on the
+tailnet you served from. The very first HTTPS request can take a few seconds
+while Tailscale fetches the certificate. If HTTPS works but you get Caddy's empty
+response, the `ts.net` name is missing from the `Caddyfile` site line.
+
+**Every device shows up as the same address, or one bad login locks out all of
+them (setup B).**
+Caddy is passing the Docker gateway instead of the device IP: add the global
+`trusted_proxies` block and the `header_up X-Forwarded-For {client_ip}` line from
+B4.
+
+**The site loads over HTTP but the certificate never appears (setup C).**
 Ports 80 *and* 443 must be forwarded to the Caddy host and the DDNS name must
 resolve to your current public IP. Check `docker compose logs caddy` for the ACME
 error. Names that cannot be validated (`localhost`, bare IPs) must be listed with
@@ -841,15 +922,15 @@ cache-first for the shell. As a last resort, clear site data for the origin.
 Set `APP_PASSWORD` in `.env`, or deliberately set `ALLOW_NO_AUTH=true` for a
 LAN-only instance.
 
-**A magic link opens the wrong address, or does not work off the LAN.**
-Set `PUBLIC_URL` to the external origin, with no trailing slash and no
-`/shelfit` suffix.
+**A magic link opens the wrong address, or does not work on another device.**
+Set `PUBLIC_URL` to the origin your devices use (the `ts.net` name in setup B),
+with no trailing slash and no `/shelfit` suffix.
 
 **Search finds nothing and titles will not add.**
 `TMDB_API_KEY` is missing or wrong — the boot log warns about this explicitly.
 
 **"Add to Home Screen" or notifications are missing.**
-Browsers gate both on a secure context. Use HTTPS (setup B) or `localhost`; plain
+Browsers gate both on a secure context. Use HTTPS (setup B or C) or `localhost`; plain
 HTTP to a LAN IP will not do.
 
 **Play on Kodi says the title cannot be found.**

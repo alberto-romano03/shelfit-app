@@ -1,5 +1,5 @@
 // Path-prefix awareness for hosting shelfIt under a sub-path (e.g. /shelfit) so
-// several apps can share one DDNS address, each behind its own /prefix.
+// several apps can share one hostname, each behind its own /prefix.
 //
 // The reverse proxy (see Caddyfile `handle_path /shelfit/*`) STRIPS the prefix
 // before forwarding, so the backend still serves everything at root. The browser

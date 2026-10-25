@@ -35,11 +35,11 @@ function intEnv(name, fallback) {
 export const PORT = intEnv('PORT', 3000);
 export const TMDB_API_KEY = process.env.TMDB_API_KEY || '';
 
-// Public origin the app is reached at from the outside world (the DDNS address),
-// e.g. "https://shelfit.example.com" — no trailing slash, no sub-path. Used to
-// build magic-link URLs the user copies to another device; a localhost/LAN
-// address would be useless off the local network. When unset, the magic-link
-// generator falls back to the external host/proto Caddy forwards on the request.
+// Origin the user's other devices reach the app at (the host's Tailscale name,
+// or a DDNS address), e.g. "https://myserver.tail1234.ts.net": no trailing
+// slash, no sub-path. Used to build magic-link URLs the user copies to another
+// device; a localhost/LAN address would be useless there. When unset, the
+// magic-link generator falls back to the external host/proto the proxy forwards.
 export const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 export const FANART_API_KEY = process.env.FANART_API_KEY || '';
 

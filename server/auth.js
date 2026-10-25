@@ -224,7 +224,7 @@ function isHttps(request) {
 }
 function buildSessionCookie(value, { maxAge, secure }) {
   // Scope the cookie to the app's sub-path so it isn't sent to sibling apps
-  // hosted under other prefixes on the same DDNS address.
+  // hosted under other prefixes on the same hostname.
   //
   // SameSite=Lax (not Strict): a magic link is typically opened by tapping it
   // from another app (a message, email, notes), which is a cross-site-initiated
@@ -660,8 +660,8 @@ export function registerAuth(fastify, { configured }) {
 }
 
 // Build the browser-facing magic-link URL. Prefers the configured public origin
-// (PUBLIC_URL / DDNS); otherwise reconstructs it from the EXTERNAL scheme+host
-// Caddy forwards, so it's never localhost or a LAN IP for a real request.
+// (PUBLIC_URL); otherwise reconstructs it from the EXTERNAL scheme+host the
+// proxy chain forwards, so it's never localhost or a LAN IP for a real request.
 function magicLinkUrl(request, token) {
   let origin = PUBLIC_URL;
   if (!origin) {
