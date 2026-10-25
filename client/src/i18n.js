@@ -213,6 +213,12 @@ const it = {
   'lists.empty': 'Questa lista è vuota',
   'lists.emptyDetail': 'Aggiungi titoli dalla pagina di un film o di una serie.',
   'lists.notInLibrary': 'Questo titolo non è nella tua libreria',
+  'lists.eyebrowMovies': 'Lista · Film',
+  'lists.eyebrowShows': 'Lista · Serie',
+  'lists.titles_one': '{n} titolo',
+  'lists.titles_other': '{n} titoli',
+  'lists.onDisc': '{n} su disco',
+  'lists.inCinema': '{n} al cinema',
 
   // --- movies & series grids, search, pickers ---
   'grid.collections': 'Saghe',
@@ -1119,6 +1125,12 @@ const en = {
   'lists.empty': 'This list is empty',
   'lists.emptyDetail': 'Add titles from any movie or show.',
   'lists.notInLibrary': 'This title is not in your library',
+  'lists.eyebrowMovies': 'List · Movies',
+  'lists.eyebrowShows': 'List · Series',
+  'lists.titles_one': '{n} title',
+  'lists.titles_other': '{n} titles',
+  'lists.onDisc': '{n} on disc',
+  'lists.inCinema': '{n} seen in cinema',
 
   // --- movies & series grids, search, pickers ---
   'grid.collections': 'Collections',
