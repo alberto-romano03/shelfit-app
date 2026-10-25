@@ -15,7 +15,8 @@ import {
 } from './ui.js';
 import { withBase } from './basePath.js';
 import { pget, pset, pequal, PK } from './persist.js';
-import { t } from './i18n.js';
+import { t, locale } from './i18n.js';
+import { collapsibleText } from './collapsibleText.js';
 
 // A cached genre payload is usable only when it carries both lists as arrays.
 function validGenres(g) {
@@ -422,39 +423,107 @@ export function openDustItOff() {
       renderResult(res.result);
     }
 
+    // --- Result: the pick as a card. The backdrop opens it and the poster
+    // overlaps it (the title page's head), then the meta line, the genres in the
+    // filter screen's own typefaces, the plot, and the filters that led here.
+    // "Suggest another" shuffles the card in place; the sheet header, layout and
+    // footer actions never re-render.
     function renderResult(firstResult) {
       body.className = 'sheet-body dust-result-mode';
       body.innerHTML = '';
 
       let current = firstResult;
 
-      // Stable result scaffold. "Suggest another" swaps ONLY the metadata inside
-      // these hosts — the sheet header, layout and footer actions never re-render.
-      const posterHost = el('div', { class: 'dust-poster' });
-      const titleEl = el('h3');
-      const metaEl = el('div', { class: 'muted' });
-      const top = el('div', { class: 'dust-result-top' }, [
-        posterHost,
-        el('div', { class: 'dust-info' }, [titleEl, metaEl]),
+      // The viewer's own choices, so the pick explains itself.
+      function whyChips() {
+        const chips = [];
+        const mood = MOODS.find(([v]) => v === state.mood);
+        if (mood) {
+          chips.push(
+            el('span', { class: 'pick-why-chip' }, [
+              el('img', { class: 'pick-why-emoji', src: withBase(`/icons/animated-genre/${mood[1]}`), alt: '' }),
+              el('span', { text: t(mood[2]) }),
+            ])
+          );
+        }
+        const list = genreData ? (state.type === 'movie' ? genreData.movie : genreData.tv) : [];
+        for (const g of list) {
+          if (state.genres.has(g.id)) chips.push(el('span', { class: 'pick-why-chip', text: g.name }));
+        }
+        const era = ERAS.find(([v]) => v === state.era);
+        if (era) chips.push(el('span', { class: 'pick-why-chip', text: t(era[1]) }));
+        const dur = DURATIONS.find(([v]) => v && v === state.duration);
+        if (dur) chips.push(el('span', { class: 'pick-why-chip', text: t(dur[1]) }));
+        const rating = RATINGS.find(([v]) => v && v === state.minRating);
+        if (rating) chips.push(el('span', { class: 'pick-why-chip', text: `★ ${t(rating[1])}` }));
+        return chips;
+      }
+
+      const heroImg = el('img', { class: 'pick-hero-img', alt: '' });
+      const posterHost = el('div', { class: 'pick-poster' });
+      const titleEl = el('h3', { class: 'pick-title' });
+      const metaEl = el('div', { class: 'pick-meta' });
+      const genresEl = el('div', { class: 'pick-genres' });
+      const descHost = el('div', { class: 'pick-desc' });
+      const why = whyChips();
+
+      const card = el('div', { class: 'pick-card' }, [
+        el('div', { class: 'pick-hero' }, [heroImg]),
+        el('div', { class: 'pick-head' }, [
+          posterHost,
+          el('div', { class: 'pick-head-text' }, [
+            el('div', { class: 'pick-eyebrow', text: t('dust.fromStore') }),
+            titleEl,
+            metaEl,
+          ]),
+        ]),
+        genresEl,
+        descHost,
       ]);
-      const descHost = el('div', { class: 'dust-result-desc' });
-      body.append(top, descHost);
+      body.append(
+        card,
+        el('div', { class: 'pick-why' }, [
+          el('div', { class: 'dust-label', text: t('dust.pickedFrom') }),
+          why.length
+            ? el('div', { class: 'pick-why-row' }, why)
+            : el('div', { class: 'pick-why-none', text: t('dust.noFilters') }),
+        ])
+      );
 
       function fill(r) {
         current = r;
+        // No backdrop → the card simply starts at the poster.
+        card.classList.toggle('no-hero', !r.backdrop_url);
+        if (r.backdrop_url) heroImg.src = withBase(r.backdrop_url);
+        else heroImg.removeAttribute('src');
         posterHost.innerHTML = '';
         mountPoster(posterHost, r.poster_url, r.title);
         titleEl.textContent = r.title || t('dust.untitled');
-        const bits = [];
-        if (r.year) bits.push(r.year);
-        if (r.rating) bits.push(`★ ${r.rating}`);
-        if (r.genres && r.genres.length) bits.push(r.genres.slice(0, 3).join(', '));
-        metaEl.textContent = bits.join('  ·  ');
-        descHost.innerHTML = '';
-        descHost.append(
-          r.overview
-            ? el('div', { class: 'overview', text: r.overview })
-            : el('div', { class: 'muted', text: t('dust.noDescription') })
+        // Year · type · TMDB score. The 0-10 score wears the TMDB mark so it is
+        // never mistaken for the viewer's own 1-5 stars.
+        const tmdb = r.rating
+          ? el('span', { class: 'pick-tmdb' }, [
+              el('img', { src: withBase('/icons/tmdb/tmdb-logo.svg'), alt: 'TMDB' }),
+              el('span', { text: r.rating.toLocaleString(locale(), { minimumFractionDigits: 1 }) }),
+            ])
+          : null;
+        const parts = [
+          r.year ? el('span', { text: r.year }) : null,
+          el('span', { text: t(r.type === 'movie' ? 'media.movie' : 'media.tvSeries') }),
+          tmdb,
+        ].filter(Boolean);
+        metaEl.replaceChildren(
+          ...parts.flatMap((n, i) => (i ? [el('span', { class: 'pick-dot', text: '·' }), n] : [n]))
+        );
+        const names = r.genres || [];
+        const ids = r.genre_ids || [];
+        genresEl.replaceChildren(
+          ...names
+            .slice(0, 4)
+            .map((name, i) => el('span', { class: `pick-genre ${genreFontClass({ id: ids[i], name })}`, text: name }))
+        );
+        descHost.replaceChildren(
+          ...(r.overview ? collapsibleText(r.overview) : [el('div', { class: 'muted', text: t('dust.noDescription') })])
         );
       }
       fill(firstResult);
@@ -487,23 +556,31 @@ export function openDustItOff() {
         lucideIcon('refresh-cw', 'btn-lucide'),
         el('span', { text: t('dust.suggestAnother') }),
       ]);
-      // Fetch a fresh pick and swap it in place — the spinning refresh glyph is the
-      // only chrome that changes while it loads.
+      // Shuffle: the card slides out while the next pick loads, then the new one
+      // slides in (a tape pulled off the shelf, the next slotted in). Reduced
+      // motion keeps only the fade.
       async function suggestAnother() {
         if (againBtn.disabled) return;
         againBtn.disabled = true;
         againBtn.classList.add('is-loading');
         let res;
         try {
-          res = await api.discover({
-            type: state.type,
-            genres: [...state.genres],
-            mood: state.mood,
-            duration: state.duration,
-            minRating: state.minRating,
-            era: state.era,
-          });
+          [res] = await Promise.all([
+            api.discover({
+              type: state.type,
+              genres: [...state.genres],
+              mood: state.mood,
+              duration: state.duration,
+              minRating: state.minRating,
+              era: state.era,
+            }),
+            new Promise((resolve) => {
+              card.classList.add('is-leaving');
+              setTimeout(resolve, 180);
+            }),
+          ]);
         } catch (err) {
+          card.classList.remove('is-leaving');
           toast(t('dust.error'), 'bad');
           return;
         } finally {
@@ -511,10 +588,16 @@ export function openDustItOff() {
           againBtn.classList.remove('is-loading');
         }
         if (!res || !res.result) {
-          toast(t('dust.empty'), 'bad'); // nothing else matched — keep the current pick
+          card.classList.remove('is-leaving'); // nothing else matched — keep the current pick
+          toast(t('dust.empty'), 'bad');
           return;
         }
         fill(res.result);
+        body.scrollTop = 0;
+        card.classList.remove('is-leaving');
+        card.classList.add('is-entering'); // jump to the right, unanimated…
+        void card.offsetWidth;
+        card.classList.remove('is-entering'); // …then slide into place
       }
       againBtn.addEventListener('click', suggestAnother);
 

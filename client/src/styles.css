@@ -5777,27 +5777,6 @@ img.mood-emoji {
 .dust-group {
   margin-top: 4px;
 }
-.dust-result {
-  display: flex;
-  gap: 14px;
-  margin: 8px 0 4px;
-}
-.dust-poster {
-  width: 120px;
-  flex: 0 0 120px;
-}
-.dust-info {
-  min-width: 0;
-}
-.dust-info h3 {
-  margin: 0 0 6px;
-  font-size: 17px;
-}
-.dust-info .overview {
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
 .dust-actions {
   display: flex;
   gap: 10px;
@@ -6351,23 +6330,179 @@ img.mood-emoji {
 .dur-ticks { position: relative; display: block; height: 18px; margin-top: 10px; }
 .dur-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 
-/* Result screen — fixed top poster/meta, scrollable desc, actions in footer */
+/* Result screen: the pick card scrolls in the sheet body, actions in the footer. */
 .dust-adjust { align-self: center; display: inline-flex; align-items: center; gap: 4px; }
 .dust-adjust svg { width: 16px; height: 16px; }
-.sheet-body.dust-result-mode { display: flex; flex-direction: column; overflow: hidden; }
-.dust-result-top { display: flex; gap: 14px; padding: 6px 0 12px; flex: 0 0 auto; }
-.dust-result-top .dust-poster {
-  width: 120px;
-  max-width: 120px;
-  flex: 0 0 120px;
+.sheet-body.dust-result-mode {
+  overflow-y: auto;
+}
+/* The pick card. "Suggest another" slides it out left and the next in from the
+   right (reduced motion: fade only). */
+.pick-card {
+  transition: opacity var(--dur-short) var(--ease-state), transform var(--dur-short) var(--ease-out);
+}
+.pick-card.is-leaving {
+  opacity: 0;
+  transform: translateX(-18px);
+}
+.pick-card.is-entering {
+  opacity: 0;
+  transform: translateX(18px);
+  transition: none;
+}
+/* The backdrop opens the card, fading into the sheet's own surface. */
+.pick-hero {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--surface-elevated);
+}
+.pick-hero-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pick-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 40%, var(--surface));
+}
+/* The poster overlaps the backdrop, the title bottom-anchored beside it. With
+   no backdrop the card starts at the poster. */
+.pick-head {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin: -64px 8px 0;
+}
+.pick-card.no-hero .pick-hero {
+  display: none;
+}
+.pick-card.no-hero .pick-head {
+  margin: 4px 0 0;
+}
+.pick-poster {
+  flex: 0 0 96px;
+  width: 96px;
   aspect-ratio: 2 / 3;
   border-radius: 10px;
   overflow: hidden;
   background: var(--surface-elevated);
+  box-shadow: 0 4px 16px var(--shadow);
 }
-.dust-result-top .dust-poster img { width: 100%; height: 100%; object-fit: cover; }
-.dust-result-top .dust-info h3 { margin: 0 0 6px; font-size: 17px; }
-.dust-result-desc { flex: 1; overflow-y: auto; padding-bottom: 8px; }
+.pick-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pick-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 2px;
+}
+.pick-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.pick-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-wrap: balance;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.pick-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.pick-dot {
+  opacity: 0.6;
+}
+.pick-tmdb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-primary);
+}
+.pick-tmdb img {
+  display: block;
+  width: auto;
+  height: 9px;
+}
+/* Genres in the filter screen's own typefaces (.gf-*), as small pills. */
+.pick-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 0 4px;
+}
+.pick-genre {
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.2;
+}
+.pick-desc {
+  margin-top: 6px;
+}
+/* What led here: the viewer's own filters, quiet, at the foot of the card. */
+.pick-why {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.pick-why-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pick-why-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.pick-why-emoji {
+  width: 16px;
+  height: 16px;
+}
+.pick-why-none {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pick-card.is-leaving,
+  .pick-card.is-entering {
+    transform: none;
+  }
+}
 .dust-actions { display: flex; gap: 10px; }
 /* Keep both result actions on ONE row even with long labels ("Suggest another" /
    "Add to library"): a touch smaller and non-wrapping, with ellipsis as the

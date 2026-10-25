@@ -8,12 +8,10 @@ import { ensureGenres } from '../genres.js';
 import { discover, IMG_SIZES } from '../tmdb.js';
 import { clientAbortSignal } from '../http.js';
 
-// Local poster proxy (cached 1 day) — keeps the phone off the TMDB CDN and
+// Local image proxy (cached 1 day) — keeps the phone off the TMDB CDN and
 // avoids a full show rebuild just to preview a suggestion.
-function posterUrl(posterPath) {
-  return posterPath
-    ? `/api/search/thumb?size=${IMG_SIZES.poster}&path=${encodeURIComponent(posterPath)}`
-    : null;
+function thumbUrl(imgPath, size) {
+  return imgPath ? `/api/search/thumb?size=${size}&path=${encodeURIComponent(imgPath)}` : null;
 }
 
 // Mood → TMDB (kept server-side; the client only sends the mood key). Genre
@@ -190,8 +188,14 @@ export default async function discoverRoutes(fastify) {
         year: dateStr.slice(0, 4),
         rating: Math.round((pick.vote_average || 0) * 10) / 10,
         genres: (pick.genre_ids || []).map((id) => gmap.get(id)).filter(Boolean),
+        // The ids alongside the names, so the client can theme each genre chip by
+        // id (names arrive in the TMDB language).
+        genre_ids: (pick.genre_ids || []).filter((id) => gmap.has(id)),
         overview: pick.overview || '',
-        poster_url: posterUrl(pick.poster_path),
+        poster_url: thumbUrl(pick.poster_path, IMG_SIZES.poster),
+        // Opens the result card; null when TMDB has none (the card then starts
+        // at the poster).
+        backdrop_url: thumbUrl(pick.backdrop_path, IMG_SIZES.backdrop),
       },
     };
   });
