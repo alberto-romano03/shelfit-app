@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v129'; // bumped: genre fonts by TMDB id
+const CACHE = 'shelfit-shell-v132'; // bumped: Rate-O-Matic poster cards
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

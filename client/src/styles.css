@@ -7725,8 +7725,8 @@ textarea.notes:focus,
 .rom-head {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  margin-bottom: 28px;
+  justify-content: space-between;
+  margin-bottom: 22px;
 }
 /* An <h3> like the other popups' titles: .modal h3 sets the size, the head owns
    the spacing below it. */
@@ -7735,11 +7735,19 @@ textarea.notes:focus,
   font-weight: 800;
   letter-spacing: 0.3px;
 }
+/* "n / N" for the session: the micro-label scale, tabular so it never jitters. */
+.rom-count {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
 /* Footer: full-width Cancel, matching the other sheet-style modals. A top border
-   is the divider between the posters and the button (auto-hidden with the footer
+   is the divider between the deck and the button (auto-hidden with the footer
    on the completion/error screens). */
 .rom-footer {
-  margin-top: 28px;
+  margin-top: 22px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
   display: flex;
@@ -7765,74 +7773,138 @@ textarea.notes:focus,
   min-height: 40vh;
   justify-content: center;
 }
-/* Two-card stack: a fixed-height positioning context; both cards are absolutely
-   centered, their casual angles + depth set inline / by the front/back classes. */
+/* The deck: a fixed-size positioning context at a true 2:3, sized by height;
+   both cards are absolutely inset, their angles + depth set inline / by the
+   front/back classes. */
 .rom-stack {
   position: relative;
-  /* The cards are absolutely inset in here, so the stack's width IS the card's
-     width, and the card has to clear the rating row it carries: five 40px stars
-     with 4px gaps (216px), the 14px gap, the 40px favourite heart, and the
-     card's own 28px of padding — 298px that a narrower card was overlapping. */
-  width: min(100%, 324px);
+  height: min(48vh, 390px);
+  aspect-ratio: 2 / 3;
   margin-inline: auto;
-  height: min(52vh, 420px);
 }
+/* A card IS its poster: full bleed, the poster corner and a soft float shadow
+   (not a framed panel). */
 .rom-card {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 22px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface-elevated);
+  box-shadow: 0 10px 30px var(--shadow);
   transform-origin: center;
   transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.38s ease;
   touch-action: none; /* we own the horizontal drag gesture */
   will-change: transform, opacity;
 }
-/* Poster keeps a real 2:3 frame instead of stretching to whatever height was
-   left over: the height comes from the flex row, the width follows the ratio,
-   and the auto side margins centre it (which also cancels the cross-axis
-   stretch that would otherwise force it full width). */
 .rom-card .rom-poster {
-  flex: 1 1 auto;
-  min-height: 0;
-  width: auto;
-  aspect-ratio: 2 / 3;
-  margin-inline: auto;
-  border-radius: 14px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  box-shadow: none;
 }
-.rom-meta {
-  flex: 0 0 auto;
-  text-align: center;
+/* Bottom scrim carrying the type, title and year (fixed dark ink: it sits on
+   artwork in both themes). */
+.rom-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.55) 45%, transparent 100%);
+  pointer-events: none;
+}
+.rom-info {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 14px;
+  color: #fff;
+  pointer-events: none;
+}
+.rom-type {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
 }
 .rom-title {
-  font-weight: 700;
-  font-size: 16px;
-  line-height: 1.25;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-wrap: balance;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   overflow: hidden;
-  text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 .rom-year {
+  margin-top: 3px;
   font-size: 13px;
-  color: var(--text-secondary);
-  min-height: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
 }
-.rom-card .rating-wrap {
-  flex: 0 0 auto;
-  margin-top: 2px;
+/* What letting go will do, stamped across the card while it is dragged: the
+   accent "★ n · Save", or a dark outlined "Skip". */
+.rom-stamp {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--r-pill);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.rom-stamp-star {
+  display: inline-flex;
+}
+.rom-stamp-star svg {
+  width: 18px;
+  height: 18px;
+}
+.rom-stamp.is-save {
+  background: color-mix(in srgb, var(--accent) 88%, transparent);
+  color: #000;
+}
+.rom-stamp.is-skip {
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+}
+/* The one rating row, fixed under the deck; height reserved for the stars plus
+   the rating phrase, so choosing a rating never nudges the footer. */
+.rom-rate {
+  min-height: 64px;
+  margin-top: 6px;
+}
+.rom-rate .rating-wrap {
+  margin-top: 8px;
 }
 /* Darkening veil over the background card (front card's veil is invisible). */
 .rom-veil {
   position: absolute;
   inset: 0;
-  border-radius: 22px;
+  border-radius: inherit;
   background: #000;
   opacity: 0;
   pointer-events: none;
@@ -7851,8 +7923,8 @@ textarea.notes:focus,
 .rom-back .rom-veil {
   opacity: 0.5;
 }
-.rom-back .rating-wrap {
-  display: none; /* background card shows no interactive elements */
+.rom-back .rom-info {
+  opacity: 0; /* the card waiting behind shows only its art */
 }
 
 @media (prefers-reduced-motion: reduce) {
