@@ -15,11 +15,14 @@ import {
 } from '../language.js';
 import { ensureCached, readMetaSync, wrongLanguage } from '../cache.js';
 
+// The metadata language is instance-wide, like the cache it fills: every
+// distinct title in anyone's library is refetched once, and the stored titles of
+// every member's copy of it are updated together.
 const allItemsStmt = db.prepare(
-  'SELECT id, tmdb_id, type FROM items ORDER BY type, id'
+  'SELECT type, tmdb_id FROM items GROUP BY type, tmdb_id ORDER BY type, MIN(id)'
 );
 const updateTitlesStmt = db.prepare(
-  'UPDATE items SET title_it = ?, title_orig = ? WHERE id = ?'
+  'UPDATE items SET title_it = ?, title_orig = ? WHERE type = ? AND tmdb_id = ?'
 );
 
 // How many cached titles are currently written in another language — what the
@@ -75,7 +78,8 @@ export default async function settingsRoutes(fastify) {
           updateTitlesStmt.run(
             meta.title_it || meta.title_orig || 'Untitled',
             meta.title_orig || meta.title_it || 'Untitled',
-            row.id
+            row.type,
+            row.tmdb_id
           );
         }
         refreshed += 1;

@@ -20,7 +20,7 @@ const PER_ROW = 20; // cap posters per row
 let memo = null; // { at, sections: [{ key, title, items: [baseItem] }] }
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
-const allItemsStmt = db.prepare('SELECT id, tmdb_id, type FROM items');
+const allItemsStmt = db.prepare('SELECT id, tmdb_id, type FROM items WHERE user_id = ?');
 
 // Normalize a raw TMDB result to the same shape as a search result (minus the
 // live "added" flags, which are overlaid per request). Returns null for people /
@@ -141,10 +141,11 @@ async function buildSections(signal) {
   return sections;
 }
 
-// Overlay the live "already in library" flags so tapping a poster opens the
-// existing detail (if owned) or the add sheet (if not) — same as search results.
-function annotate(sections) {
-  const rows = allItemsStmt.all();
+// Overlay the member's live "already in library" flags so tapping a poster opens
+// the existing detail (if owned) or the add sheet (if not), same as search
+// results. The sections themselves are shared; only this overlay is personal.
+function annotate(sections, userId) {
+  const rows = allItemsStmt.all(userId);
   const addedMap = new Map();
   for (const row of rows) addedMap.set(`${row.type}:${row.tmdb_id}`, row);
   return sections.map((s) => ({
@@ -181,6 +182,6 @@ export default async function exploreRoutes(fastify) {
       }
     }
 
-    return { sections: annotate(memo ? memo.sections : []), capped: !allowed('tmdb') };
+    return { sections: annotate(memo ? memo.sections : [], request.user.id), capped: !allowed('tmdb') };
   });
 }

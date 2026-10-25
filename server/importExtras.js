@@ -52,14 +52,17 @@ function log(line) {
 
 const dedupe = (arr) => [...new Set(arr)];
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
-const findLocal = db.prepare('SELECT * FROM items WHERE tmdb_id = ?');
+// Everything lands in the library and lists of the member who ran the import.
+const findLocal = db.prepare('SELECT * FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?');
 const insertItemStmt = db.prepare(
-  `INSERT INTO items (tmdb_id, type, title_it, title_orig, status, favorite)
-   VALUES (?, ?, ?, ?, ?, ?)`
+  `INSERT INTO items (user_id, tmdb_id, type, title_it, title_orig, status, favorite)
+   VALUES (?, ?, ?, ?, ?, ?, ?)`
 );
 const setFavoriteStmt = db.prepare('UPDATE items SET favorite = 1 WHERE id = ?');
-const findListStmt = db.prepare('SELECT * FROM lists WHERE name = ? AND type = ?');
-const insertListStmt = db.prepare('INSERT INTO lists (name, type, created_at) VALUES (?, ?, ?)');
+const findListStmt = db.prepare('SELECT * FROM lists WHERE user_id = ? AND name = ? AND type = ?');
+const insertListStmt = db.prepare(
+  'INSERT INTO lists (user_id, name, type, created_at) VALUES (?, ?, ?, ?)'
+);
 const insertListItemStmt = db.prepare(
   'INSERT OR IGNORE INTO list_items (list_id, tmdb_id, added_at) VALUES (?, ?, ?)'
 );
@@ -111,8 +114,8 @@ async function resolveShowByTvdb(tvdbId) {
 
 // Ensure a title exists in the library, creating it (with the given status /
 // favourite flag) if missing. Returns the row, or null if the TMDB cache failed.
-async function ensureItem(type, tmdbId, { status, favorite }) {
-  const existing = findLocal.get(String(tmdbId));
+async function ensureItem(userId, type, tmdbId, { status, favorite }) {
+  const existing = findLocal.get(userId, type, String(tmdbId));
   if (existing) return existing;
   let meta;
   try {
@@ -121,6 +124,7 @@ async function ensureItem(type, tmdbId, { status, favorite }) {
     return null;
   }
   insertItemStmt.run(
+    userId,
     String(tmdbId),
     type,
     meta.title_it || meta.title_orig || '',
@@ -128,7 +132,7 @@ async function ensureItem(type, tmdbId, { status, favorite }) {
     status,
     favorite ? 1 : 0
   );
-  return findLocal.get(String(tmdbId));
+  return findLocal.get(userId, type, String(tmdbId));
 }
 
 // --- Lists file parsing (Go `map[...]` fmt, no JSON) -----------------------
@@ -176,7 +180,7 @@ function buildUuidNameMap() {
 }
 
 // --- Main routine ----------------------------------------------------------
-export async function runExtrasImport() {
+export async function runExtrasImport(userId) {
   try {
     fs.writeFileSync(EXTRAS_LOG, '');
   } catch {
@@ -244,12 +248,12 @@ export async function runExtrasImport() {
       summary.unresolved += 1;
       continue;
     }
-    const existing = findLocal.get(String(tmdb));
+    const existing = findLocal.get(userId, 'movie', String(tmdb));
     if (existing) {
       setFavoriteStmt.run(existing.id);
       summary.favorites_movies_flagged += 1;
     } else {
-      const item = await ensureItem('movie', tmdb, { status: 'completed', favorite: 1 });
+      const item = await ensureItem(userId, 'movie', tmdb, { status: 'completed', favorite: 1 });
       if (item) summary.favorites_movies_added += 1;
       else {
         log(`[FAV-MOVIE] "${name}" (TMDB ${tmdb}) — cache failed`);
@@ -266,12 +270,12 @@ export async function runExtrasImport() {
       summary.unresolved += 1;
       continue;
     }
-    const existing = findLocal.get(String(tmdb));
+    const existing = findLocal.get(userId, 'show', String(tmdb));
     if (existing) {
       setFavoriteStmt.run(existing.id);
       summary.favorites_series_flagged += 1;
     } else {
-      const item = await ensureItem('show', tmdb, { status: 'completed', favorite: 1 });
+      const item = await ensureItem(userId, 'show', tmdb, { status: 'completed', favorite: 1 });
       if (item) summary.favorites_series_added += 1;
       else {
         log(`[FAV-SERIES] TheTVDB ${tvdb} (TMDB ${tmdb}) — cache failed`);
@@ -302,9 +306,9 @@ export async function runExtrasImport() {
     }
     if (!tmdbIds.length) continue;
 
-    let list = findListStmt.get(name, 'movie');
+    let list = findListStmt.get(userId, name, 'movie');
     if (!list) {
-      const info = insertListStmt.run(name, 'movie', Date.now());
+      const info = insertListStmt.run(userId, name, 'movie', Date.now());
       list = { id: info.lastInsertRowid };
       summary.lists_created += 1;
     }
@@ -344,7 +348,7 @@ export async function runExtrasImport() {
       summary.unresolved += 1;
       continue;
     }
-    const item = findLocal.get(String(tmdb));
+    const item = findLocal.get(userId, 'show', String(tmdb));
     if (!item) {
       log(`[REWATCH] "${nm}" — not in library, skipped`);
       continue;
@@ -373,11 +377,11 @@ export async function runExtrasImport() {
       summary.unresolved += 1;
       continue;
     }
-    if (findLocal.get(String(tmdb))) {
+    if (findLocal.get(userId, 'show', String(tmdb))) {
       summary.plan_skipped_existing += 1;
       continue;
     }
-    const item = await ensureItem('show', tmdb, { status: 'plan_to_watch', favorite: 0 });
+    const item = await ensureItem(userId, 'show', tmdb, { status: 'plan_to_watch', favorite: 0 });
     if (item) summary.plan_added += 1;
     else {
       log(`[PLAN] "${name}" (TMDB ${tmdb}) — cache failed`);
@@ -385,7 +389,7 @@ export async function runExtrasImport() {
     }
   }
 
-  await recomputeStats(db);
+  await recomputeStats(db, userId);
   setMinInterval(0);
   log('--- SUMMARY ---');
   log(JSON.stringify(summary, null, 2));

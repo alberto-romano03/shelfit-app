@@ -19,20 +19,20 @@ function assetBase(type, tmdbId) {
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
 const watchedMoviesStmt = db.prepare(
-  "SELECT id, tmdb_id, type, title_it, title_orig, rating FROM items WHERE type = 'movie' AND status = 'completed'"
+  "SELECT id, tmdb_id, type, title_it, title_orig, rating FROM items WHERE user_id = ? AND type = 'movie' AND status = 'completed'"
 );
 const watchedShowsStmt = db.prepare(
   `SELECT i.id, i.tmdb_id, i.type, i.title_it, i.title_orig, i.rating
      FROM items i
-    WHERE i.type = 'show'
+    WHERE i.user_id = ? AND i.type = 'show'
       AND (i.status = 'completed'
            OR EXISTS (SELECT 1 FROM progress p WHERE p.item_id = i.id AND p.season > 0))`
 );
 
-// Already-watched rows for a type: completed movies; completed shows OR any show
-// with at least one watched episode.
-function watchedRows(type) {
-  return type === 'movie' ? watchedMoviesStmt.all() : watchedShowsStmt.all();
+// A member's already-watched rows for a type: completed movies; completed shows
+// OR any show with at least one watched episode.
+function watchedRows(type, userId) {
+  return type === 'movie' ? watchedMoviesStmt.all(userId) : watchedShowsStmt.all(userId);
 }
 
 // Pick up to n distinct random rows (in-place shuffle by splice).
@@ -79,7 +79,7 @@ export default async function shelfRoutes(fastify) {
     if (!Number.isFinite(count) || count < 1) count = 1;
     count = Math.min(count, 10);
 
-    const rows = watchedRows(type);
+    const rows = watchedRows(type, request.user.id);
     if (!rows.length) return { items: [] };
 
     const picks = pickDistinct(rows, count);

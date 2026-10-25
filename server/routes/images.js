@@ -146,9 +146,8 @@ export default async function imageRoutes(fastify) {
       }
 
       setCustom(type, tmdbId, slot);
-      // Read the flag back rather than assuming: a title that is only cached and
-      // not in the library has no row to flag, so its image is stored but never
-      // protected from a refresh.
+      // Artwork is shared by the household (title_art), so the flag holds whether
+      // or not the title is in the caller's library.
       return { ok: true, slot, custom: customSlots(type, tmdbId)[slot] };
     }
   );

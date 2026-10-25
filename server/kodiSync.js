@@ -16,16 +16,28 @@ import { scheduleStatsRecompute } from './stats.js';
 
 const VALID_STATUS = ['watching', 'completed', 'paused', 'dropped', 'plan_to_watch'];
 
-const findByTmdb = db.prepare('SELECT id, type, status FROM items WHERE tmdb_id = ?');
-const findByTitle = db.prepare(
-  'SELECT id, type, status FROM items WHERE type = ? AND (title_it = ? OR title_orig = ?)'
+// The sync writes into ONE member's library: the sync owner (see syncOwnerId).
+const findByTmdb = db.prepare(
+  'SELECT id, type, status FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?'
 );
+const findByTitle = db.prepare(
+  'SELECT id, type, status FROM items WHERE user_id = ? AND type = ? AND (title_it = ? OR title_orig = ?)'
+);
+const masterIdStmt = db.prepare("SELECT id FROM users WHERE role = 'master'");
+
+// Kodi tracks "watched" per Kodi profile, not per person, so its library syncs
+// into a single member's shelfIt library: the master for now (a per-instance
+// owner is planned). The review card for scheduled discoveries is theirs alone.
+export function syncOwnerId() {
+  const row = masterIdStmt.get();
+  return row ? row.id : null;
+}
 const setStatus = db.prepare(
   "UPDATE items SET status = ?, updated_at = datetime('now') WHERE id = ?"
 );
 const insertItem = db.prepare(
-  `INSERT INTO items (tmdb_id, type, title_it, title_orig, status)
-   VALUES (?, ?, ?, ?, ?)`
+  `INSERT INTO items (user_id, tmdb_id, type, title_it, title_orig, status)
+   VALUES (?, ?, ?, ?, ?, ?)`
 );
 
 // --- Record shaping (Kodi JSON-RPC → resolver record) ---------------------
@@ -76,11 +88,12 @@ async function resolve(kind, rec) {
 
 // Match against shelfIt: TMDB id primary, title fallback.
 function existingFor(kind, rec) {
+  const owner = syncOwnerId();
   if (rec.resolvedTmdb) {
-    const byId = findByTmdb.get(rec.resolvedTmdb);
+    const byId = findByTmdb.get(owner, kind, String(rec.resolvedTmdb));
     if (byId) return byId;
   }
-  const rows = findByTitle.all(kind, rec.title, rec.originaltitle || rec.title);
+  const rows = findByTitle.all(owner, kind, rec.title, rec.originaltitle || rec.title);
   return rows[0] || null;
 }
 
@@ -88,7 +101,7 @@ function existingFor(kind, rec) {
 // review payload. Returns null if metadata can't be fetched.
 async function discover(kind, rec, proposed) {
   const tmdb = rec.resolvedTmdb;
-  if (!tmdb || findByTmdb.get(tmdb)) return null;
+  if (!tmdb || findByTmdb.get(syncOwnerId(), kind, String(tmdb))) return null;
   let meta;
   try {
     meta = readMetaSync(kind, tmdb) || (await ensureCached(kind, tmdb));
@@ -195,13 +208,14 @@ async function doSync() {
 // using metadata already cached during the sync. Skips anything now present.
 export async function commitKodiSync(items) {
   if (!Array.isArray(items)) return { added: 0 };
+  const owner = syncOwnerId();
   let added = 0;
   for (const it of items || []) {
     const kind = it.type === 'movie' ? 'movie' : 'show';
     const tmdb = String(it.tmdb_id || '');
     if (!/^\d+$/.test(tmdb)) continue;
     const status = VALID_STATUS.includes(it.status) ? it.status : 'plan_to_watch';
-    if (findByTmdb.get(tmdb)) continue; // added already / meanwhile
+    if (findByTmdb.get(owner, kind, tmdb)) continue; // added already / meanwhile
     let meta = readMetaSync(kind, tmdb);
     if (!meta) {
       try {
@@ -212,6 +226,7 @@ export async function commitKodiSync(items) {
     }
     if (!meta) continue;
     insertItem.run(
+      owner,
       tmdb,
       kind,
       meta.title_it || meta.title_orig || 'Untitled',
@@ -226,13 +241,16 @@ export async function commitKodiSync(items) {
 
 // --- Pending review store (scheduled sync → client poll) ------------------
 let pending = null; // last scheduled sync result with discoveries
-export function getPendingCount() {
-  return pending ? pending.discoveries.length : 0;
+// Only the sync owner is offered the review card; for anyone else there is
+// nothing pending and nothing to claim.
+export function getPendingCount(userId) {
+  return pending && userId === syncOwnerId() ? pending.discoveries.length : 0;
 }
 export function setPending(res) {
   pending = res && res.discoveries && res.discoveries.length ? res : null;
 }
-export function claimPending() {
+export function claimPending(userId) {
+  if (userId !== syncOwnerId()) return null;
   const p = pending;
   pending = null;
   return p;

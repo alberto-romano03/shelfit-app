@@ -48,24 +48,28 @@ function currentSeasonNext(orderedEps, counts, currentSeason) {
 // progress-dependent part (Watch Next / suppression) is recomputed on every
 // request from the DB so it always reflects the latest watched state.
 const MEMO_TTL_MS = 5 * 60 * 1000;
-let memo = null; // { day, at, upcoming, shows: [{ id, tmdb_id, title, orderedEps }] }
+// One memo per member: user id -> { day, at, upcoming, shows: [{ id, tmdb_id, title, orderedEps }] }
+const memos = new Map();
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
+// All bound to the signed-in member: Up Next is built from their own series only.
 const watchingShowsStmt = db.prepare(
-  "SELECT * FROM items WHERE type = 'show' AND status = 'watching'"
+  "SELECT * FROM items WHERE user_id = ? AND type = 'show' AND status = 'watching'"
 );
 const watchingShowIdsStmt = db.prepare(
-  "SELECT id, current_season FROM items WHERE type = 'show' AND status = 'watching'"
+  "SELECT id, current_season FROM items WHERE user_id = ? AND type = 'show' AND status = 'watching'"
 );
 const progressOverlayStmt = db.prepare(
-  'SELECT item_id, season, episode, watched_at, watch_count FROM progress WHERE season > 0'
+  `SELECT p.item_id, p.season, p.episode, p.watched_at, p.watch_count
+     FROM progress p JOIN items i ON i.id = p.item_id
+    WHERE i.user_id = ? AND p.season > 0`
 );
 
 // One pass over the cached season files producing (a) the coming-soon air-date
 // window — logic UNCHANGED from the original endpoint — and (b) per-show ordered
 // episode lists that the fresh progress overlay turns into Watch Next entries.
-function buildScan(today, end) {
-  const shows = watchingShowsStmt.all();
+function buildScan(today, end, userId) {
+  const shows = watchingShowsStmt.all(userId);
 
   const upcoming = [];
   const scanned = [];
@@ -129,17 +133,20 @@ export default async function upcomingRoutes(fastify) {
   //                  series, ordered by how recently the user last watched it.
   //   • upcoming   : episodes airing in the next 7 days (Coming Soon), with any
   //                  series that already has a Watch Next entry suppressed.
-  fastify.get('/api/upcoming', async () => {
+  fastify.get('/api/upcoming', async (request) => {
+    const userId = request.user.id;
     const today = dayStr(0);
     const end = dayStr(7);
 
+    let memo = memos.get(userId);
     if (!memo || memo.day !== today || Date.now() - memo.at >= MEMO_TTL_MS) {
-      memo = { day: today, at: Date.now(), ...buildScan(today, end) };
+      memo = { day: today, at: Date.now(), ...buildScan(today, end, userId) };
+      memos.set(userId, memo);
     }
 
     // Fresh progress overlay (cheap, single indexed query): per show, the set of
     // watched episodes and the most recent watched_at (the "left off" moment).
-    const rows = progressOverlayStmt.all();
+    const rows = progressOverlayStmt.all(userId);
     const byItem = new Map();
     for (const r of rows) {
       let e = byItem.get(r.item_id);
@@ -157,7 +164,7 @@ export default async function upcomingRoutes(fastify) {
     // memo above is cached for a few minutes, so a series just moved OUT of
     // 'watching' — or whose current_season just changed on a mark — would otherwise
     // be stale until it expires. Reading these live keeps both immediate.
-    const watchingRows = watchingShowIdsStmt.all();
+    const watchingRows = watchingShowIdsStmt.all(userId);
     const watchingIds = new Set(watchingRows.map((r) => r.id));
     const currentSeasonById = new Map(watchingRows.map((r) => [r.id, r.current_season]));
 

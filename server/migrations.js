@@ -80,6 +80,136 @@ export const MIGRATIONS = [
       db.exec('DROP TABLE profile');
     },
   },
+  {
+    // Per-member libraries. Every library entry, list and Wall pick gets an owner;
+    // everything that exists today belongs to the master. Item and list ids are
+    // kept (progress, rewatches, list entries, client URLs and offline caches all
+    // refer to them), and so is each table's AUTOINCREMENT high-water mark, so a
+    // deleted id is never handed out again. Custom artwork moves out of `items`
+    // into `title_art`: it is a household choice, shared like the image cache.
+    version: 2,
+    name: 'per-member libraries',
+    foreignKeys: false,
+    up(db) {
+      const master = db.prepare("SELECT id FROM users WHERE role = 'master'").get();
+      if (!master) throw new Error('no master account');
+      const owner = master.id;
+      const seqOf = (name) => {
+        const row = db.prepare('SELECT seq FROM sqlite_sequence WHERE name = ?').get(name);
+        return row ? row.seq : 0;
+      };
+      const restoreSeq = (name, oldSeq) => {
+        const maxId = db.prepare(`SELECT COALESCE(MAX(id), 0) AS m FROM ${name}`).get().m;
+        db.prepare('DELETE FROM sqlite_sequence WHERE name IN (?, ?)').run(name, `${name}_new`);
+        // CAST: a JS number binds as REAL, and seq is an integer column by convention.
+        db.prepare('INSERT INTO sqlite_sequence (name, seq) VALUES (?, CAST(? AS INTEGER))').run(
+          name,
+          Math.max(oldSeq, maxId)
+        );
+      };
+
+      db.exec(`
+        CREATE TABLE title_art (
+          type       TEXT NOT NULL CHECK(type IN ('movie','show')),
+          tmdb_id    TEXT NOT NULL,
+          slot       TEXT NOT NULL CHECK(slot IN ('poster','backdrop','fanart')),
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (type, tmdb_id, slot)
+        ) WITHOUT ROWID;
+        INSERT OR IGNORE INTO title_art SELECT type, tmdb_id, 'poster', custom_poster FROM items WHERE custom_poster IS NOT NULL;
+        INSERT OR IGNORE INTO title_art SELECT type, tmdb_id, 'backdrop', custom_backdrop FROM items WHERE custom_backdrop IS NOT NULL;
+        INSERT OR IGNORE INTO title_art SELECT type, tmdb_id, 'fanart', custom_fanart FROM items WHERE custom_fanart IS NOT NULL;
+      `);
+
+      // items: + user_id, UNIQUE(user_id, type, tmdb_id) replaces the global
+      // UNIQUE(tmdb_id), custom_* columns dropped.
+      const itemsSeq = seqOf('items');
+      db.exec(`
+        CREATE TABLE items_new (
+          id                INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          tmdb_id           TEXT NOT NULL,
+          type              TEXT NOT NULL CHECK(type IN ('movie','show')),
+          title_it          TEXT NOT NULL,
+          title_orig        TEXT NOT NULL,
+          status            TEXT NOT NULL CHECK(status IN (
+                              'watching','completed','paused','dropped','plan_to_watch'
+                            )) DEFAULT 'plan_to_watch',
+          rating            INTEGER CHECK(rating BETWEEN 1 AND 5),
+          notes             TEXT,
+          rewatch_count     INTEGER DEFAULT 0,
+          added_at          TEXT DEFAULT (datetime('now')),
+          updated_at        TEXT DEFAULT (datetime('now')),
+          favorite          INTEGER NOT NULL DEFAULT 0,
+          owned             INTEGER NOT NULL DEFAULT 0,
+          watched_in_cinema INTEGER NOT NULL DEFAULT 0,
+          cinema_date       TEXT,
+          cinema_time       TEXT,
+          cinema_name       TEXT,
+          year              TEXT,
+          genres            TEXT,
+          current_season    INTEGER,
+          watch_date        TEXT,
+          UNIQUE(user_id, type, tmdb_id)
+        );
+      `);
+      const cols =
+        'id, tmdb_id, type, title_it, title_orig, status, rating, notes, rewatch_count, added_at, ' +
+        'updated_at, favorite, owned, watched_in_cinema, cinema_date, cinema_time, cinema_name, year, ' +
+        'genres, current_season, watch_date';
+      db.prepare(`INSERT INTO items_new (user_id, ${cols}) SELECT ?, ${cols} FROM items`).run(owner);
+      db.exec(`
+        DROP TABLE items;
+        ALTER TABLE items_new RENAME TO items;
+        CREATE INDEX idx_items_user_status ON items(user_id, status);
+        CREATE INDEX idx_items_user_type ON items(user_id, type);
+        CREATE INDEX idx_items_title ON items(type, tmdb_id);
+      `);
+      restoreSeq('items', itemsSeq);
+
+      // lists: + user_id.
+      const listsSeq = seqOf('lists');
+      db.exec(`
+        CREATE TABLE lists_new (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          name       TEXT NOT NULL,
+          type       TEXT NOT NULL CHECK(type IN ('movie','show')),
+          created_at INTEGER NOT NULL
+        );
+      `);
+      db.prepare(
+        'INSERT INTO lists_new (id, user_id, name, type, created_at) SELECT id, ?, name, type, created_at FROM lists'
+      ).run(owner);
+      db.exec(`
+        DROP TABLE lists;
+        ALTER TABLE lists_new RENAME TO lists;
+        CREATE INDEX idx_lists_user ON lists(user_id);
+      `);
+      restoreSeq('lists', listsSeq);
+
+      // favorites (The Wall): one row per member instead of the id = 1 singleton.
+      db.exec(`
+        CREATE TABLE favorites_new (
+          user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          movie_item_id  INTEGER REFERENCES items(id) ON DELETE SET NULL,
+          show_item_id   INTEGER REFERENCES items(id) ON DELETE SET NULL,
+          person_tmdb_id INTEGER
+        );
+      `);
+      db.prepare(
+        `INSERT INTO favorites_new (user_id, movie_item_id, show_item_id, person_tmdb_id)
+         SELECT ?, movie_item_id, show_item_id, person_tmdb_id FROM favorites WHERE id = 1`
+      ).run(owner);
+      db.exec(`
+        DROP TABLE favorites;
+        ALTER TABLE favorites_new RENAME TO favorites;
+      `);
+
+      // Stats are cached per member from now on ('summary:<user id>').
+      db.exec("DELETE FROM stats_cache WHERE key = 'summary'");
+    },
+  },
 ];
 
 // Filesystem half of v1: the one custom profile photo moves from

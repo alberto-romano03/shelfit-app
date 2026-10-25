@@ -6,22 +6,27 @@ const DEFAULT_EPISODE_MINUTES = 30;
 // Prepared once at module load, bound to the single shared connection. The
 // functions below still accept a `db` argument for their existing call sites;
 // it is always this same singleton, so the module-level statements are used.
+//
+// Statistics are per member: each one's summary is computed from their own
+// library and cached under 'summary:<user id>'.
+const userIdsStmt = db.prepare('SELECT id FROM users ORDER BY id');
 const selItemsStmt = db.prepare(
-  'SELECT id, tmdb_id, type, status, rewatch_count FROM items'
+  'SELECT id, tmdb_id, type, status, rewatch_count FROM items WHERE user_id = ?'
 );
 const selProgressStmt = db.prepare(
   'SELECT season, episode, watch_count FROM progress WHERE item_id = ? AND season > 0'
 );
 const upsertSummaryStmt = db.prepare(
   `INSERT INTO stats_cache (key, value, updated_at)
-   VALUES ('summary', ?, datetime('now'))
+   VALUES (?, ?, datetime('now'))
    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
 );
-const selSummaryStmt = db.prepare("SELECT value FROM stats_cache WHERE key = 'summary'");
+const selSummaryStmt = db.prepare('SELECT value FROM stats_cache WHERE key = ?');
+const summaryKey = (userId) => `summary:${userId}`;
 
-// Full recompute of the statistics summary from the database + cached meta.
-// Writes the result into stats_cache under the single key 'summary' and
-// returns it.
+// Full recompute of one member's statistics summary from the database + cached
+// meta. Writes the result into stats_cache under 'summary:<user id>' and returns
+// it. Without a user id, every member's summary is recomputed (returns null).
 //
 // ASYNC ON PURPOSE: this reads one meta file per item plus one per watched
 // season (hundreds of files on a real library). Done synchronously it blocked the
@@ -30,8 +35,12 @@ const selSummaryStmt = db.prepare("SELECT value FROM stats_cache WHERE key = 'su
 // between files, so every other request (the probe included) is still answered
 // while this runs. Reads are served from cache.js's parsed-meta cache, so after
 // the first pass it costs almost nothing.
-export async function recomputeStats(db) {
-  const items = selItemsStmt.all();
+export async function recomputeStats(db, userId) {
+  if (userId == null) {
+    for (const { id } of userIdsStmt.all()) await recomputeStats(db, id);
+    return null;
+  }
+  const items = selItemsStmt.all(userId);
 
   let totalMinutesMovies = 0;
   let totalMoviesCompleted = 0;
@@ -100,7 +109,7 @@ export async function recomputeStats(db) {
     updated_at: new Date().toISOString(),
   };
 
-  upsertSummaryStmt.run(JSON.stringify(summary));
+  upsertSummaryStmt.run(summaryKey(userId), JSON.stringify(summary));
 
   return summary;
 }
@@ -108,6 +117,9 @@ export async function recomputeStats(db) {
 // Coalesced, off-transaction recompute. Callers in request handlers use this
 // instead of awaiting the full recompute, so a single mutation doesn't pay an
 // O(library) scan. Multiple mutations in quick succession collapse into one.
+// It refreshes every member's summary: a household's libraries are small and the
+// per-file reads are served from cache.js's parsed-meta cache, so this stays cheap
+// and no call site has to say whose library it touched.
 // Fire-and-forget: the recompute now yields between files, so it no longer
 // stalls the requests that follow the write.
 let statsTimer = null;
@@ -124,9 +136,9 @@ export function scheduleStatsRecompute(db) {
   if (statsTimer.unref) statsTimer.unref();
 }
 
-// Read the cached summary; recompute once if it has never been built.
-export async function getStats(db) {
-  const row = selSummaryStmt.get();
+// Read a member's cached summary; recompute once if it has never been built.
+export async function getStats(db, userId) {
+  const row = selSummaryStmt.get(summaryKey(userId));
   if (row) {
     try {
       return JSON.parse(row.value);
@@ -134,5 +146,5 @@ export async function getStats(db) {
       /* fall through to recompute */
     }
   }
-  return recomputeStats(db);
+  return recomputeStats(db, userId);
 }

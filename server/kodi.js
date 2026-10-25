@@ -77,8 +77,9 @@ const getInstanceStmt = db.prepare('SELECT * FROM kodi_instances WHERE id = ?');
 const getActiveInstanceStmt = db.prepare('SELECT * FROM kodi_instances WHERE is_active = 1');
 const deleteInstanceStmt = db.prepare('DELETE FROM kodi_instances WHERE id = ?');
 const firstInstanceIdStmt = db.prepare('SELECT id FROM kodi_instances ORDER BY id LIMIT 1');
+// Catalog lookup (title + year of a title anyone has added), not library state.
 const localTitleYearStmt = db.prepare(
-  'SELECT title_it, title_orig, year FROM items WHERE tmdb_id = ? AND type = ?'
+  'SELECT title_it, title_orig, year FROM items WHERE tmdb_id = ? AND type = ? LIMIT 1'
 );
 
 // --- Enable toggle (settings key/value) -----------------------------------
@@ -280,10 +281,13 @@ export async function statusResponse() {
 // --- Now Playing ----------------------------------------------------------
 // Match a currently-playing title to a shelfIt library row by TMDB id, or — when
 // Kodi carries no TMDB id (non-library / direct-file playback) — by title.
-const findItemByTmdbStmt = db.prepare('SELECT id, type, tmdb_id FROM items WHERE tmdb_id = ?');
+// Matched against the library of the member looking at Now Playing.
+const findItemByTmdbStmt = db.prepare(
+  'SELECT id, type, tmdb_id FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?'
+);
 const findItemByTitleStmt = db.prepare(
   `SELECT id, type, tmdb_id FROM items
-    WHERE type = ? AND (lower(title_it) = ? OR lower(title_orig) = ?)
+    WHERE user_id = ? AND type = ? AND (lower(title_it) = ? OR lower(title_orig) = ?)
     LIMIT 1`
 );
 // "Already seen?" lookups so the toast can offer Add-rewatch instead of Mark-watched.
@@ -384,10 +388,11 @@ function timeToSeconds(t) {
   return (t.hours || 0) * 3600 + (t.minutes || 0) * 60 + (t.seconds || 0);
 }
 
-// Current Now-Playing snapshot for the active instance. Does GetActivePlayers,
+// Current Now-Playing snapshot for the active instance, matched against
+// `userId`'s library. Does GetActivePlayers,
 // then GetItem + GetProperties in ONE parallel call. Returns { active:false } when
 // nothing is playing or Kodi is off. Never throws.
-export async function nowPlaying() {
+export async function nowPlaying(userId) {
   if (!isEnabled()) return { active: false };
   const inst = getActiveInstance();
   if (!inst) return { active: false };
@@ -496,13 +501,13 @@ export async function nowPlaying() {
 
   let match = null;
   let row = null;
-  if (tmdb != null) row = findItemByTmdbStmt.get(String(tmdb));
-  // Fallback: no usable TMDB id (e.g. a non-TMDB scraper, or direct playback) —
+  const wantType = mediaType === 'episode' ? 'show' : 'movie';
+  if (tmdb != null) row = findItemByTmdbStmt.get(userId, wantType, String(tmdb));
+  // Fallback: no usable TMDB id (e.g. a non-TMDB scraper, or direct playback):
   // match the library by title instead so Mark-watched still works.
   if (!row && matchTitle) {
-    const wantType = mediaType === 'episode' ? 'show' : 'movie';
     const lc = matchTitle.toLowerCase();
-    row = findItemByTitleStmt.get(wantType, lc, lc);
+    row = findItemByTitleStmt.get(userId, wantType, lc, lc);
   }
   if (row) {
     const folder = row.type === 'movie' ? 'movies' : 'shows';

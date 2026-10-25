@@ -46,10 +46,10 @@ function readCinemas() {
 const ticketsStmt = db.prepare(
   `SELECT id, tmdb_id, title_it, cinema_date, cinema_time, cinema_name
      FROM items
-    WHERE type = 'movie' AND watched_in_cinema = 1
+    WHERE user_id = ? AND type = 'movie' AND watched_in_cinema = 1
     ORDER BY (cinema_date IS NULL), cinema_date DESC, id DESC`
 );
-const getMovieStmt = db.prepare("SELECT id, type FROM items WHERE id = ?");
+const getMovieStmt = db.prepare('SELECT id, type, user_id FROM items WHERE id = ? AND user_id = ?');
 
 // Accept only real 'YYYY-MM-DD' dates and 'HH:MM' times (or empty → cleared).
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -59,8 +59,8 @@ const CINEMA_NAME_MAX = 80; // trim overly long free-text entries
 export default async function cinemaRoutes(fastify) {
   // GET /api/cinema/tickets → the ticket collection (newest screening first;
   // undated tickets last). Backdrops come from the existing local TMDB cache.
-  fastify.get('/api/cinema/tickets', async () => {
-    const rows = ticketsStmt.all();
+  fastify.get('/api/cinema/tickets', async (request) => {
+    const rows = ticketsStmt.all(request.user.id);
     return {
       tickets: rows.map((r) => {
         // Release date (from the cached meta) is the default shown when the user
@@ -90,7 +90,7 @@ export default async function cinemaRoutes(fastify) {
   // Each field is optional; a null/empty value clears it. Saved immediately by
   // the ticket UI (optimistic on the client), so validation is strict here.
   fastify.patch('/api/movies/:id/cinema', async (request, reply) => {
-    const row = getMovieStmt.get(request.params.id);
+    const row = getMovieStmt.get(request.params.id, request.user.id);
     if (!row || row.type !== 'movie') {
       reply.code(404);
       return { error: 'not found' };
@@ -127,7 +127,11 @@ export default async function cinemaRoutes(fastify) {
 
     if (!fields.length) return { ok: true };
 
-    db.prepare(`UPDATE items SET ${fields.join(', ')} WHERE id = ?`).run(...params, row.id);
+    db.prepare(`UPDATE items SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`).run(
+      ...params,
+      row.id,
+      row.user_id
+    );
     return { ok: true };
   });
 }

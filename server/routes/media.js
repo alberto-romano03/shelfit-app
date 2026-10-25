@@ -38,8 +38,8 @@ function assetBase(type, tmdbId) {
 // on showing the copy it already has (assets are served `immutable`).
 function itemImageUrls(row) {
   const base = assetBase(row.type, row.tmdb_id);
-  const pv = imageVersion(row, 'poster');
-  const bv = imageVersion(row, 'backdrop');
+  const pv = imageVersion(row.type, row.tmdb_id, 'poster');
+  const bv = imageVersion(row.type, row.tmdb_id, 'backdrop');
   return {
     poster_url: `${base}/poster.webp${pv ? `?v=${pv}` : ''}`,
     backdrop_url: `${base}/backdrop.webp${bv ? `?v=${bv}` : ''}`,
@@ -95,21 +95,29 @@ const backfillMetaStmt = db.prepare('UPDATE items SET year = ?, genres = ? WHERE
 // distinct genre list, which must reflect the WHOLE type library regardless of
 // the active status chip (matching the pre-pagination behaviour where the client
 // derived genres from the full list it had loaded).
-const typeItemsStmt = db.prepare('SELECT * FROM items WHERE type = ?');
+const typeItemsStmt = db.prepare('SELECT * FROM items WHERE type = ? AND user_id = ?');
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
 // The library list query (dynamic WHERE) and the PATCH update (dynamic SET) are
 // built per request from a fixed whitelist of columns with bound values, so they
 // stay inline; every fixed-shape query below is hoisted here.
-const getItemByIdStmt = db.prepare('SELECT * FROM items WHERE id = ?');
+//
+// Every query is bound to the signed-in member (`user_id`). Lookups by item id
+// check the owner too, so another member's id answers 404, exactly like an id that
+// doesn't exist. Progress and rewatch rows are only reached through an item that
+// has passed that check.
+const getItemByIdStmt = db.prepare('SELECT * FROM items WHERE id = ? AND user_id = ?');
 const allLastWatchedStmt = db.prepare(
-  'SELECT item_id, season, episode FROM progress WHERE season > 0 ORDER BY item_id, season DESC, episode DESC'
+  `SELECT p.item_id, p.season, p.episode
+     FROM progress p JOIN items i ON i.id = p.item_id
+    WHERE i.user_id = ? AND p.season > 0
+    ORDER BY p.item_id, p.season DESC, p.episode DESC`
 );
 const planToWatchStmt = db.prepare(
-  "SELECT id, type, tmdb_id, title_it, rating FROM items WHERE status = 'plan_to_watch' ORDER BY added_at DESC, id DESC"
+  "SELECT id, type, tmdb_id, title_it, rating FROM items WHERE user_id = ? AND status = 'plan_to_watch' ORDER BY added_at DESC, id DESC"
 );
 const unratedStmt = db.prepare(
-  "SELECT * FROM items WHERE rating IS NULL AND status != 'plan_to_watch' ORDER BY RANDOM()"
+  "SELECT * FROM items WHERE user_id = ? AND rating IS NULL AND status != 'plan_to_watch' ORDER BY RANDOM()"
 );
 const watchedSeasonsStmt = db.prepare(
   'SELECT season, episode FROM progress WHERE item_id = ? AND season > 0'
@@ -117,14 +125,21 @@ const watchedSeasonsStmt = db.prepare(
 const seasonWatchedStmt = db.prepare(
   'SELECT episode, watch_count, watched_at, notes FROM progress WHERE item_id = ? AND season = ?'
 );
-const findByTypeTmdbStmt = db.prepare('SELECT id, status FROM items WHERE type = ? AND tmdb_id = ?');
-const findByTmdbStmt = db.prepare('SELECT id FROM items WHERE tmdb_id = ?');
-const insertItemStmt = db.prepare(
-  `INSERT INTO items (tmdb_id, type, title_it, title_orig, status)
-   VALUES (?, ?, ?, ?, ?)`
+const findByTypeTmdbStmt = db.prepare(
+  'SELECT id, status FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?'
 );
-const deleteItemStmt = db.prepare('DELETE FROM items WHERE id = ?');
-const deleteItemListRefsStmt = db.prepare('DELETE FROM list_items WHERE tmdb_id = ?');
+const insertItemStmt = db.prepare(
+  `INSERT INTO items (user_id, tmdb_id, type, title_it, title_orig, status)
+   VALUES (?, ?, ?, ?, ?, ?)`
+);
+const deleteItemStmt = db.prepare('DELETE FROM items WHERE id = ? AND user_id = ?');
+// Removing a title takes it out of the same member's lists of that type, nobody else's.
+const deleteItemListRefsStmt = db.prepare(
+  `DELETE FROM list_items
+    WHERE tmdb_id = ? AND list_id IN (SELECT id FROM lists WHERE user_id = ? AND type = ?)`
+);
+// Whether any member still has this title (its cache folder is shared).
+const titleHeldStmt = db.prepare('SELECT 1 FROM items WHERE type = ? AND tmdb_id = ? LIMIT 1');
 // Movie rewatch events + the paired rewatch_count counter (always updated together
 // in a single transaction so they can never diverge — see the endpoints below).
 const insertRewatchStmt = db.prepare(
@@ -196,10 +211,10 @@ function enrichListItem(row, lastWatched) {
 // Distinct genres across an entire type library (all statuses), sorted — the
 // source for the grid's genre <select>. Computed only on page 1 of a paginated
 // request so it isn't repeated on every page.
-function typeGenres(type) {
+function typeGenres(type, userId) {
   if (!type) return [];
   const set = new Set();
-  for (const row of typeItemsStmt.all(type)) {
+  for (const row of typeItemsStmt.all(type, userId)) {
     for (const g of itemYearGenres(row).genres || []) set.add(g);
   }
   return [...set].sort();
@@ -256,8 +271,9 @@ export default async function mediaRoutes(fastify) {
   // GET /api/media  (filters: status, type, genre, sort, owned)
   fastify.get('/api/media', async (request) => {
     const { status, type, genre, sort, owned } = request.query;
-    const clauses = [];
-    const params = [];
+    const userId = request.user.id;
+    const clauses = ['user_id = ?'];
+    const params = [userId];
     if (status) {
       clauses.push('status = ?');
       params.push(status);
@@ -271,7 +287,7 @@ export default async function mediaRoutes(fastify) {
     if (owned === '1' || owned === 'true') {
       clauses.push('owned = 1');
     }
-    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const where = `WHERE ${clauses.join(' AND ')}`;
     const rows = db
       .prepare(`SELECT * FROM items ${where}`)
       .all(...params);
@@ -279,7 +295,7 @@ export default async function mediaRoutes(fastify) {
     // Last-watched per show in ONE query (rows come highest-first, so the first
     // seen per item_id is its latest episode) — avoids a per-row query.
     const lastWatched = new Map();
-    for (const p of allLastWatchedStmt.all()) {
+    for (const p of allLastWatchedStmt.all(userId)) {
       if (!lastWatched.has(p.item_id)) {
         lastWatched.set(p.item_id, { season: p.season, episode: p.episode });
       }
@@ -331,7 +347,7 @@ export default async function mediaRoutes(fastify) {
     // genres across the whole type library for the filter dropdown. Sent once.
     if (page === 1) {
       resp.groups = gridGroups(list, sort);
-      resp.genres = typeGenres(type);
+      resp.genres = typeGenres(type, userId);
     }
     return resp;
   });
@@ -341,8 +357,8 @@ export default async function mediaRoutes(fastify) {
   // design (no meta/genres), but includes each poster URL so the service worker
   // can warm the images and the grid can show real poster cards offline.
   // Newest-added first, matching the library's default order.
-  fastify.get('/api/plan-to-watch', async () => {
-    const rows = planToWatchStmt.all();
+  fastify.get('/api/plan-to-watch', async (request) => {
+    const rows = planToWatchStmt.all(request.user.id);
     return {
       titles: rows.map((r) => ({
         id: r.id,
@@ -358,8 +374,8 @@ export default async function mediaRoutes(fastify) {
   // Rate-O-Matic swipe rater. "Watched" = any status except plan_to_watch, so
   // titles the user hasn't started never appear. Shuffled in SQL (ORDER BY
   // RANDOM()) so the order carries no alphabetical / date-added bias.
-  fastify.get('/api/unrated', async () => {
-    const rows = unratedStmt.all();
+  fastify.get('/api/unrated', async (request) => {
+    const rows = unratedStmt.all(request.user.id);
     return {
       titles: rows.map((row) => ({
         id: row.id,
@@ -374,7 +390,7 @@ export default async function mediaRoutes(fastify) {
 
   // GET /api/media/:id  (detail, with lazy rebuild + background refresh)
   fastify.get('/api/media/:id', async (request, reply) => {
-    const row = getItemByIdStmt.get(request.params.id);
+    const row = getItemByIdStmt.get(request.params.id, request.user.id);
     if (!row) {
       reply.code(404);
       return { error: 'not found' };
@@ -452,7 +468,7 @@ export default async function mediaRoutes(fastify) {
       ...itemImageUrls(row),
       // The disc art lives behind /api/fanart, served `immutable` too, so the
       // client appends this when the user has replaced it.
-      fanart_v: imageVersion(row, 'fanart'),
+      fanart_v: imageVersion(row.type, row.tmdb_id, 'fanart'),
       // Whether a real Fanart disc is cached (movies only); else the client uses
       // the poster-based disc rendering. Never triggers a network fetch.
       disc_available: row.type === 'movie' && hasFanartDiscCached(row.tmdb_id),
@@ -502,7 +518,7 @@ export default async function mediaRoutes(fastify) {
       }
     }
 
-    const existing = findByTypeTmdbStmt.get(type, tmdbId);
+    const existing = findByTypeTmdbStmt.get(request.user.id, type, tmdbId);
 
     const base = assetBase(type, tmdbId);
     return {
@@ -521,7 +537,7 @@ export default async function mediaRoutes(fastify) {
 
   // GET /api/media/:id/season/:n  → episodes merged with watched state.
   fastify.get('/api/media/:id/season/:n', async (request, reply) => {
-    const row = getItemByIdStmt.get(request.params.id);
+    const row = getItemByIdStmt.get(request.params.id, request.user.id);
     if (!row || row.type !== 'show') {
       reply.code(404);
       return { error: 'not found' };
@@ -635,7 +651,7 @@ export default async function mediaRoutes(fastify) {
     const initialStatus =
       status && VALID_STATUS.includes(status) ? status : 'plan_to_watch';
 
-    const existing = findByTmdbStmt.get(String(tmdb_id));
+    const existing = findByTypeTmdbStmt.get(request.user.id, type, String(tmdb_id));
     if (existing) {
       reply.code(409);
       return { error: 'already_added', item_id: existing.id };
@@ -658,6 +674,7 @@ export default async function mediaRoutes(fastify) {
 
     const insert = db.transaction(() => {
       const info = insertItemStmt.run(
+        request.user.id,
         String(tmdb_id),
         type,
         meta.title_it || meta.title_orig || 'Untitled',
@@ -675,7 +692,7 @@ export default async function mediaRoutes(fastify) {
 
   // PATCH /api/media/:id  → update status, rating, notes.
   fastify.patch('/api/media/:id', async (request, reply) => {
-    const row = getItemByIdStmt.get(request.params.id);
+    const row = getItemByIdStmt.get(request.params.id, request.user.id);
     if (!row) {
       reply.code(404);
       return { error: 'not found' };
@@ -735,9 +752,10 @@ export default async function mediaRoutes(fastify) {
     }
 
     const apply = db.transaction(() => {
-      db.prepare(`UPDATE items SET ${fields.join(', ')} WHERE id = ?`).run(
+      db.prepare(`UPDATE items SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`).run(
         ...params,
-        row.id
+        row.id,
+        row.user_id
       );
       // Movie completion state / rewatch count affect the stats cache.
       if (row.type === 'movie' && (body.status !== undefined || body.rewatch_count !== undefined)) {
@@ -753,7 +771,7 @@ export default async function mediaRoutes(fastify) {
   // Edits the first-watch date retroactively so the title lands in the right
   // monthly receipt. Stored in items.watch_date, independent of updated_at.
   fastify.patch('/api/media/:id/watch-date', async (request, reply) => {
-    const row = getItemByIdStmt.get(request.params.id);
+    const row = getItemByIdStmt.get(request.params.id, request.user.id);
     if (!row || row.type !== 'movie') {
       reply.code(404);
       return { error: 'not found' };
@@ -772,7 +790,7 @@ export default async function mediaRoutes(fastify) {
   // Adds one rewatch event AND increments rewatch_count in a single transaction
   // so the counter and the dated rows never diverge. Returns the new count.
   fastify.post('/api/media/:id/rewatch', async (request, reply) => {
-    const row = getItemByIdStmt.get(request.params.id);
+    const row = getItemByIdStmt.get(request.params.id, request.user.id);
     if (!row || row.type !== 'movie') {
       reply.code(404);
       return { error: 'not found' };
@@ -789,7 +807,7 @@ export default async function mediaRoutes(fastify) {
       return info.lastInsertRowid;
     });
     const rewatchId = add();
-    const updated = getItemByIdStmt.get(row.id);
+    const updated = getItemByIdStmt.get(row.id, row.user_id);
     reply.code(201);
     return { rewatch_id: rewatchId, rewatch_count: updated.rewatch_count };
   });
@@ -798,7 +816,7 @@ export default async function mediaRoutes(fastify) {
   // Removes one rewatch event AND decrements rewatch_count in the same
   // transaction. Returns the new count.
   fastify.delete('/api/media/:id/rewatch/:rewatchId', async (request, reply) => {
-    const row = getItemByIdStmt.get(request.params.id);
+    const row = getItemByIdStmt.get(request.params.id, request.user.id);
     if (!row || row.type !== 'movie') {
       reply.code(404);
       return { error: 'not found' };
@@ -812,13 +830,13 @@ export default async function mediaRoutes(fastify) {
       return res.changes;
     });
     const changed = remove();
-    const updated = getItemByIdStmt.get(row.id);
+    const updated = getItemByIdStmt.get(row.id, row.user_id);
     return { ok: changed > 0, rewatch_count: updated.rewatch_count };
   });
 
   // GET /api/media/:id/rewatches  → dated rewatch events, newest first.
   fastify.get('/api/media/:id/rewatches', async (request, reply) => {
-    const row = getItemByIdStmt.get(request.params.id);
+    const row = getItemByIdStmt.get(request.params.id, request.user.id);
     if (!row) {
       reply.code(404);
       return { error: 'not found' };
@@ -828,20 +846,21 @@ export default async function mediaRoutes(fastify) {
     };
   });
 
-  // DELETE /api/media/:id  → remove item + progress, prune list references, and
-  // reclaim its on-disk cache so nothing is orphaned.
+  // DELETE /api/media/:id  → remove item + progress, prune it from the member's
+  // lists, and reclaim its on-disk cache once no member has the title any more.
   fastify.delete('/api/media/:id', async (request, reply) => {
-    const row = getItemByIdStmt.get(request.params.id);
+    const row = getItemByIdStmt.get(request.params.id, request.user.id);
     if (!row) {
       reply.code(404);
       return { error: 'not found' };
     }
-    const apply = db.transaction(() => {
-      deleteItemStmt.run(row.id); // progress cascades
-      deleteItemListRefsStmt.run(Number(row.tmdb_id));
+    const stillHeld = db.transaction(() => {
+      deleteItemStmt.run(row.id, row.user_id); // progress cascades
+      deleteItemListRefsStmt.run(Number(row.tmdb_id), row.user_id, row.type);
       scheduleStatsRecompute(db);
-    });
-    apply();
+      return !!titleHeldStmt.get(row.type, row.tmdb_id);
+    })();
+    if (stillHeld) return { ok: true };
     // Filesystem cleanup outside the transaction (fs is not transactional).
     try {
       clearItemCache(row.type, row.tmdb_id);

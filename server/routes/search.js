@@ -17,7 +17,8 @@ import { imageVersion } from '../customImages.js';
 const IMDB_RE = /^tt\d+$/i;
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
-const allItemsStmt = db.prepare('SELECT id, tmdb_id, type FROM items');
+// The signed-in member's titles, for the "already added" flags on TMDB results.
+const allItemsStmt = db.prepare('SELECT id, tmdb_id, type FROM items WHERE user_id = ?');
 
 // The library half of the search box (the "my collection only" toggle). This
 // never touches TMDB: it reads the rows the user already owns, so the answer is
@@ -25,10 +26,9 @@ const allItemsStmt = db.prepare('SELECT id, tmdb_id, type FROM items');
 // LIKE is case-insensitive for ASCII in SQLite; accented letters still have to
 // match their own case.
 const libraryStmt = db.prepare(
-  `SELECT id, tmdb_id, type, title_it, title_orig, year,
-          custom_poster, custom_backdrop, custom_fanart
+  `SELECT id, tmdb_id, type, title_it, title_orig, year
      FROM items
-    WHERE title_it LIKE ? OR title_orig LIKE ?
+    WHERE user_id = ? AND (title_it LIKE ? OR title_orig LIKE ?)
     ORDER BY title_it
     LIMIT 60`
 );
@@ -39,7 +39,7 @@ const libraryStmt = db.prepare(
 // the copy it already has).
 function mapLibraryRow(row) {
   const folder = row.type === 'movie' ? 'movies' : 'shows';
-  const v = imageVersion(row, 'poster');
+  const v = imageVersion(row.type, row.tmdb_id, 'poster');
   return {
     tmdb_id: String(row.tmdb_id),
     type: row.type,
@@ -95,8 +95,8 @@ function mapShow(r, addedMap) {
   };
 }
 
-function buildAddedMap() {
-  const rows = allItemsStmt.all();
+function buildAddedMap(userId) {
+  const rows = allItemsStmt.all(userId);
   const map = new Map();
   for (const row of rows) map.set(`${row.type}:${row.tmdb_id}`, row);
   return map;
@@ -112,14 +112,14 @@ export default async function searchRoutes(fastify) {
     // Library scope: answered entirely from the local rows.
     if (request.query.scope === 'library') {
       const like = `%${q}%`;
-      const rows = libraryStmt.all(like, like);
+      const rows = libraryStmt.all(request.user.id, like, like);
       const results = rows
         .filter((r) => type === 'all' || r.type === type)
         .map(mapLibraryRow);
       return { results };
     }
 
-    const addedMap = buildAddedMap();
+    const addedMap = buildAddedMap(request.user.id);
     let results = [];
 
     try {

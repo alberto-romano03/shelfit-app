@@ -44,7 +44,7 @@ const ERAS = {
 };
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
-const ownedByTypeStmt = db.prepare('SELECT tmdb_id FROM items WHERE type = ?');
+const ownedByTypeStmt = db.prepare('SELECT tmdb_id FROM items WHERE user_id = ? AND type = ?');
 
 function idsForNames(genreList, names) {
   const byName = new Map(genreList.map((g) => [g.name.toLowerCase(), g.id]));
@@ -175,7 +175,7 @@ export default async function discoverRoutes(fastify) {
 
     // Exclude titles already in the library, and require a poster.
     const owned = new Set(
-      ownedByTypeStmt.all(type).map((r) => String(r.tmdb_id))
+      ownedByTypeStmt.all(request.user.id, type).map((r) => String(r.tmdb_id))
     );
     const pool = results.filter((r) => r.poster_path && !owned.has(String(r.id)));
     if (!pool.length) return { result: null, results: [] };

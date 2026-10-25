@@ -23,10 +23,10 @@ const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
 const clearProfileImageStmt = db.prepare('UPDATE users SET profile_image = NULL WHERE id = ?');
 const ratedItemsStmt = db.prepare(
-  'SELECT id, tmdb_id, type, title_it, rating FROM items WHERE rating IS NOT NULL ORDER BY rating DESC, updated_at DESC'
+  'SELECT id, tmdb_id, type, title_it, rating FROM items WHERE user_id = ? AND rating IS NOT NULL ORDER BY rating DESC, updated_at DESC'
 );
 const favoriteItemsStmt = db.prepare(
-  'SELECT id, tmdb_id, type, title_it, rating FROM items WHERE favorite = 1 ORDER BY updated_at DESC'
+  'SELECT id, tmdb_id, type, title_it, rating FROM items WHERE user_id = ? AND favorite = 1 ORDER BY updated_at DESC'
 );
 
 const BADGE_EXT = new Set(['.png', '.svg', '.jpg', '.jpeg', '.webp', '.gif']);
@@ -213,8 +213,8 @@ export default async function profileRoutes(fastify) {
   });
 
   // GET /api/profile/rated → rated titles for the customization grids.
-  fastify.get('/api/profile/rated', async () => {
-    const rows = ratedItemsStmt.all();
+  fastify.get('/api/profile/rated', async (request) => {
+    const rows = ratedItemsStmt.all(request.user.id);
     const items = rows.map((r) => {
       const folder = r.type === 'movie' ? 'movies' : 'shows';
       return {
@@ -232,8 +232,8 @@ export default async function profileRoutes(fastify) {
   });
 
   // GET /api/profile/favorites → favourited titles, for the cover-art grid.
-  fastify.get('/api/profile/favorites', async () => {
-    const rows = favoriteItemsStmt.all();
+  fastify.get('/api/profile/favorites', async (request) => {
+    const rows = favoriteItemsStmt.all(request.user.id);
     const items = rows.map((r) => {
       const folder = r.type === 'movie' ? 'movies' : 'shows';
       return {

@@ -37,10 +37,10 @@ function remotePoster(posterPath) {
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
 const ownedMovieRowsStmt = db.prepare(
-  "SELECT id, tmdb_id, title_it, status, rating FROM items WHERE type = 'movie'"
+  "SELECT id, tmdb_id, title_it, status, rating FROM items WHERE user_id = ? AND type = 'movie'"
 );
-function ownedMovieRows() {
-  return ownedMovieRowsStmt.all();
+function ownedMovieRows(userId) {
+  return ownedMovieRowsStmt.all(userId);
 }
 
 export default async function collectionRoutes(fastify) {
@@ -48,7 +48,7 @@ export default async function collectionRoutes(fastify) {
   // Groups the user's movies by TMDB collection, plus a standalone bucket.
   fastify.get('/api/collections', async (request, reply) => {
     const signal = clientAbortSignal(request, reply);
-    const rows = ownedMovieRows();
+    const rows = ownedMovieRows(request.user.id);
 
     // First pass (sync): read metas, note which need a legacy backfill.
     const entries = rows.map((row) => {
@@ -144,7 +144,7 @@ export default async function collectionRoutes(fastify) {
 
     // Which of these films are already in the library?
     const owned = new Map(); // tmdb_id -> { item_id, status }
-    for (const r of ownedMovieRows()) {
+    for (const r of ownedMovieRows(request.user.id)) {
       owned.set(String(r.tmdb_id), { item_id: r.id, status: r.status });
     }
 

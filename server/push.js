@@ -6,7 +6,8 @@
 //   • A once-per-day check that notifies for episodes whose air_date fell between
 //     the last check and now, reusing the locally-cached TMDB air dates.
 //
-// Single-user: exactly one push subscription is kept (in the settings table). A
+// Exactly one push subscription is kept (in the settings table), owned by the
+// member who enabled it: the daily check covers that member's series only. A
 // failed delivery with 404/410 (subscription gone) auto-disables notifications.
 
 import crypto from 'node:crypto';
@@ -34,13 +35,15 @@ function delSetting(key) {
 
 // Started/finished shows whose new episodes we notify about (prepared once).
 const activeShowsStmt = db.prepare(
-  "SELECT id, tmdb_id, title_it, title_orig FROM items WHERE type = 'show' AND status IN ('watching','completed','paused')"
+  "SELECT id, tmdb_id, title_it, title_orig FROM items WHERE user_id = ? AND type = 'show' AND status IN ('watching','completed','paused')"
 );
+const masterIdStmt = db.prepare("SELECT id FROM users WHERE role = 'master'");
 
 const K_VAPID = 'push_vapid';
 const K_SUB = 'push_subscription';
 const K_ENABLED = 'push_enabled';
 const K_LAST = 'push_last_check';
+const K_OWNER = 'push_user';
 
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:shelfit@example.com';
 
@@ -60,8 +63,17 @@ export function getSubscription() {
     return null;
   }
 }
-export function setSubscription(sub) {
+export function setSubscription(sub, userId) {
   setSetting(K_SUB, JSON.stringify(sub));
+  setSetting(K_OWNER, String(userId));
+}
+// Who the subscription belongs to. A subscription stored before accounts
+// existed belongs to the master.
+export function getPushOwner() {
+  const id = parseInt(getSetting(K_OWNER), 10);
+  if (Number.isInteger(id)) return id;
+  const master = masterIdStmt.get();
+  return master ? master.id : null;
 }
 export function clearSubscription() {
   delSetting(K_SUB);
@@ -221,7 +233,7 @@ export async function checkNewEpisodes(logger) {
   const lastDate = lastCheck.slice(0, 10); // YYYY-MM-DD, lexical comparison
   const todayDate = nowIso.slice(0, 10);
 
-  const shows = activeShowsStmt.all();
+  const shows = activeShowsStmt.all(getPushOwner());
 
   const newlyAired = [];
   for (const show of shows) {

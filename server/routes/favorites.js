@@ -4,18 +4,24 @@
 //
 // The title picks are stored as items(id) references so removing a title from the
 // library clears the pick automatically (ON DELETE SET NULL). The routes still
-// speak tmdb ids, resolving them to the item on write.
+// speak tmdb ids, resolving them to the item on write. Each member has their own
+// Wall: one `favorites` row per user, created on their first pick.
 
 import db from '../db.js';
 import { readPersonSync, ensurePerson } from '../persons.js';
 
-const getFavoritesStmt = db.prepare('SELECT * FROM favorites WHERE id = 1');
-const setMovieStmt = db.prepare('UPDATE favorites SET movie_item_id = ? WHERE id = 1');
-const setShowStmt = db.prepare('UPDATE favorites SET show_item_id = ? WHERE id = 1');
-const setPersonStmt = db.prepare('UPDATE favorites SET person_tmdb_id = ? WHERE id = 1');
-// items.tmdb_id is TEXT — always compare with a string.
-const findItemStmt = db.prepare('SELECT * FROM items WHERE tmdb_id = ? AND type = ?');
-const getItemStmt = db.prepare('SELECT * FROM items WHERE id = ?');
+const getFavoritesStmt = db.prepare('SELECT * FROM favorites WHERE user_id = ?');
+const upsert = (column) =>
+  db.prepare(
+    `INSERT INTO favorites (user_id, ${column}) VALUES (?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET ${column} = excluded.${column}`
+  );
+const setMovieStmt = upsert('movie_item_id');
+const setShowStmt = upsert('show_item_id');
+const setPersonStmt = upsert('person_tmdb_id');
+// items.tmdb_id is TEXT: always compare with a string.
+const findItemStmt = db.prepare('SELECT * FROM items WHERE user_id = ? AND tmdb_id = ? AND type = ?');
+const getItemStmt = db.prepare('SELECT * FROM items WHERE id = ? AND user_id = ?');
 
 // A treated-as-cleared param: the spec's "pass null to clear".
 function isClear(v) {
@@ -38,10 +44,10 @@ function titleCard(row) {
   };
 }
 
-export function buildFavorites() {
-  const fav = getFavoritesStmt.get() || {};
-  const movie = fav.movie_item_id ? getItemStmt.get(fav.movie_item_id) : null;
-  const show = fav.show_item_id ? getItemStmt.get(fav.show_item_id) : null;
+export function buildFavorites(userId) {
+  const fav = getFavoritesStmt.get(userId) || {};
+  const movie = fav.movie_item_id ? getItemStmt.get(fav.movie_item_id, userId) : null;
+  const show = fav.show_item_id ? getItemStmt.get(fav.show_item_id, userId) : null;
   // Person is read from the local cache only — never a TMDB call just to paint
   // the home screen. It's null until the person page has been opened once.
   const person = fav.person_tmdb_id ? readPersonSync(fav.person_tmdb_id) : null;
@@ -63,24 +69,25 @@ export function buildFavorites() {
 
 export default async function favoriteRoutes(fastify) {
   // GET /api/favorites → the three current picks with their basic metadata.
-  fastify.get('/api/favorites', async () => buildFavorites());
+  fastify.get('/api/favorites', async (request) => buildFavorites(request.user.id));
 
   // PATCH /api/favorites/movie/:tmdbId — set (or clear with "null").
   for (const kind of ['movie', 'show']) {
     fastify.patch(`/api/favorites/${kind}/:tmdbId`, async (request, reply) => {
       const { tmdbId } = request.params;
+      const userId = request.user.id;
       const stmt = kind === 'movie' ? setMovieStmt : setShowStmt;
       if (isClear(tmdbId)) {
-        stmt.run(null);
-        return buildFavorites();
+        stmt.run(userId, null);
+        return buildFavorites(userId);
       }
-      const item = findItemStmt.get(String(tmdbId), kind);
+      const item = findItemStmt.get(userId, String(tmdbId), kind);
       if (!item) {
         reply.code(404);
         return { error: `that ${kind} is not in your library` };
       }
-      stmt.run(item.id);
-      return buildFavorites();
+      stmt.run(userId, item.id);
+      return buildFavorites(userId);
     });
   }
 
@@ -88,21 +95,22 @@ export default async function favoriteRoutes(fastify) {
   // person cache so The Wall can render the photo immediately after picking.
   fastify.patch('/api/favorites/person/:tmdbId', async (request, reply) => {
     const { tmdbId } = request.params;
+    const userId = request.user.id;
     if (isClear(tmdbId)) {
-      setPersonStmt.run(null);
-      return buildFavorites();
+      setPersonStmt.run(userId, null);
+      return buildFavorites(userId);
     }
     const id = Number(tmdbId);
     if (!Number.isInteger(id) || id <= 0) {
       reply.code(400);
       return { error: 'invalid person id' };
     }
-    setPersonStmt.run(id);
+    setPersonStmt.run(userId, id);
     try {
       await ensurePerson(id);
     } catch {
       /* the pick still stands; the person page will retry the fetch */
     }
-    return buildFavorites();
+    return buildFavorites(userId);
   });
 }

@@ -26,6 +26,7 @@ import {
   commitKodiSync,
   getPendingCount,
   claimPending,
+  syncOwnerId,
 } from '../kodiSync.js';
 
 function configPayload() {
@@ -141,14 +142,14 @@ export default async function kodiRoutes(fastify) {
   // --- Runtime (guarded: never contacts Kodi when off/no active instance) --
   // Status carries the count of discoveries waiting from a scheduled sync so the
   // client can raise the review card when it's ready (and no popup is open).
-  fastify.get('/api/kodi/status', async () => {
+  fastify.get('/api/kodi/status', async (request) => {
     const s = await statusResponse();
-    return { ...s, pending_review: getPendingCount() };
+    return { ...s, pending_review: getPendingCount(request.user.id) };
   });
 
   // Now Playing snapshot (drives the avatar ring, topbar indicator and panel).
   // Cheap + guarded; returns { active:false } when nothing is playing / Kodi off.
-  fastify.get('/api/kodi/now-playing', async () => nowPlaying());
+  fastify.get('/api/kodi/now-playing', async (request) => nowPlaying(request.user.id));
 
   // Proxy the currently-playing item's artwork from Kodi (used by the toast when
   // there's no local shelfIt poster — e.g. streaming add-ons). Streams the bytes
@@ -174,14 +175,15 @@ export default async function kodiRoutes(fastify) {
   });
 
   // Claim discoveries stashed by the scheduled sync (returns and clears them).
-  fastify.post('/api/kodi/sync/claim', async () => {
-    const p = claimPending();
+  fastify.post('/api/kodi/sync/claim', async (request) => {
+    const p = claimPending(request.user.id);
     return { discoveries: p ? p.discoveries : [] };
   });
 
   // Commit reviewed discoveries to the library.
   fastify.post('/api/kodi/sync/commit', async (request) => {
     const items = (request.body && request.body.items) || [];
+    if (request.user.id !== syncOwnerId()) return { added: 0 };
     return commitKodiSync(items);
   });
 

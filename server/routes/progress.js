@@ -8,7 +8,9 @@ import { readMetaSync, readSeasonMetaSync } from '../cache.js';
 import { scheduleStatsRecompute } from '../stats.js';
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
-const getItemStmt = db.prepare('SELECT * FROM items WHERE id = ?');
+// Bound to the signed-in member: every handler loads the series through this
+// first, so progress rows are only ever touched for a series the caller owns.
+const getItemStmt = db.prepare('SELECT * FROM items WHERE id = ? AND user_id = ?');
 const watchedKeysStmt = db.prepare(
   'SELECT season, episode FROM progress WHERE item_id = ? AND season > 0'
 );
@@ -72,8 +74,8 @@ const setCurrentSeasonStmt = db.prepare(
   'UPDATE items SET current_season = ? WHERE id = ?'
 );
 
-function getItem(id) {
-  return getItemStmt.get(id);
+function getItem(id, userId) {
+  return getItemStmt.get(id, userId);
 }
 
 // Per-request memo for the cached-meta disk reads. isCaughtUp() and
@@ -185,7 +187,7 @@ function previousGap(item, season, episode, cache = makeMetaCache()) {
 export default async function progressRoutes(fastify) {
   // GET /api/media/:id/progress → all watched episodes with watch_count.
   fastify.get('/api/media/:id/progress', async (request, reply) => {
-    const item = getItem(request.params.id);
+    const item = getItem(request.params.id, request.user.id);
     if (!item) {
       reply.code(404);
       return { error: 'not found' };
@@ -205,7 +207,7 @@ export default async function progressRoutes(fastify) {
       reply.code(400);
       return { error: 'specials (season 0) are not tracked' };
     }
-    const item = getItem(item_id);
+    const item = getItem(item_id, request.user.id);
     if (!item) {
       reply.code(404);
       return { error: 'item not found' };
@@ -246,7 +248,7 @@ export default async function progressRoutes(fastify) {
       reply.code(400);
       return { error: 'item_id, season, episode are required' };
     }
-    const item = getItem(item_id);
+    const item = getItem(item_id, request.user.id);
     if (!item || item.type !== 'show') {
       reply.code(404);
       return { error: 'show not found' };
@@ -277,7 +279,7 @@ export default async function progressRoutes(fastify) {
       reply.code(400);
       return { error: 'item_id, season, episode are required' };
     }
-    const item = getItem(item_id);
+    const item = getItem(item_id, request.user.id);
     if (!item) {
       reply.code(404);
       return { error: 'item not found' };
@@ -312,7 +314,7 @@ export default async function progressRoutes(fastify) {
       reply.code(400);
       return { error: 'watch_count must be a non-negative integer' };
     }
-    const item = getItem(item_id);
+    const item = getItem(item_id, request.user.id);
     if (!item) {
       reply.code(404);
       return { error: 'item not found' };
@@ -339,8 +341,12 @@ export default async function progressRoutes(fastify) {
   // DELETE /api/progress/:item_id/:season/:episode → fully unwatch.
   fastify.delete(
     '/api/progress/:item_id/:season/:episode',
-    async (request) => {
+    async (request, reply) => {
       const { item_id, season, episode } = request.params;
+      if (!getItem(item_id, request.user.id)) {
+        reply.code(404);
+        return { error: 'item not found' };
+      }
       const apply = db.transaction(() => {
         deleteEpisodeStmt.run(item_id, season, episode);
         scheduleStatsRecompute(db);
@@ -356,6 +362,10 @@ export default async function progressRoutes(fastify) {
     async (request, reply) => {
       const { item_id, season, episode } = request.params;
       const { notes } = request.body || {};
+      if (!getItem(item_id, request.user.id)) {
+        reply.code(404);
+        return { error: 'item not found' };
+      }
       const existing = getProgressIdStmt.get(item_id, season, episode);
       if (!existing) {
         // Allow attaching a note by creating the watched record.
@@ -383,7 +393,7 @@ export default async function progressRoutes(fastify) {
       reply.code(400);
       return { error: 'invalid season' };
     }
-    const item = getItem(item_id);
+    const item = getItem(item_id, request.user.id);
     if (!item) {
       reply.code(404);
       return { error: 'item not found' };
@@ -412,6 +422,10 @@ export default async function progressRoutes(fastify) {
     if (!item_id || season == null) {
       reply.code(400);
       return { error: 'item_id and season are required' };
+    }
+    if (!getItem(item_id, request.user.id)) {
+      reply.code(404);
+      return { error: 'item not found' };
     }
     const apply = db.transaction(() => {
       deleteSeasonStmt.run(item_id, season);

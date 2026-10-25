@@ -15,11 +15,12 @@
 //   • Matching uses the common identifier: TMDB id (present on every record
 //     here), falling back to IMDb id, then title+year.
 //
-// Safe to run repeatedly: item inserts are guarded by the tmdb_id UNIQUE key,
-// episode inserts use ON CONFLICT DO NOTHING, and status only advances — so a
-// re-run converges to the same state. Unresolved titles are logged and skipped.
+// Safe to run repeatedly: an existing title is matched by (user, type, tmdb_id)
+// first, episode inserts use ON CONFLICT DO NOTHING, and status only advances, so
+// a re-run converges to the same state. Unresolved titles are logged and skipped.
 //
-// Run inside the app container (needs the TMDB key + image cache):
+// Run inside the app container (needs the TMDB key + image cache). Titles go into
+// the master's library:
 //   docker compose exec shelfit node server/importKodi.js
 
 import fs from 'node:fs';
@@ -167,17 +168,18 @@ export function advancedStatus(current, target) {
   return ADVANCE[target] > ADVANCE[current] ? target : null;
 }
 
-const findItem = db.prepare('SELECT id, type, status FROM items WHERE tmdb_id = ?');
+const findItem = db.prepare('SELECT id, type, status FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?');
+const masterIdStmt = db.prepare("SELECT id FROM users WHERE role = 'master'");
 const setStatus = db.prepare(
   "UPDATE items SET status = ?, updated_at = datetime('now') WHERE id = ?"
 );
 const insertMovie = db.prepare(
-  `INSERT INTO items (tmdb_id, type, title_it, title_orig, status)
-   VALUES (?, 'movie', ?, ?, ?)`
+  `INSERT INTO items (user_id, tmdb_id, type, title_it, title_orig, status)
+   VALUES (?, ?, 'movie', ?, ?, ?)`
 );
 const insertShow = db.prepare(
-  `INSERT INTO items (tmdb_id, type, title_it, title_orig, status)
-   VALUES (?, 'show', ?, ?, ?)`
+  `INSERT INTO items (user_id, tmdb_id, type, title_it, title_orig, status)
+   VALUES (?, ?, 'show', ?, ?, ?)`
 );
 const insertProgress = db.prepare(
   `INSERT INTO progress (item_id, season, episode, watch_count, watched_at)
@@ -203,7 +205,7 @@ function showStatusFromProgress(itemId, tmdb) {
 }
 
 // --- Movies ---------------------------------------------------------------
-async function importMovies(movies, summary) {
+async function importMovies(movies, summary, userId) {
   for (const m of movies) {
     const tmdb = await resolveTmdb('movie', m);
     if (!tmdb) {
@@ -212,7 +214,7 @@ async function importMovies(movies, summary) {
       continue;
     }
     const watched = m.playcount > 0;
-    const existing = findItem.get(String(tmdb));
+    const existing = findItem.get(userId, 'movie', String(tmdb));
 
     if (existing) {
       if (existing.type !== 'movie') {
@@ -241,6 +243,7 @@ async function importMovies(movies, summary) {
     }
     const status = watched ? 'completed' : 'plan_to_watch';
     insertMovie.run(
+      userId,
       String(tmdb),
       meta.title_it || meta.title_orig || m.title || 'Untitled',
       meta.title_orig || meta.title_it || m.originaltitle || m.title || 'Untitled',
@@ -252,7 +255,7 @@ async function importMovies(movies, summary) {
 }
 
 // --- Shows ----------------------------------------------------------------
-async function importShows(shows, summary) {
+async function importShows(shows, summary, userId) {
   for (const sh of shows) {
     const tmdb = await resolveTmdb('show', sh);
     if (!tmdb) {
@@ -261,7 +264,7 @@ async function importShows(shows, summary) {
       continue;
     }
     const watchedEps = sh.episodes.filter((e) => e.playcount > 0 && e.season >= 1);
-    const existing = findItem.get(String(tmdb));
+    const existing = findItem.get(userId, 'show', String(tmdb));
 
     let itemId;
     let currentStatus;
@@ -284,6 +287,7 @@ async function importShows(shows, summary) {
         continue;
       }
       const info = insertShow.run(
+        userId,
         String(tmdb),
         meta.title_it || meta.title_orig || sh.title || 'Untitled',
         meta.title_orig || meta.title_it || sh.originaltitle || sh.title || 'Untitled',
@@ -322,7 +326,7 @@ async function importShows(shows, summary) {
 }
 
 // --- Entry point ----------------------------------------------------------
-export async function runKodiImport() {
+export async function runKodiImport(userId = masterIdStmt.get().id) {
   if (!fs.existsSync(KODI_XML)) {
     throw new Error(`Kodi export not found at ${KODI_XML}`);
   }
@@ -350,9 +354,9 @@ export async function runKodiImport() {
     conflicts: 0,
   };
 
-  await importMovies(movies, summary);
-  await importShows(shows, summary);
-  await recomputeStats(db);
+  await importMovies(movies, summary, userId);
+  await importShows(shows, summary, userId);
+  await recomputeStats(db, userId);
 
   log(`SUMMARY ${JSON.stringify(summary)}`);
   return summary;

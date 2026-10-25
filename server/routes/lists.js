@@ -1,5 +1,6 @@
 // User-defined lists under /api/lists: CRUD for lists and their members, each
-// list scoped to movies or shows. List items carry cached metadata (title, year,
+// list scoped to movies or shows and owned by the member who made it (another
+// member's list id answers 404). List items carry cached metadata (title, year,
 // poster) read from the local cache and are never re-fetched from TMDB.
 
 import db from '../db.js';
@@ -7,7 +8,7 @@ import { readMetaSync } from '../cache.js';
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
 const itemIdStmt = db.prepare(
-  'SELECT id, rating, owned, watched_in_cinema FROM items WHERE tmdb_id = ?'
+  'SELECT id, rating, owned, watched_in_cinema FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?'
 );
 const previewStmt = db.prepare(
   'SELECT tmdb_id FROM list_items WHERE list_id = ? ORDER BY added_at DESC LIMIT ?'
@@ -16,11 +17,11 @@ const containsStmt = db.prepare(
   'SELECT 1 FROM list_items WHERE list_id = ? AND tmdb_id = ?'
 );
 const insertListStmt = db.prepare(
-  'INSERT INTO lists (name, type, created_at) VALUES (?, ?, ?)'
+  'INSERT INTO lists (user_id, name, type, created_at) VALUES (?, ?, ?, ?)'
 );
-const renameListStmt = db.prepare('UPDATE lists SET name = ? WHERE id = ?');
-const deleteListStmt = db.prepare('DELETE FROM lists WHERE id = ?');
-const getListStmt = db.prepare('SELECT * FROM lists WHERE id = ?');
+const renameListStmt = db.prepare('UPDATE lists SET name = ? WHERE id = ? AND user_id = ?');
+const deleteListStmt = db.prepare('DELETE FROM lists WHERE id = ? AND user_id = ?');
+const getListStmt = db.prepare('SELECT * FROM lists WHERE id = ? AND user_id = ?');
 const listItemsStmt = db.prepare(
   'SELECT tmdb_id, added_at FROM list_items WHERE list_id = ? ORDER BY added_at DESC'
 );
@@ -31,12 +32,12 @@ const removeListItemStmt = db.prepare(
   'DELETE FROM list_items WHERE list_id = ? AND tmdb_id = ?'
 );
 
-// Metadata for a list item, always read from the local cache — never re-fetched.
-// `item_id` is the library row id when the title is in the library (so the UI
+// Metadata for a list item, always read from the local cache, never re-fetched.
+// `item_id` is the row id when the title is in the member's library (so the UI
 // can open its detail page), otherwise null.
-function itemMeta(type, tmdbId) {
+function itemMeta(type, tmdbId, userId) {
   const folder = type === 'movie' ? 'movies' : 'shows';
-  const row = itemIdStmt.get(String(tmdbId));
+  const row = itemIdStmt.get(userId, type, String(tmdbId));
   const item_id = row ? row.id : null;
   // Library-scoped extras (null/false when the title is only a list member and
   // not in the library): user rating + the physical/cinema badge flags. Consumed
@@ -71,16 +72,17 @@ export default async function listRoutes(fastify) {
   // GET /api/lists  (optional ?type=movie|show, ?tmdbId=<id> for membership)
   fastify.get('/api/lists', async (request) => {
     const { type, tmdbId } = request.query;
-    const where = type === 'movie' || type === 'show' ? 'WHERE l.type = ?' : '';
+    const userId = request.user.id;
+    const byType = type === 'movie' || type === 'show';
     const rows = db
       .prepare(
         `SELECT l.id, l.name, l.type, l.created_at, COUNT(li.id) AS count
          FROM lists l LEFT JOIN list_items li ON li.list_id = l.id
-         ${where}
+         WHERE l.user_id = ?${byType ? ' AND l.type = ?' : ''}
          GROUP BY l.id
          ORDER BY l.created_at DESC`
       )
-      .all(...(where ? [type] : []));
+      .all(...(byType ? [userId, type] : [userId]));
 
     const lists = rows.map((l) => {
       const out = {
@@ -91,7 +93,7 @@ export default async function listRoutes(fastify) {
         count: l.count,
         preview: previewStmt
           .all(l.id, PREVIEW_LIMIT)
-          .map((it) => itemMeta(l.type, it.tmdb_id)),
+          .map((it) => itemMeta(l.type, it.tmdb_id, userId)),
       };
       if (tmdbId !== undefined) {
         out.contains = !!containsStmt.get(l.id, Number(tmdbId));
@@ -108,7 +110,7 @@ export default async function listRoutes(fastify) {
       reply.code(400);
       return { error: 'name and valid type are required' };
     }
-    const info = insertListStmt.run(String(name).trim(), type, Date.now());
+    const info = insertListStmt.run(request.user.id, String(name).trim(), type, Date.now());
     reply.code(201);
     return { id: info.lastInsertRowid };
   });
@@ -120,7 +122,7 @@ export default async function listRoutes(fastify) {
       reply.code(400);
       return { error: 'name is required' };
     }
-    const res = renameListStmt.run(String(name).trim(), request.params.id);
+    const res = renameListStmt.run(String(name).trim(), request.params.id, request.user.id);
     if (!res.changes) {
       reply.code(404);
       return { error: 'not found' };
@@ -130,7 +132,7 @@ export default async function listRoutes(fastify) {
 
   // DELETE /api/lists/:id  (cascades to list_items)
   fastify.delete('/api/lists/:id', async (request, reply) => {
-    const res = deleteListStmt.run(request.params.id);
+    const res = deleteListStmt.run(request.params.id, request.user.id);
     if (!res.changes) {
       reply.code(404);
       return { error: 'not found' };
@@ -140,7 +142,7 @@ export default async function listRoutes(fastify) {
 
   // GET /api/lists/:id/items → items with cached metadata.
   fastify.get('/api/lists/:id/items', async (request, reply) => {
-    const list = getListStmt.get(request.params.id);
+    const list = getListStmt.get(request.params.id, request.user.id);
     if (!list) {
       reply.code(404);
       return { error: 'not found' };
@@ -150,13 +152,13 @@ export default async function listRoutes(fastify) {
       id: list.id,
       name: list.name,
       type: list.type,
-      items: rows.map((r) => ({ ...itemMeta(list.type, r.tmdb_id), added_at: r.added_at })),
+      items: rows.map((r) => ({ ...itemMeta(list.type, r.tmdb_id, list.user_id), added_at: r.added_at })),
     };
   });
 
   // POST /api/lists/:id/items  { tmdbId }
   fastify.post('/api/lists/:id/items', async (request, reply) => {
-    const list = getListStmt.get(request.params.id);
+    const list = getListStmt.get(request.params.id, request.user.id);
     if (!list) {
       reply.code(404);
       return { error: 'not found' };
@@ -171,8 +173,13 @@ export default async function listRoutes(fastify) {
   });
 
   // DELETE /api/lists/:id/items/:tmdbId
-  fastify.delete('/api/lists/:id/items/:tmdbId', async (request) => {
-    const res = removeListItemStmt.run(request.params.id, Number(request.params.tmdbId));
+  fastify.delete('/api/lists/:id/items/:tmdbId', async (request, reply) => {
+    const list = getListStmt.get(request.params.id, request.user.id);
+    if (!list) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    const res = removeListItemStmt.run(list.id, Number(request.params.tmdbId));
     return { ok: res.changes > 0 };
   });
 }

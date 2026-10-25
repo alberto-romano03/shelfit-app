@@ -79,6 +79,7 @@ export function client(app, cookie) {
     return { status: res.statusCode, json, body: res.body, headers: res.headers };
   }
   return {
+    cookie,
     get: (url) => call('GET', url),
     post: (url, payload, headers) => call('POST', url, payload, headers),
     patch: (url, payload) => call('PATCH', url, payload),

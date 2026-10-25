@@ -43,22 +43,28 @@ const STATUS_XML_TO_DB = {
 const STATUS_RANK = { plan_to_watch: 0, dropped: 1, paused: 2, watching: 3, completed: 4 };
 
 // --- Prepared statements (compiled once at module load, reused thereafter) ---
+// A backup is one member's library: export reads the signed-in member's rows and
+// lists, import merges into them. Progress and rewatch rows are reached through
+// those items only.
 // Export
 const exportItemsStmt = db.prepare(
-  'SELECT * FROM items ORDER BY type, CAST(tmdb_id AS INTEGER)'
+  'SELECT * FROM items WHERE user_id = ? ORDER BY type, CAST(tmdb_id AS INTEGER)'
 );
 const exportListsStmt = db.prepare(
   `SELECT l.name AS name, l.type AS type, li.tmdb_id AS tmdb_id
      FROM list_items li JOIN lists l ON l.id = li.list_id
+    WHERE l.user_id = ?
     ORDER BY l.created_at`
 );
 const exportProgressStmt = db.prepare(
   'SELECT season, episode, watch_count, watched_at, notes FROM progress WHERE item_id = ? ORDER BY season, episode'
 );
 // Import
-const findItemStmt = db.prepare('SELECT * FROM items WHERE tmdb_id = ?');
-const findListStmt = db.prepare('SELECT id FROM lists WHERE name = ? AND type = ?');
-const insertListStmt = db.prepare('INSERT INTO lists (name, type, created_at) VALUES (?, ?, ?)');
+const findItemStmt = db.prepare('SELECT * FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?');
+const findListStmt = db.prepare('SELECT id FROM lists WHERE user_id = ? AND name = ? AND type = ?');
+const insertListStmt = db.prepare(
+  'INSERT INTO lists (user_id, name, type, created_at) VALUES (?, ?, ?, ?)'
+);
 const addListItemStmt = db.prepare(
   'INSERT OR IGNORE INTO list_items (list_id, tmdb_id, added_at) VALUES (?, ?, ?)'
 );
@@ -67,10 +73,10 @@ const findProgressStmt = db.prepare(
 );
 const insertItemStmt = db.prepare(
   `INSERT INTO items
-     (tmdb_id, type, title_it, title_orig, status, rating, notes, owned, rewatch_count,
+     (user_id, tmdb_id, type, title_it, title_orig, status, rating, notes, owned, rewatch_count,
       favorite, watched_in_cinema, cinema_date, cinema_time, cinema_name, current_season,
       watch_date, updated_at)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`
 );
 // Movie rewatch export + idempotent import (matched on item_id + date so a
 // re-import never duplicates), plus the counter sync from the row count.
@@ -212,10 +218,10 @@ function listsXml(lists) {
 
 // Build the raw string that goes between <library> and </library>, plus the
 // entry count. The checksum is computed over exactly this string.
-function buildLibrary() {
-  const items = exportItemsStmt.all();
+function buildLibrary(userId) {
+  const items = exportItemsStmt.all(userId);
 
-  const listRows = exportListsStmt.all();
+  const listRows = exportListsStmt.all(userId);
   const listMap = new Map(); // `${type}:${tmdb_id}` -> [names]
   for (const r of listRows) {
     const key = `${r.type}:${r.tmdb_id}`;
@@ -239,8 +245,8 @@ function buildLibrary() {
   return { content: `\n${inner}  `, count };
 }
 
-export function buildExportXml() {
-  const { content, count } = buildLibrary();
+export function buildExportXml(userId) {
+  const { content, count } = buildLibrary(userId);
   const checksum = sha256(content);
   const exportedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   return (
@@ -434,7 +440,7 @@ export function validateImport(xml) {
 // Apply the parsed entries. Everything is one transaction; a per-entry failure is
 // recorded and skipped (the rest still commit). Returns a summary + the list of
 // newly-added items so metadata can be fetched in the background afterwards.
-function applyImport(entries) {
+function applyImport(entries, userId) {
   const summary = { added: 0, merged: 0, unchanged: 0, failed: 0 };
   const failures = [];
   const newItems = []; // { id, type, tmdb_id }
@@ -447,9 +453,9 @@ function applyImport(entries) {
 
   function ensureListMembership(entry, changedRef) {
     for (const name of entry.lists || []) {
-      let list = findList.get(name, entry.type);
+      let list = findList.get(userId, name, entry.type);
       if (!list) {
-        const info = insertList.run(name, entry.type, Date.now());
+        const info = insertList.run(userId, name, entry.type, Date.now());
         list = { id: info.lastInsertRowid };
         changedRef.v = true;
       }
@@ -464,7 +470,7 @@ function applyImport(entries) {
         if (!/^\d+$/.test(String(entry.tmdb_id))) {
           throw new Error('invalid tmdb_id');
         }
-        const existing = findItem.get(String(entry.tmdb_id));
+        const existing = findItem.get(userId, entry.type, String(entry.tmdb_id));
 
         if (!existing) {
           // --- New title: insert from the XML, queue a metadata fetch. ---
@@ -487,6 +493,7 @@ function applyImport(entries) {
               : null;
           const watchDateCol = isMovie && entry.watch_date ? entry.watch_date : null;
           const info = insertItemStmt.run(
+            userId,
             String(entry.tmdb_id),
             entry.type,
             title,
@@ -679,8 +686,8 @@ function queueMetadataFetch(newItems, logger) {
 // ======================= ROUTES =======================
 export default async function libraryRoutes(fastify) {
   // GET /api/library/export → the whole library as a downloadable XML file.
-  fastify.get('/api/library/export', async (_request, reply) => {
-    const xml = buildExportXml();
+  fastify.get('/api/library/export', async (request, reply) => {
+    const xml = buildExportXml(request.user.id);
     const date = new Date().toISOString().slice(0, 10);
     reply
       .header('Content-Type', 'application/xml; charset=utf-8')
@@ -702,7 +709,7 @@ export default async function libraryRoutes(fastify) {
     }
     let result;
     try {
-      result = applyImport(check.entries);
+      result = applyImport(check.entries, request.user.id);
     } catch (err) {
       // A catastrophic DB error → the transaction rolled back; nothing was written.
       fastify.log.error(err);

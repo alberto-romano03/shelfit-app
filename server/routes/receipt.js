@@ -15,7 +15,7 @@ const DEFAULT_EPISODE_MINUTES = 30;
 const monthMoviesStmt = db.prepare(
   `SELECT id, tmdb_id, type, title_it, genres
      FROM items
-    WHERE type = 'movie' AND status = 'completed'
+    WHERE user_id = ? AND type = 'movie' AND status = 'completed'
       AND substr(COALESCE(watch_date, updated_at), 1, 7) = ?
     ORDER BY COALESCE(watch_date, updated_at) DESC`
 );
@@ -23,7 +23,7 @@ const monthMoviesStmt = db.prepare(
 const monthRewatchesStmt = db.prepare(
   `SELECT r.id, r.watched_at, i.tmdb_id, i.title_it, i.genres, i.type
      FROM movie_rewatches r JOIN items i ON i.id = r.item_id
-    WHERE i.type = 'movie' AND substr(r.watched_at, 1, 7) = ?
+    WHERE i.user_id = ? AND i.type = 'movie' AND substr(r.watched_at, 1, 7) = ?
     ORDER BY r.watched_at DESC, r.id DESC`
 );
 const monthEpisodesStmt = db.prepare(
@@ -31,7 +31,7 @@ const monthEpisodesStmt = db.prepare(
           i.tmdb_id, i.title_it, i.genres, i.type
      FROM progress p
      JOIN items i ON i.id = p.item_id
-    WHERE i.type = 'show' AND p.season > 0 AND substr(p.watched_at, 1, 7) = ?`
+    WHERE i.user_id = ? AND i.type = 'show' AND p.season > 0 AND substr(p.watched_at, 1, 7) = ?`
 );
 const displayNameStmt = db.prepare('SELECT display_name FROM users WHERE id = ?');
 
@@ -112,7 +112,8 @@ function episodeMinutes(tmdbId, season, episode, seriesRun, seasonCache) {
 // `month` is a parseMonthKey() result; defaults to the current month. Every
 // query below is driven by `key`, and the labels/closing line by year+monthIndex,
 // so a past month builds exactly the receipt that month would have produced.
-// `userId` is the signed-in member, whose name gives the membership initials.
+// `userId` is the signed-in member: the receipt lists their titles only, and
+// their name gives the membership initials.
 async function buildReceipt(month = parseMonthKey(monthKey()), userId) {
   const { key, year, monthIndex } = month;
 
@@ -132,12 +133,12 @@ async function buildReceipt(month = parseMonthKey(monthKey()), userId) {
   };
 
   // --- Movies this month: first watches + each dated rewatch as its own line ---
-  const firstWatches = monthMoviesStmt.all(key).map((r) => movieLine(r, false));
-  const rewatches = monthRewatchesStmt.all(key).map((r) => movieLine(r, true));
+  const firstWatches = monthMoviesStmt.all(userId, key).map((r) => movieLine(r, false));
+  const rewatches = monthRewatchesStmt.all(userId, key).map((r) => movieLine(r, true));
   const movies = [...firstWatches, ...rewatches];
 
   // --- Shows: episodes watched this month, grouped by series ---
-  const epRows = monthEpisodesStmt.all(key);
+  const epRows = monthEpisodesStmt.all(userId, key);
 
   const showMap = new Map();
   for (const r of epRows) {
@@ -200,7 +201,7 @@ async function buildReceipt(month = parseMonthKey(monthKey()), userId) {
 
   // Deterministic "membership number" from lifetime stats + display name, so it
   // feels personal and stays stable between views.
-  const stats = await getStats(db);
+  const stats = await getStats(db, userId);
   const nameRow = displayNameStmt.get(userId);
   const initials =
     ((nameRow && nameRow.display_name) || 'SH')

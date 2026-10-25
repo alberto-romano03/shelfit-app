@@ -13,8 +13,9 @@ import {
 import { imageRamCache } from '../imageRamCache.js';
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
+// Any member's ongoing series; each title once (the cache is shared).
 const ongoingShowsStmt = db.prepare(
-  "SELECT tmdb_id FROM items WHERE type = 'show' AND status IN ('watching','paused')"
+  "SELECT DISTINCT tmdb_id FROM items WHERE type = 'show' AND status IN ('watching','paused')"
 );
 
 // Accept singular or plural type names ('movie'/'movies').

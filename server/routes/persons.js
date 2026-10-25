@@ -23,7 +23,9 @@ const ACCEPTED = new Set(['image/jpeg', 'image/png', 'image/webp']);
 // status / rating / favourite for each, so the person page can show "you and
 // them" (counts, average rating, badges on every card) without shipping the
 // whole library to the browser. items.tmdb_id is TEXT.
-const libraryIdsStmt = db.prepare('SELECT id, tmdb_id, type, title_it, status, rating, favorite FROM items');
+const libraryIdsStmt = db.prepare(
+  'SELECT id, tmdb_id, type, title_it, status, rating, favorite FROM items WHERE user_id = ?'
+);
 
 export default async function personRoutes(fastify) {
   // GET /api/persons/search?q= → TMDB person search for the "pick a person"
@@ -70,7 +72,7 @@ export default async function personRoutes(fastify) {
       return { error: 'person not found' };
     }
     const library = {};
-    for (const row of libraryIdsStmt.all()) {
+    for (const row of libraryIdsStmt.all(request.user.id)) {
       library[`${row.type}:${row.tmdb_id}`] = {
         id: row.id,
         title: row.title_it,

@@ -43,6 +43,15 @@ function plantLegacyDatabase(dataDir) {
     .run().lastInsertRowid;
   db.prepare('INSERT INTO progress (item_id, season, episode) VALUES (?, 1, 1), (?, 1, 2)').run(show, show);
   db.prepare('UPDATE favorites SET movie_item_id = ? WHERE id = 1').run(movie);
+  // Custom artwork as the old schema stored it, a list, and a deleted title so the
+  // items sequence sits above the highest surviving id.
+  db.prepare("UPDATE items SET custom_poster = '2026-05-01 10:00:00' WHERE id = ?").run(movie);
+  const list = db.prepare("INSERT INTO lists (name, type, created_at) VALUES ('Faves', 'movie', 1)").run().lastInsertRowid;
+  db.prepare('INSERT INTO list_items (list_id, tmdb_id, added_at) VALUES (?, 603, 1)').run(list);
+  const gone = db
+    .prepare("INSERT INTO items (tmdb_id, type, title_it, title_orig) VALUES ('999', 'movie', 'Gone', 'Gone')")
+    .run().lastInsertRowid;
+  db.prepare('DELETE FROM items WHERE id = ?').run(gone);
   db.prepare(
     'INSERT INTO magic_links (token, label, created_at, expires_at, use_count) VALUES (?, ?, ?, ?, 0)'
   ).run(MAGIC_TOKEN, 'TV', Date.now(), Date.now() + 86400000);
@@ -78,6 +87,31 @@ describe('v1 migration of a single-user database', () => {
     assert.equal(master.cover_image, 'movie:603');
     assert.equal(master.session_generation, 3);
     assert.doesNotMatch(master.password_hash, /^s2:/, 'the legacy hash is carried over as is');
+  });
+
+  it('gives every library row to the master (v2), keeping ids and sequences', () => {
+    assert.deepEqual(
+      h.db.prepare('SELECT DISTINCT user_id FROM items').all().map((r) => r.user_id),
+      [1]
+    );
+    assert.deepEqual(h.db.prepare('SELECT id FROM items ORDER BY id').all().map((r) => r.id), [1, 2]);
+    assert.deepEqual(
+      { ...h.db.prepare("SELECT seq, typeof(seq) AS t FROM sqlite_sequence WHERE name = 'items'").get() },
+      { seq: 3, t: 'integer' }
+    );
+    assert.equal(h.db.prepare("SELECT COUNT(*) AS c FROM sqlite_sequence WHERE name LIKE '%_new'").get().c, 0);
+    assert.deepEqual(h.db.prepare('SELECT user_id, name FROM lists').all(), [{ user_id: 1, name: 'Faves' }]);
+    assert.equal(h.db.prepare('SELECT COUNT(*) AS c FROM list_items').get().c, 1);
+    assert.deepEqual(h.db.prepare('SELECT user_id, movie_item_id FROM favorites').all(), [
+      { user_id: 1, movie_item_id: 1 },
+    ]);
+    const cols = h.db.prepare('PRAGMA table_info(items)').all().map((c) => c.name);
+    assert.ok(cols.includes('user_id'));
+    assert.ok(!cols.some((c) => c.startsWith('custom_')));
+    assert.deepEqual(h.db.prepare('SELECT type, tmdb_id, slot, updated_at FROM title_art').all(), [
+      { type: 'movie', tmdb_id: '603', slot: 'poster', updated_at: '2026-05-01 10:00:00' },
+    ]);
+    assert.deepEqual(h.db.pragma('foreign_key_check'), []);
   });
 
   it('drops the old profile table and auth settings, keeps everything else', () => {

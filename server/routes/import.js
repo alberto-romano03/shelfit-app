@@ -16,10 +16,11 @@ import { runExtrasImport } from '../importExtras.js';
 const NOT_FOUND_PATH = path.join(IMPORT_DIR, 'not_found.log');
 
 // --- Prepared statements (compiled once at module load, reused thereafter) ---
-const findLocalItemStmt = db.prepare('SELECT * FROM items WHERE tmdb_id = ?');
+// An import fills the library of the member who started it (`userId`).
+const findLocalItemStmt = db.prepare('SELECT * FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?');
 const insertShowStmt = db.prepare(
-  `INSERT INTO items (tmdb_id, type, title_it, title_orig, status)
-   VALUES (?, 'show', ?, ?, 'watching')`
+  `INSERT INTO items (user_id, tmdb_id, type, title_it, title_orig, status)
+   VALUES (?, ?, 'show', ?, ?, 'watching')`
 );
 const insertProgressStmt = db.prepare(
   `INSERT INTO progress (item_id, season, episode, watch_count, watched_at)
@@ -31,19 +32,19 @@ const countWatchedStmt = db.prepare(
 );
 const setStatusStmt = db.prepare('UPDATE items SET status = ? WHERE id = ?');
 const insertWatchedMovieStmt = db.prepare(
-  `INSERT INTO items (tmdb_id, type, title_it, title_orig, status, updated_at)
-   VALUES (?, 'movie', ?, ?, 'completed', COALESCE(?, datetime('now')))`
+  `INSERT INTO items (user_id, tmdb_id, type, title_it, title_orig, status, updated_at)
+   VALUES (?, ?, 'movie', ?, ?, 'completed', COALESCE(?, datetime('now')))`
 );
 const insertRewatchMovieStmt = db.prepare(
-  `INSERT INTO items (tmdb_id, type, title_it, title_orig, status, rewatch_count, updated_at)
-   VALUES (?, 'movie', ?, ?, 'completed', 1, COALESCE(?, datetime('now')))`
+  `INSERT INTO items (user_id, tmdb_id, type, title_it, title_orig, status, rewatch_count, updated_at)
+   VALUES (?, ?, 'movie', ?, ?, 'completed', 1, COALESCE(?, datetime('now')))`
 );
 const incrementRewatchStmt = db.prepare(
   'UPDATE items SET rewatch_count = rewatch_count + 1 WHERE id = ?'
 );
 const insertPlanMovieStmt = db.prepare(
-  `INSERT INTO items (tmdb_id, type, title_it, title_orig, status)
-   VALUES (?, 'movie', ?, ?, 'plan_to_watch')`
+  `INSERT INTO items (user_id, tmdb_id, type, title_it, title_orig, status)
+   VALUES (?, ?, 'movie', ?, ?, 'plan_to_watch')`
 );
 
 // The "actions" file (mixed watch/movie/series rows) and the "episodes" file
@@ -131,8 +132,8 @@ function logNotFound(line) {
   job.not_found += 1;
 }
 
-function findLocalItem(tmdbId) {
-  return findLocalItemStmt.get(String(tmdbId));
+function findLocalItem(userId, type, tmdbId) {
+  return findLocalItemStmt.get(userId, type, String(tmdbId));
 }
 
 // --- Movie helpers --------------------------------------------------------
@@ -178,7 +179,7 @@ function totalRealEpisodes(tmdbId) {
 
 // --- Main import routine --------------------------------------------------
 
-async function runImport() {
+async function runImport(userId) {
   // Space every TMDB call for the duration of the job to stay under the API limit.
   setMinInterval(TMDB_IMPORT_INTERVAL_MS);
 
@@ -309,7 +310,7 @@ async function runImport() {
       continue;
     }
 
-    if (findLocalItem(tmdbId)) {
+    if (findLocalItem(userId, 'show', tmdbId)) {
       job.skipped += 1;
       job.processed += 1;
       continue;
@@ -332,6 +333,7 @@ async function runImport() {
     // exist (findLocalItem above), that half-import would never self-heal.
     const importOne = db.transaction(() => {
       const info = insertShowStmt.run(
+        userId,
         String(tmdbId),
         meta.title_it || meta.title_orig || row.series_name,
         meta.title_orig || meta.title_it || row.series_name
@@ -389,7 +391,7 @@ async function runImport() {
       job.processed += 1;
       continue;
     }
-    if (findLocalItem(tmdbId)) {
+    if (findLocalItem(userId, 'movie', tmdbId)) {
       job.skipped += 1;
       job.processed += 1;
       continue;
@@ -404,6 +406,7 @@ async function runImport() {
     }
     const watchDate = row.watch_date || row.created_at || null;
     insertWatchedMovieStmt.run(
+      userId,
       String(tmdbId),
       meta.title_it || meta.title_orig || name,
       meta.title_orig || meta.title_it || name,
@@ -423,7 +426,7 @@ async function runImport() {
       job.processed += 1;
       continue;
     }
-    let item = findLocalItem(tmdbId);
+    let item = findLocalItem(userId, 'movie', tmdbId);
     if (!item) {
       // Not previously watched in the export — add it as completed first.
       let meta;
@@ -435,6 +438,7 @@ async function runImport() {
         continue;
       }
       insertRewatchMovieStmt.run(
+        userId,
         String(tmdbId),
         meta.title_it || meta.title_orig || name,
         meta.title_orig || meta.title_it || name,
@@ -457,7 +461,7 @@ async function runImport() {
       job.processed += 1;
       continue;
     }
-    if (findLocalItem(tmdbId)) {
+    if (findLocalItem(userId, 'movie', tmdbId)) {
       job.skipped += 1;
       job.processed += 1;
       continue;
@@ -471,6 +475,7 @@ async function runImport() {
       continue;
     }
     insertPlanMovieStmt.run(
+      userId,
       String(tmdbId),
       meta.title_it || meta.title_orig || name,
       meta.title_orig || meta.title_it || name
@@ -480,7 +485,7 @@ async function runImport() {
   }
 
   // Update stats once at the end.
-  await recomputeStats(db);
+  await recomputeStats(db, userId);
 
   setMinInterval(0);
   job.current_title = null;
@@ -557,7 +562,7 @@ export default async function importRoutes(fastify) {
     const jobId = `import_${Date.now()}`;
     resetJob(jobId);
     // Run in the background; never let a failure crash the process.
-    runImport().catch((err) => {
+    runImport(request.user.id).catch((err) => {
       fastify.log.error(`import failed: ${err.message}`);
       setMinInterval(0);
       job.running = false;
@@ -583,7 +588,7 @@ export default async function importRoutes(fastify) {
     extrasJob.finished = false;
     extrasJob.summary = null;
     extrasJob.started_at = Date.now();
-    runExtrasImport()
+    runExtrasImport(request.user.id)
       .then((s) => {
         extrasJob.summary = s;
       })

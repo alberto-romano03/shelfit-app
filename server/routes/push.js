@@ -10,6 +10,7 @@ import {
   getSubscription,
   setSubscription,
   clearSubscription,
+  getPushOwner,
   sendTest,
 } from '../push.js';
 
@@ -27,11 +28,16 @@ function validSubscription(s) {
 
 export default async function pushRoutes(fastify) {
   // Config the client needs to render the toggle and subscribe.
-  fastify.get('/api/push/config', async () => ({
-    enabled: isPushEnabled(),
-    subscribed: !!getSubscription(),
-    publicKey: getVapidPublicKey(),
-  }));
+  // The one subscription belongs to whoever turned notifications on: everyone
+  // else sees the toggle off, as on a device that never subscribed.
+  fastify.get('/api/push/config', async (request) => {
+    const mine = getPushOwner() === request.user.id;
+    return {
+      enabled: mine && isPushEnabled(),
+      subscribed: mine && !!getSubscription(),
+      publicKey: getVapidPublicKey(),
+    };
+  });
 
   // Store a browser subscription and enable notifications.
   fastify.post('/api/push/subscribe', async (request, reply) => {
@@ -40,20 +46,25 @@ export default async function pushRoutes(fastify) {
       reply.code(400);
       return { error: 'invalid subscription' };
     }
-    setSubscription(sub);
+    setSubscription(sub, request.user.id);
     setPushEnabled(true);
     return { ok: true };
   });
 
   // Remove the subscription and disable notifications entirely.
-  fastify.post('/api/push/unsubscribe', async () => {
+  fastify.post('/api/push/unsubscribe', async (request) => {
+    if (getPushOwner() !== request.user.id) return { ok: true }; // not theirs to remove
     clearSubscription();
     setPushEnabled(false);
     return { ok: true };
   });
 
   // Send a test notification so the user can confirm delivery works.
-  fastify.post('/api/push/test', async (request) => {
+  fastify.post('/api/push/test', async (request, reply) => {
+    if (getPushOwner() !== request.user.id) {
+      reply.code(409);
+      return { error: 'notifications are not enabled for this account' };
+    }
     return sendTest(request.log);
   });
 }
