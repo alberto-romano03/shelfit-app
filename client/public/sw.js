@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v124'; // bumped: edit-profile modal redesign
+const CACHE = 'shelfit-shell-v125'; // bumped: Now Playing toast restyle
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

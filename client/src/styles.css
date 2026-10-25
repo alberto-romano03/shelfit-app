@@ -9613,22 +9613,27 @@ textarea.notes:focus,
   .np-indicator-label { animation: none; }
 }
 
-/* --- Now Playing toast (slides down from above, settles below the header) --- */
+/* --- Now Playing toast (slides down from above, settles below the header) ---
+   A sibling of the app's other toasts: --surface-elevated, the same float
+   shadow, no outline (toasts separate by tone and shadow alone). An inner
+   padding keeps the poster inside the card, and the outer radius is the
+   poster's radius plus that padding, so the two curves are concentric. */
 .np-toast {
-  --poster-w: 84px;
+  --poster-w: 60px;
+  --np-pad: 10px;
   position: fixed;
   top: 72px; /* refined to the header's bottom on open (JS) */
   left: 0;
   right: 0;
   margin-inline: auto;
-  width: min(440px, calc(100% - 24px));
+  width: min(420px, calc(100% - 24px));
   z-index: 300;
   display: flex;
-  align-items: stretch;
-  overflow: hidden; /* poster clipped by the toast radius */
+  align-items: center;
+  gap: 12px;
+  padding: var(--np-pad);
   background: var(--surface-elevated);
-  border: 1px solid color-mix(in srgb, #17b2e8 22%, var(--border));
-  border-radius: var(--r-lg); /* same family as cards / other toasts */
+  border-radius: calc(var(--r-sm) + var(--np-pad));
   box-shadow: 0 8px 28px var(--shadow);
   /* Vertical equivalent of the server toast: slide down from above. */
   transform: translateY(calc(-100% - 120px));
@@ -9644,14 +9649,16 @@ textarea.notes:focus,
 .np-toast.dismissing {
   transition: transform var(--dur-medium) var(--ease-in), opacity var(--dur-medium) var(--ease-in);
 }
-/* A true 2:3 poster (84 x 126) that sets the card's height. It used to stretch
-   to the text column and crop into a narrow strip. */
+/* A true 2:3 poster (60 x 90) at the small media radius. The card already
+   floats, so the poster gets only a whisper of depth (half the --shadow token,
+   tight to the edge) rather than a lift of its own. */
 .np-toast-poster {
   flex: 0 0 var(--poster-w);
   width: var(--poster-w);
-  aspect-ratio: 2 / 3; /* flush left edges */
-  align-self: flex-start;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--r-sm);
   background: var(--surface);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--shadow) 50%, transparent);
   overflow: hidden;
 }
 .np-toast-poster img {
@@ -9665,7 +9672,7 @@ textarea.notes:focus,
   min-width: 0;
   display: flex;
   align-items: stretch;
-  padding: 11px 14px;
+  padding-right: 4px;
 }
 .np-toast-text {
   flex: 1 1 auto;
@@ -9673,10 +9680,11 @@ textarea.notes:focus,
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
 }
-/* Which Kodi is playing: the tv glyph + the instance's name, in the app's
-   micro-label type. Grey while Kodi is paused. */
+/* Which Kodi is playing: the instance's name in the app's micro-label type.
+   Only the tv glyph keeps Kodi's blue (the avatar ring's and header label's),
+   as a quiet cue; it goes grey while Kodi is paused. */
 .np-toast-source {
   display: flex;
   align-items: center;
@@ -9684,13 +9692,14 @@ textarea.notes:focus,
   min-width: 0;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1.2px;
+  letter-spacing: 1px;
   text-transform: uppercase;
-  color: #17b2e8;
+  color: var(--text-secondary);
 }
 .np-toast-source .btn-lucide {
   width: 14px;
   height: 14px;
+  color: #17b2e8;
 }
 .np-toast-source-name {
   min-width: 0;
@@ -9698,20 +9707,19 @@ textarea.notes:focus,
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.np-toast.paused .np-toast-source {
+.np-toast.paused .np-toast-source .btn-lucide {
   color: var(--text-secondary);
 }
-/* The content's name, large enough to fill the card beside the poster. */
 .np-toast-title {
   font-weight: 700;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .np-toast-meta {
-  margin-top: -3px;
+  margin-top: -2px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -9720,18 +9728,19 @@ textarea.notes:focus,
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Audio (language · codec) and subtitles: two small pills with their glyphs. */
+/* Audio (language · codec) and subtitles: two flat pills with their glyphs, on
+   the --surface step below the card. */
 .np-toast-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-top: 2px;
 }
 .np-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
+  padding: 3px 9px;
   border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--text-secondary);
