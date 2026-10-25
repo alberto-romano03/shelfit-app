@@ -7,14 +7,19 @@ const __dirname = path.dirname(__filename);
 // Project root: server/ lives directly under it.
 export const ROOT_DIR = path.resolve(__dirname, '..');
 
-// Everything persistent lives under data/ (the Docker volume).
-export const DATA_DIR = path.join(ROOT_DIR, 'data');
+// Everything persistent lives under data/ (the Docker volume). SHELFIT_DATA_DIR
+// points it elsewhere; the test suite uses it so a run can never touch real data.
+export const DATA_DIR = process.env.SHELFIT_DATA_DIR
+  ? path.resolve(process.env.SHELFIT_DATA_DIR)
+  : path.join(ROOT_DIR, 'data');
 export const DB_PATH = path.join(DATA_DIR, 'shelfit.db');
 export const CACHE_DIR = path.join(DATA_DIR, 'cache');
 export const BADGES_DIR = path.join(DATA_DIR, 'badges');
 export const IMPORT_DIR = path.join(DATA_DIR, 'import');
 // Holds a single user-uploaded profile photo (fixed name, replaced on update).
 export const PROFILE_DIR = path.join(DATA_DIR, 'profile');
+// Database snapshots, incl. the automatic one taken before every schema migration.
+export const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 export const CLIENT_DIST = path.join(ROOT_DIR, 'client', 'dist');
 
 // Parse a positive-integer env var, falling back (with a warning) to `fallback`

@@ -19,6 +19,14 @@ RUN npm run build
 # Drop dev dependencies but keep the already-compiled better-sqlite3 binary.
 RUN npm prune --omit=dev
 
+# ---- Test stage: server test suite, never part of the runtime image ---------
+# docker build --target test -t shelfit-test . && docker run --rm shelfit-test
+# (node:test is built in, so the pruned dependencies are all it needs.)
+FROM build AS test
+COPY server/ ./server/
+COPY test/ ./test/
+CMD ["node", "--test", "test/**/*.test.js"]
+
 # ---- Runtime stage: slim image, no build tools --------------------------
 FROM node:22-alpine AS runtime
 WORKDIR /app

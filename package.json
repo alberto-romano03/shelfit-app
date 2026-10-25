@@ -8,6 +8,8 @@
     "dev": "concurrently \"node server/index.js\" \"vite client/\"",
     "build": "vite build client/ --outDir ../client/dist",
     "start": "node server/index.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "docker:test": "docker build --target test -t shelfit-test . && docker run --rm shelfit-test",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:logs": "docker compose logs -f"

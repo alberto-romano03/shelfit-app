@@ -9,6 +9,9 @@ import {
   IMPORT_DIR,
   PROFILE_DIR,
 } from './config.js';
+import { backupDatabase } from './backup.js';
+import { runMigrations } from './migrate.js';
+import { MIGRATIONS } from './migrations.js';
 
 // Ensure all persistent directories exist before opening the database.
 for (const dir of [
@@ -26,6 +29,8 @@ for (const dir of [
   fs.mkdirSync(dir, { recursive: true });
 }
 
+// A database created by this boot has nothing to back up before migrating.
+const isNewDatabase = !fs.existsSync(DB_PATH);
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -301,5 +306,15 @@ ensureColumn('profile', 'cover_image', 'TEXT');
     }
   })();
 }
+
+// --- Versioned migrations -------------------------------------------------
+// Everything above is the baseline (schema v0). Later schema changes live in
+// migrations.js and are applied here, once each, behind an automatic backup.
+// A failure throws, which stops the boot with the database left untouched.
+runMigrations(db, MIGRATIONS, {
+  backup: isNewDatabase ? null : backupDatabase,
+  // eslint-disable-next-line no-console
+  log: (msg) => console.log(msg),
+});
 
 export default db;
