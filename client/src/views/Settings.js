@@ -138,7 +138,7 @@ export default async function Settings(container) {
     } else {
       wrap.append(el('div', { class: 'muted', text: t('settings.cache.empty') }));
     }
-    wrap.append(row(t('settings.cache.oldest'), data.oldest_cached_at ? formatDate(data.oldest_cached_at) : '—'));
+    wrap.append(row(t('settings.cache.oldest'), data.oldest_cached_at ? formatDate(data.oldest_cached_at) : '–'));
   }
 
   cacheSection.append(
@@ -424,7 +424,7 @@ export default async function Settings(container) {
     }
     return el('div', {
       class: 'import-file warn',
-      text: `⚠ ${f.name} (${size}) — ${f.issue || t('settings.tvtime.appearsInvalid')}`,
+      text: `⚠ ${f.name} (${size}): ${f.issue || t('settings.tvtime.appearsInvalid')}`,
     });
   }
   function renderImportFiles(wrap, files) {
@@ -1082,7 +1082,7 @@ export default async function Settings(container) {
       wrap.append(el('div', { class: 'backup-fail-head', text: t('settings.backup.failHead', { n: failures.length }) }));
       const list = el('ul', { class: 'backup-fail-list' });
       failures.slice(0, 30).forEach((f) =>
-        list.append(el('li', { text: `${f.title} — ${f.reason}` }))
+        list.append(el('li', { text: `${f.title}: ${f.reason}` }))
       );
       wrap.append(list);
     }

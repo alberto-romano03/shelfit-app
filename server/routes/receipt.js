@@ -47,7 +47,7 @@ const CLOSINGS = [
   'PLEASE REWIND BEFORE RETURNING',
   'BE KIND, PLEASE REWIND',
   'DROP IN THE NIGHT SLOT AFTER HOURS',
-  'NO LATE FEES THIS MONTH — ENJOY!',
+  'NO LATE FEES THIS MONTH. ENJOY!',
   'SEE YOU NEXT FRIDAY NIGHT',
 ];
 
@@ -243,7 +243,7 @@ export default async function receiptRoutes(fastify) {
     if (requested === undefined || requested === '') return buildReceipt();
     const month = parseMonthKey(requested);
     if (!month) {
-      return reply.code(400).send({ error: 'Invalid month — expected a past YYYY-MM' });
+      return reply.code(400).send({ error: 'Invalid month: expected a past YYYY-MM' });
     }
     return buildReceipt(month);
   });

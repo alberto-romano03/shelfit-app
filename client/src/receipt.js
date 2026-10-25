@@ -229,7 +229,7 @@ function buildRows(data) {
   if (data.movies.length) {
     rows.push({ type: 'sect', text: t('receipt.sectMovies') });
     data.movies.slice(0, CAP).forEach((m) => {
-      const right = m.minutes > 0 ? t('receipt.minutes', { minutes: m.minutes }) : '—';
+      const right = m.minutes > 0 ? t('receipt.minutes', { minutes: m.minutes }) : '–';
       rows.push(...itemRows(m.title, right, m.times, FSIZE.item, m.rewatch));
     });
     if (data.movies.length > CAP)
@@ -237,7 +237,7 @@ function buildRows(data) {
   }
 
   if (data.movies.length && data.shows.length)
-    rows.push({ type: 'sep', text: '·—·—·—·—·—·—·—·—·—·' });
+    rows.push({ type: 'sep', text: '·–·–·–·–·–·–·–·–·–·' });
 
   if (data.shows.length) {
     rows.push({ type: 'sect', text: t('receipt.sectShows') });

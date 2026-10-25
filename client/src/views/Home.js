@@ -724,7 +724,7 @@ export default async function Home(container) {
       if (isAbortError(err)) return;
       if (!isServerReachable()) markDegraded();
       if (!cached.movies && !cached.eps) {
-        Object.values(statValueEls).forEach((v) => (v.textContent = '—'));
+        Object.values(statValueEls).forEach((v) => (v.textContent = '–'));
       }
     });
 

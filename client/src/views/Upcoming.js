@@ -141,7 +141,7 @@ function daysUntil(dateStr) {
 
 function episodeSub(season, episode, title) {
   const label = epLabel(season, episode);
-  return title ? `${label} — ${title}` : label;
+  return title ? `${label} · ${title}` : label;
 }
 
 // Watch Next card: next unwatched aired episode of a series in progress. Season

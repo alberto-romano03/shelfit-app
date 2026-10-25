@@ -263,7 +263,7 @@ export default async function Season(container, params) {
         el('div', { class: 'thumb' }),
         el('div', { class: 'ep-main' }, [
           el('div', { class: 'ep-title' }, [
-            el('span', { class: 'ep-title-text', text: 'S01 E01 — Sample Episode' }),
+            el('span', { class: 'ep-title-text', text: 'S01 E01 · Sample Episode' }),
           ]),
           el('div', { class: 'ep-sub', text: '1 Jan 2020 · 45 min' }),
         ]),
@@ -327,7 +327,7 @@ export default async function Season(container, params) {
       currentEp = ep;
       retryHandler = null;
       node.classList.remove('is-skel', 'is-retry');
-      titleText.textContent = `${epLabel(data.season_number, ep.episode_number)} — ${ep.name || ''}`;
+      titleText.textContent = `${epLabel(data.season_number, ep.episode_number)} · ${ep.name || ''}`;
       noteDot.style.display = ep.notes ? '' : 'none';
       const bits = [];
       if (ep.air_date) bits.push(formatDate(ep.air_date));

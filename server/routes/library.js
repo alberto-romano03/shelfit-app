@@ -388,7 +388,7 @@ function mergeNotes(existing, imported) {
   if (!a) return b || null;
   if (!b) return a || null;
   if (a.includes(b)) return a; // idempotent re-import
-  return `${a}\n\n— imported —\n${b}`;
+  return `${a}\n\n(imported)\n${b}`;
 }
 
 // Validate the whole file WITHOUT touching the DB. Returns { ok, error?, entries?, version? }.
@@ -418,14 +418,14 @@ export function validateImport(xml) {
   const content = xml.slice(libStart + '<library>'.length, libEnd);
 
   if (!checksum || sha256(content) !== checksum) {
-    return { ok: false, error: 'Checksum mismatch — the file appears corrupted or edited.' };
+    return { ok: false, error: 'Checksum mismatch: the file appears corrupted or edited.' };
   }
 
   const entries = parseEntries(content);
   if (!Number.isNaN(declaredCount) && declaredCount !== entries.length) {
     return {
       ok: false,
-      error: `Entry count mismatch (header says ${declaredCount}, found ${entries.length}) — the file may be truncated.`,
+      error: `Entry count mismatch (header says ${declaredCount}, found ${entries.length}). The file may be truncated.`,
     };
   }
   return { ok: true, version, entries };
@@ -707,7 +707,7 @@ export default async function libraryRoutes(fastify) {
       // A catastrophic DB error → the transaction rolled back; nothing was written.
       fastify.log.error(err);
       reply.code(500);
-      return { error: 'Import failed and was rolled back — no changes were made.' };
+      return { error: 'Import failed and was rolled back: no changes were made.' };
     }
     queueMetadataFetch(result.newItems, fastify.log);
     return {

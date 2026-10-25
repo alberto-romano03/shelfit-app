@@ -280,7 +280,7 @@ function bentoCell(area, iconName, primary, secondary, opts = {}) {
   return cell;
 }
 function statusCell(st, area = 'status', shade) {
-  const s = st || { label: '—', tone: 'grey', icon: 'circle-check' };
+  const s = st || { label: '–', tone: 'grey', icon: 'circle-check' };
   const cls = `bento-cell bento-status bento-status--${s.tone}` + (shade ? ` bento-shade-${shade}` : '');
   const cell = el('div', { class: cls }, [
     lucideIcon(s.icon, 'bento-icon'),
@@ -293,7 +293,7 @@ function statusCell(st, area = 'status', shade) {
 function langCell(langCode, countryCode, secondaryKind) {
   const flag = flagEmoji(countryCode);
   const code = (langCode || '').toUpperCase();
-  const primary = [flag, code].filter(Boolean).join(' ') || '—';
+  const primary = [flag, code].filter(Boolean).join(' ') || '–';
   const secondary =
     secondaryKind === 'region' ? intlName(countryCode, 'region') : intlName(langCode, 'language');
   return bentoCell('lang', null, primary, secondary || '', { tone: 'blue', shade: 'light' });
@@ -309,10 +309,10 @@ function buildMovieBento(meta) {
     // Production name gets a touch more visual weight (emphasis). Palette roles:
     // the big production cell is the dark anchor; director + status are mid; the
     // small detail cells recede in light.
-    bentoCell('status', 'clapperboard', meta.production_company || '—', t('detail.bento.production'), { tone: 'teal', emphasis: true, shade: 'dark' }),
-    bentoCell('age', 'shield', cert || '—', t('detail.bento.ageRating'), { tone: 'purple', shade: 'light' }),
+    bentoCell('status', 'clapperboard', meta.production_company || '–', t('detail.bento.production'), { tone: 'teal', emphasis: true, shade: 'dark' }),
+    bentoCell('age', 'shield', cert || '–', t('detail.bento.ageRating'), { tone: 'purple', shade: 'light' }),
     langCell(meta.original_language, meta.origin_country, 'language'),
-    bentoCell('dir', 'user-round', meta.director || '—', t('detail.bento.director'), { tone: 'pink', shade: 'mid' }),
+    bentoCell('dir', 'user-round', meta.director || '–', t('detail.bento.director'), { tone: 'pink', shade: 'mid' }),
     statusCell(movieStatus(meta.status), 'prod', 'mid'),
   ];
   // Budget/revenue collapse: either missing → the other fills; both missing →
@@ -338,19 +338,19 @@ function buildShowBento(meta) {
   const seasonsText =
     seasons > 0
       ? `${t('detail.bento.seasonCount', { n: seasons })} · ${t('detail.bento.epCount', { n: eps })}`
-      : '—';
+      : '–';
   const creators = Array.isArray(meta.created_by) ? meta.created_by.slice(0, 2).join(', ') : '';
 
   const cells = [
     // Rotated content (boxes unchanged): creators → tall box, seasons → wide box,
     // status → the small box. Palette roles: the big "Created by" cell is the dark
     // anchor; network + release status are mid; the rest recede in light.
-    bentoCell('status', 'users', creators || '—', t('detail.bento.createdBy'), { tone: 'orange', shade: 'dark' }),
-    bentoCell('network', 'tv', meta.network || '—', t('detail.bento.network'), { tone: 'pink', shade: 'mid' }),
+    bentoCell('status', 'users', creators || '–', t('detail.bento.createdBy'), { tone: 'orange', shade: 'dark' }),
+    bentoCell('network', 'tv', meta.network || '–', t('detail.bento.network'), { tone: 'pink', shade: 'mid' }),
     langCell(meta.original_language, meta.origin_country, 'region'),
     statusCell(showStatus(meta.status), 'seasons', 'mid'),
     bentoCell('creators', 'layers', seasonsText, t('common.seasons'), { tone: 'indigo', shade: 'light' }),
-    bentoCell('lastaired', 'calendar-check', fmtLongDate(meta.last_air_date) || '—', t('detail.bento.lastAired'), { tone: 'cyan', shade: 'light' }),
+    bentoCell('lastaired', 'calendar-check', fmtLongDate(meta.last_air_date) || '–', t('detail.bento.lastAired'), { tone: 'cyan', shade: 'light' }),
   ];
   return el('div', { class: 'bento bento--tv' }, cells);
 }

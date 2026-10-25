@@ -38,12 +38,12 @@ const TICKET_SORTS = {
   newest: {
     cmp: (a, b) =>
       shownDate(b).localeCompare(shownDate(a)) || (b.cinemaTime || '').localeCompare(a.cinemaTime || ''),
-    group: (tk) => shownDate(tk).slice(0, 4) || '—',
+    group: (tk) => shownDate(tk).slice(0, 4) || '–',
   },
   oldest: {
     cmp: (a, b) =>
       shownDate(a).localeCompare(shownDate(b)) || (a.cinemaTime || '').localeCompare(b.cinemaTime || ''),
-    group: (tk) => shownDate(tk).slice(0, 4) || '—',
+    group: (tk) => shownDate(tk).slice(0, 4) || '–',
   },
   title: {
     cmp: (a, b) => titleCollator().compare(a.title || '', b.title || ''),
