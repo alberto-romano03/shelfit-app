@@ -6289,7 +6289,10 @@ img.mood-emoji {
   min-width: 0;
   height: 42px;
   box-sizing: border-box;
-  padding: 0 10px;
+  /* Tight sides: the themed faces (Georgia, Rockwell…) run wider than the UI
+     font, and long Italian names like "Documentario" need every pixel of a
+     third of the row before they ellipsize. */
+  padding: 0 6px;
   line-height: 42px;
   text-align: center;
   white-space: nowrap;

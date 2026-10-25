@@ -61,9 +61,43 @@ const ERAS = [
   ['latest', 'dust.era.latest', 'dust.era.latestRange', 'era-latest'],
 ];
 
-// Thematic font per genre (CSS class → font stack in styles.css).
-function genreFontClass(name) {
-  const n = name.toLowerCase();
+// Thematic font per genre (CSS class → font stack in styles.css), keyed by TMDB
+// genre id. The ids are the same in every language, while the names arrive in the
+// configured TMDB language (Italian by default), so matching names alone left
+// "Commedia", "Avventura", "Azione"… on the default font. Movie and TV ids differ
+// for a few genres (e.g. 878 vs 10765), so both are listed.
+const GENRE_FONTS = {
+  27: 'gf-horror', // Horror
+  53: 'gf-horror', // Thriller
+  37: 'gf-western', // Western (movie + tv)
+  10749: 'gf-romance', // Romance
+  36: 'gf-classic', // History
+  99: 'gf-classic', // Documentary
+  10752: 'gf-classic', // War
+  10768: 'gf-classic', // War & Politics (tv)
+  878: 'gf-scifi', // Science Fiction
+  14: 'gf-scifi', // Fantasy
+  10765: 'gf-scifi', // Sci-Fi & Fantasy (tv)
+  16: 'gf-fun', // Animation
+  35: 'gf-fun', // Comedy
+  10751: 'gf-fun', // Family
+  10762: 'gf-fun', // Kids (tv)
+  10402: 'gf-fun', // Music
+  10764: 'gf-fun', // Reality (tv)
+  80: 'gf-noir', // Crime
+  9648: 'gf-noir', // Mystery
+  28: 'gf-action', // Action
+  12: 'gf-action', // Adventure
+  10759: 'gf-action', // Action & Adventure (tv)
+  18: 'gf-drama', // Drama
+  10766: 'gf-drama', // Soap (tv)
+};
+
+// `g` is a TMDB genre ({ id, name }). The id decides; the English-name match is
+// only a fallback for an id TMDB might add later.
+function genreFontClass(g) {
+  if (GENRE_FONTS[g.id]) return GENRE_FONTS[g.id];
+  const n = String(g.name || '').toLowerCase();
   if (/horror|thriller/.test(n)) return 'gf-horror';
   if (/western/.test(n)) return 'gf-western';
   if (/romance/.test(n)) return 'gf-romance';
@@ -138,8 +172,10 @@ export function openDustItOff() {
       }
       list.forEach((g) => {
         const c = el('button', {
-          class: `genre-chip ${genreFontClass(g.name)}` + (state.genres.has(g.id) ? ' active' : ''),
-          text: g.name === 'Science Fiction' ? 'SCI-FI' : g.name, // display-only shortening
+          class: `genre-chip ${genreFontClass(g)}` + (state.genres.has(g.id) ? ' active' : ''),
+          // Display-only shortening: the sci-fi face is wide and tracked, so the
+          // long name ("Science Fiction", "Fantascienza") would ellipsize.
+          text: g.id === 878 ? 'SCI-FI' : g.name,
         });
         c.addEventListener('click', () => {
           if (state.genres.has(g.id)) {
