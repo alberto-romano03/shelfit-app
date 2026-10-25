@@ -39,10 +39,10 @@ import {
   segmentedControl,
   fadeSwap,
   lucideIcon,
+  stateBlock,
 } from '../ui.js';
 import { imageCache } from '../imageCache.js';
 import { isServerReachable, markDegraded } from '../network.js';
-import { withBase } from '../basePath.js';
 import { initSnow } from '../snow.js';
 import { t, locale } from '../i18n.js';
 
@@ -808,36 +808,27 @@ function makeAvatarPlaceholder(name) {
 }
 
 // --- Profile customization modal -----------------------------------------
-// Keep long favourite-poster grids from making the Edit-profile modal huge:
-// show at most `limit` cells, hide the rest behind a "Show all N" toggle. The
-// currently-selected cell is always kept visible so the active choice never
-// disappears. Returns a toggle button to place under the grid, plus refresh()
-// to re-apply after cells are added (e.g. a freshly uploaded custom photo).
-function collapsibleGrid(grid, limit) {
-  let expanded = false;
-  const toggle = el('button', {
-    class: 'link-btn collapse-toggle',
-    style: { display: 'none' },
+// A live preview of the Home header (cover, avatar, inline-editable name,
+// badge) sits pinned at the top with a segmented control [Photo | Cover |
+// Badge]. Only the active picker scrolls below it; Cancel / Save stay pinned in
+// the footer (the split modal). Each picker's tiles are shaped like what they
+// set, and each has a "none" choice: the name's initial, the default gradient,
+// no badge. Nothing is saved until Save.
+
+// One picker tile: a selection ring with a gap (a transparent border plus
+// padding, painted in the accent when .active), so the art is never covered.
+function pickTile(shapeCls, content, selected, label, onPick) {
+  const node = el(
+    'button',
+    { class: `pe-tile ${shapeCls}${selected ? ' active' : ''}`, type: 'button', 'aria-label': label },
+    [content]
+  );
+  node.addEventListener('click', () => {
+    node.parentElement.querySelectorAll('.pe-tile').forEach((n) => n.classList.remove('active'));
+    node.classList.add('active');
+    onPick();
   });
-  function apply() {
-    const cells = Array.from(grid.querySelectorAll('.sel'));
-    if (cells.length <= limit) {
-      toggle.style.display = 'none';
-      cells.forEach((c) => (c.style.display = ''));
-      return;
-    }
-    toggle.style.display = '';
-    cells.forEach((cell, i) => {
-      const keep = expanded || i < limit || cell.classList.contains('active');
-      cell.style.display = keep ? '' : 'none';
-    });
-    toggle.textContent = expanded ? t('home.profile.showFewer') : t('home.profile.showAll', { n: cells.length });
-  }
-  toggle.addEventListener('click', () => {
-    expanded = !expanded;
-    apply();
-  });
-  return { toggle, refresh: apply };
+  return node;
 }
 
 async function openProfileModal(profile, onSaved) {
@@ -853,72 +844,115 @@ async function openProfileModal(profile, onSaved) {
   if (favoritesRes.status === 'fulfilled' && favoritesRes.value) favorites = favoritesRes.value;
 
   const state = {
-    display_name: profile.display_name,
     profile_image: profile.profile_image || null,
     cover_image: profile.cover_image || null,
     active_badge: profile.active_badge || null,
   };
+  const favs = favorites.items || [];
+  const favByToken = new Map(favs.map((f) => [f.token, f]));
+  const badgeByFile = new Map((badges.badges || []).map((b) => [b.filename, b]));
+  let customUrl = profile.has_custom_photo ? `/api/profile/photo?v=${Date.now()}` : null;
+
+  // The image a choice shows: a favourite's art, the uploaded photo, or — for a
+  // token that is no longer a favourite — the URL the profile already resolves.
+  function photoSrc() {
+    const v = state.profile_image;
+    if (!v) return null;
+    if (v === 'custom') return customUrl;
+    if (favByToken.has(v)) return favByToken.get(v).poster_url;
+    return v === profile.profile_image ? profile.profile_image_url || null : null;
+  }
+  function coverSrc() {
+    const v = state.cover_image;
+    if (!v) return null;
+    if (favByToken.has(v)) return favByToken.get(v).backdrop_url;
+    return v === profile.cover_image ? profile.cover_image_url || null : null;
+  }
+  function badgeSrc() {
+    const v = state.active_badge;
+    if (!v) return null;
+    if (badgeByFile.has(v)) return badgeByFile.get(v).url;
+    return v === profile.active_badge ? profile.active_badge_url || null : null;
+  }
 
   openModal((modal, close) => {
-    const nameField = el('input', {
-      class: 'text-field',
+    // --- Live preview: a small window onto the Home header -----------------
+    const nameInput = el('input', {
+      class: 'pe-name',
       type: 'text',
-      value: state.display_name,
+      value: profile.display_name,
+      'aria-label': t('home.profile.displayName'),
+    });
+    const initialOf = () => (nameInput.value.trim() || '?').charAt(0).toUpperCase();
+    const coverBox = el('div', { class: 'pe-cover' });
+    const avatarBox = el('div', { class: 'pe-avatar' });
+    const badgeBox = el('div', { class: 'pe-badge' });
+
+    function paintCover() {
+      const src = coverSrc();
+      coverBox.replaceChildren(src ? cachedImg(src, { class: 'pe-cover-img', alt: '' }) : document.createComment(''));
+    }
+    function paintAvatar() {
+      const src = photoSrc();
+      avatarBox.replaceChildren(
+        src
+          ? cachedImg(src, { alt: t('home.profile.avatarAlt') })
+          : el('span', { class: 'pe-avatar-initial', text: initialOf() })
+      );
+    }
+    function paintBadge() {
+      const src = badgeSrc();
+      badgeBox.hidden = !src;
+      badgeBox.replaceChildren(src ? cachedImg(src, { alt: t('home.profile.badgeAlt') }) : document.createComment(''));
+    }
+
+    const preview = el('div', { class: 'pe-preview' }, [
+      coverBox,
+      el('div', { class: 'pe-row' }, [
+        avatarBox,
+        el('label', { class: 'pe-name-wrap' }, [nameInput, lucideIcon('square-pen', 'pe-glyph pe-name-ico')]),
+        badgeBox,
+      ]),
+    ]);
+
+    // --- Photo picker: upload, the initial ("no photo"), then favourites ----
+    const initialTile = el('span', { class: 'pe-initial', text: initialOf() });
+    nameInput.addEventListener('input', () => {
+      initialTile.textContent = initialOf();
+      if (!photoSrc()) paintAvatar(); // the preview's initial follows the name
     });
 
-    // Profile photo: custom upload + grid of favourited posters.
-    const fileInput = el('input', {
-      type: 'file',
-      accept: 'image/*',
-      style: { display: 'none' },
-    });
-    const photoGrid = el('div', { class: 'select-grid' });
-
-    let customCell = null;
+    const photoGrid = el('div', { class: 'pe-grid pe-grid--photo' });
+    let customTile = null;
     function selectCustom() {
       state.profile_image = 'custom';
-      photoGrid.querySelectorAll('.sel').forEach((c) => c.classList.remove('active'));
-      if (customCell) customCell.classList.add('active');
+      photoGrid.querySelectorAll('.pe-tile').forEach((n) => n.classList.remove('active'));
+      customTile.classList.add('active');
+      paintAvatar();
     }
-    function buildCustomCell(url) {
-      const cell = el(
-        'div',
-        { class: 'sel' + (state.profile_image === 'custom' ? ' active' : '') },
-        [cachedImg(url, { alt: t('home.profile.customPhotoAlt') })]
+    function buildCustomTile() {
+      const node = pickTile(
+        'pe-tile--round',
+        cachedImg(customUrl, { alt: t('home.profile.customPhotoAlt') }),
+        state.profile_image === 'custom',
+        t('home.profile.customPhotoAlt'),
+        selectCustom
       );
-      cell.addEventListener('click', selectCustom);
-      return cell;
-    }
-    if (profile.has_custom_photo) {
-      customCell = buildCustomCell(`/api/profile/photo?v=${Date.now()}`);
-      photoGrid.append(customCell);
+      return node;
     }
 
-    for (const t of favorites.items) {
-      const cell = el('div', { class: 'sel' + (state.profile_image === t.token ? ' active' : '') }, [
-        cachedImg(t.poster_url, { alt: t.title_it }),
-      ]);
-      cell.addEventListener('click', () => {
-        state.profile_image = t.token;
-        photoGrid.querySelectorAll('.sel').forEach((c) => c.classList.remove('active'));
-        cell.classList.add('active');
-      });
-      photoGrid.append(cell);
-    }
-    if (!favorites.items.length && !profile.has_custom_photo) {
-      photoGrid.append(
-        el('div', { class: 'muted', text: t('home.profile.noPhotos') })
-      );
-    }
-    const photoCollapse = collapsibleGrid(photoGrid, 9);
-    photoCollapse.refresh();
-
-    const uploadBtn = el('button', {
-      class: 'btn btn-secondary',
-      html: `${icons.imageUp}<span class="upload-label" style="margin-left:8px">${t('home.profile.uploadPhoto')}</span>`,
-      onClick: () => fileInput.click(),
-    });
-    const uploadLabel = uploadBtn.querySelector('.upload-label');
+    const fileInput = el('input', { type: 'file', accept: 'image/*', hidden: true });
+    const uploadTile = el(
+      'button',
+      {
+        class: 'pe-tile pe-tile--round pe-upload',
+        type: 'button',
+        'aria-label': t('home.profile.uploadPhoto'),
+        title: t('home.profile.uploadPhoto'),
+        onClick: () => fileInput.click(),
+      },
+      [lucideIcon('image-up', 'pe-glyph pe-upload-ico')]
+    );
     fileInput.addEventListener('change', async () => {
       const file = fileInput.files && fileInput.files[0];
       fileInput.value = '';
@@ -931,80 +965,118 @@ async function openProfileModal(profile, onSaved) {
         toast(t('home.profile.tooLarge'), 'bad');
         return;
       }
-      uploadBtn.disabled = true;
-      const label = uploadLabel.textContent;
-      uploadLabel.textContent = t('home.profile.uploading');
+      uploadTile.disabled = true;
+      uploadTile.classList.add('is-busy');
+      uploadTile.title = t('home.profile.uploading');
       try {
         await api.uploadProfilePhoto(file);
-        const url = `/api/profile/photo?v=${Date.now()}`;
-        if (!customCell) {
-          customCell = buildCustomCell(url);
-          photoGrid.prepend(customCell);
-          photoCollapse.refresh();
-        } else {
-          customCell.querySelector('img').src = withBase(url);
-        }
+        customUrl = `/api/profile/photo?v=${Date.now()}`;
+        const fresh = buildCustomTile();
+        if (customTile) customTile.replaceWith(fresh);
+        else initialTileBtn.after(fresh);
+        customTile = fresh;
         selectCustom();
         toast(t('home.profile.uploaded'), 'ok');
       } catch (err) {
         toast(err.message || t('home.profile.uploadFailed'), 'bad');
       } finally {
-        uploadBtn.disabled = false;
-        uploadLabel.textContent = label;
+        uploadTile.disabled = false;
+        uploadTile.classList.remove('is-busy');
+        uploadTile.title = t('home.profile.uploadPhoto');
       }
     });
-    const uploadRow = el('div', { class: 'stack', style: { marginBottom: '10px' } }, [
-      uploadBtn,
-      fileInput,
-    ]);
 
-    // Cover grid (backdrops) — 2 columns since backdrops are landscape. Only
-    // favourited titles are offered here.
-    const coverGrid = el('div', { class: 'select-grid cover-grid' });
-    for (const t of favorites.items) {
-      const cell = el('div', { class: 'sel cover' + (state.cover_image === t.token ? ' active' : '') }, [
-        cachedImg(t.backdrop_url, { alt: t.title_it }),
-      ]);
-      cell.addEventListener('click', () => {
-        state.cover_image = t.token;
-        coverGrid.querySelectorAll('.sel').forEach((c) => c.classList.remove('active'));
-        cell.classList.add('active');
-      });
-      coverGrid.append(cell);
+    const initialTileBtn = pickTile('pe-tile--round', initialTile, !state.profile_image, t('home.profile.noPhoto'), () => {
+      state.profile_image = null;
+      paintAvatar();
+    });
+    photoGrid.append(uploadTile, initialTileBtn);
+    if (customUrl) {
+      customTile = buildCustomTile();
+      photoGrid.append(customTile);
     }
-    if (!favorites.items.length) {
-      coverGrid.append(
-        el('div', { class: 'muted', text: t('home.profile.noCovers') })
+    for (const f of favs) {
+      photoGrid.append(
+        pickTile('pe-tile--round', cachedImg(f.poster_url, { alt: '' }), state.profile_image === f.token, f.title_it, () => {
+          state.profile_image = f.token;
+          paintAvatar();
+        })
       );
     }
-    const coverCollapse = collapsibleGrid(coverGrid, 6);
-    coverCollapse.refresh();
 
-    // Badge grid ("No badge" first)
-    const badgeGrid = el('div', { class: 'badge-grid' });
-    const noBadge = el('div', {
-      class: 'bsel bsel-none' + (!state.active_badge ? ' active' : ''),
-      html: icons.badgeX,
-      'aria-label': t('home.profile.noBadge'),
-      title: t('home.profile.noBadge'),
-    });
-    noBadge.addEventListener('click', () => {
-      state.active_badge = null;
-      badgeGrid.querySelectorAll('.bsel').forEach((c) => c.classList.remove('active'));
-      noBadge.classList.add('active');
-    });
-    badgeGrid.append(noBadge);
-    for (const b of badges.badges) {
-      const cell = el('div', { class: 'bsel' + (state.active_badge === b.filename ? ' active' : '') }, [
-        cachedImg(b.url, { alt: b.filename }),
+    // --- Cover picker: the default gradient ("no cover"), then favourites ---
+    const coverGrid = el('div', { class: 'pe-grid pe-grid--cover' }, [
+      pickTile(
+        'pe-tile--wide',
+        el('span', { class: 'pe-gradient' }, [lucideIcon('blend', 'pe-glyph pe-gradient-ico')]),
+        !state.cover_image,
+        t('home.profile.noCover'),
+        () => {
+          state.cover_image = null;
+          paintCover();
+        }
+      ),
+      ...favs.map((f) =>
+        pickTile('pe-tile--wide', cachedImg(f.backdrop_url, { alt: '' }), state.cover_image === f.token, f.title_it, () => {
+          state.cover_image = f.token;
+          paintCover();
+        })
+      ),
+    ]);
+
+    // --- Badge picker: "no badge", then every badge ------------------------
+    const badgeGrid = el('div', { class: 'pe-grid pe-grid--badge' }, [
+      pickTile(
+        'pe-tile--badge',
+        el('span', { class: 'pe-none-badge', html: icons.badgeX }),
+        !state.active_badge,
+        t('home.profile.noBadge'),
+        () => {
+          state.active_badge = null;
+          paintBadge();
+        }
+      ),
+      ...(badges.badges || []).map((b) =>
+        pickTile('pe-tile--badge', cachedImg(b.url, { alt: '' }), state.active_badge === b.filename, b.filename, () => {
+          state.active_badge = b.filename;
+          paintBadge();
+        })
+      ),
+    ]);
+
+    // No favourites yet: the always-available tiles stay, and a section empty
+    // state below says where the images come from.
+    const withEmpty = (grid, detail) =>
+      el('div', {}, [
+        grid,
+        favs.length
+          ? null
+          : stateBlock({ tier: 'section', icon: 'heart-plus', title: t('home.profile.noFavorites'), detail }),
       ]);
-      cell.addEventListener('click', () => {
-        state.active_badge = b.filename;
-        badgeGrid.querySelectorAll('.bsel').forEach((c) => c.classList.remove('active'));
-        cell.classList.add('active');
-      });
-      badgeGrid.append(cell);
-    }
+    const panels = {
+      photo: withEmpty(photoGrid, t('home.profile.noPhotos')),
+      cover: withEmpty(coverGrid, t('home.profile.noCovers')),
+      badge: badgeGrid,
+    };
+    const body = el('div', { class: 'modal-body' }, [panels.photo, fileInput]);
+    const tabs = segmentedControl({
+      options: [
+        ['photo', t('home.profile.tabPhoto'), 'user-round'],
+        ['cover', t('home.profile.tabCover'), 'image'],
+        ['badge', t('home.profile.tabBadge'), 'badge'],
+      ],
+      value: 'photo',
+      center: true,
+      ariaLabel: t('home.profile.edit'),
+      onChange: (k) => {
+        body.replaceChildren(panels[k], fileInput);
+        body.scrollTop = 0;
+      },
+    });
+
+    paintCover();
+    paintAvatar();
+    paintBadge();
 
     const saveBtn = el('button', { class: 'btn btn-primary' }, [
       lucideIcon('check', 'btn-lucide'),
@@ -1014,7 +1086,7 @@ async function openProfileModal(profile, onSaved) {
       saveBtn.disabled = true;
       try {
         await api.updateProfile({
-          display_name: nameField.value.trim() || state.display_name,
+          display_name: nameInput.value.trim() || profile.display_name,
           profile_image: state.profile_image,
           cover_image: state.cover_image,
           active_badge: state.active_badge || '',
@@ -1028,24 +1100,10 @@ async function openProfileModal(profile, onSaved) {
       }
     });
 
-    // The photo, cover and badge grids make this a long form, so the actions are
-    // pinned (as in the Kodi instance form): the body scrolls under the rule.
-    modal.classList.add('modal--split');
+    modal.classList.add('modal--split', 'pe-modal');
     modal.append(
-      el('div', { class: 'modal-body' }, [
-        el('h3', { text: t('home.profile.edit') }),
-        el('div', { class: 'field-label', text: t('home.profile.displayName') }),
-        nameField,
-        el('div', { class: 'field-label', text: t('home.profile.photo') }),
-        uploadRow,
-        photoGrid,
-        photoCollapse.toggle,
-        el('div', { class: 'field-label', text: t('home.profile.cover') }),
-        coverGrid,
-        coverCollapse.toggle,
-        el('div', { class: 'field-label', text: t('home.profile.badge') }),
-        badgeGrid,
-      ]),
+      el('div', { class: 'pe-head' }, [el('h3', { text: t('home.profile.edit') }), preview, tabs.el]),
+      body,
       el('div', { class: 'modal-foot' }, [
         el('hr', { class: 'status-sep' }),
         el('div', { class: 'modal-actions' }, [

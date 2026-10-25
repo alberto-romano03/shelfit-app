@@ -1597,13 +1597,6 @@ textarea.notes {
   font-size: 13px;
   padding: 6px;
 }
-/* "Show all / Show fewer" toggle under the collapsible profile-image grids */
-.collapse-toggle {
-  display: block;
-  width: 100%;
-  margin: 6px 0 2px;
-  text-align: center;
-}
 
 /* ============================= Season view ============================= */
 .episode {
@@ -3637,67 +3630,269 @@ body.modal-open {
   opacity: 0;
   cursor: pointer;
 }
-.select-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 2px; /* room for the active border so it isn't clipped */
+/* ===================== Edit-profile modal (Home.js) =====================
+   A split modal: the head (title, live preview, tabs) stays put, the active
+   picker scrolls in .modal-body, the actions are pinned in .modal-foot. A steady
+   height keeps the sheet from jumping when the tab changes. */
+.modal.pe-modal {
+  height: min(88vh, 760px);
 }
-.select-grid.cover-grid {
-  grid-template-columns: repeat(2, 1fr);
+.pe-head {
+  flex: none;
 }
-.select-grid .sel {
-  border-radius: var(--r-sm);
+/* Vertical rhythm only: .seg--center owns the auto side margins. */
+.pe-head .seg {
+  margin-top: 14px;
+  margin-bottom: 12px;
+}
+/* Preview: a small window onto the Home header. --bg ground, the cover fading
+   into it and the avatar ringed in it, so it reads as "your profile". The
+   cover's empty fill is the header's own default gradient. */
+.pe-preview {
+  position: relative;
+  border-radius: var(--r-md);
   overflow: hidden;
-  border: 2px solid transparent;
-  background: var(--surface-elevated);
-  cursor: pointer;
+  background: var(--bg);
+  border: 1px solid var(--border);
 }
-.select-grid .sel.active {
-  border-color: var(--accent);
+.pe-cover {
+  position: relative;
+  height: 92px;
+  background: linear-gradient(160deg, #1f1f1f, #0a0a0a);
 }
-/* aspect-ratio lives on the <img> (a replaced element) so grid rows size
-   correctly — putting it on the empty cell makes tall cells overlap. The profile
-   photo picker uses a square (1:1) tile; the cover picker overrides to 16:9 below
-   (its cells carry .cover, which wins on specificity). */
-.select-grid .sel img {
+.pe-cover-img {
   display: block;
   width: 100%;
-  aspect-ratio: 1 / 1;
+  height: 100%;
   object-fit: cover;
 }
-.select-grid .sel.cover img {
-  aspect-ratio: 16 / 9;
+.pe-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 30%, var(--bg));
 }
-.badge-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-  gap: 8px;
+.pe-row {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: -30px;
+  padding: 0 12px 12px;
 }
-.badge-grid .bsel {
-  height: 64px;
-  border-radius: 10px;
+.pe-avatar {
+  width: 60px;
+  height: 60px;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  border: 3px solid var(--bg);
+  overflow: hidden;
   background: var(--surface-elevated);
-  border: 2px solid transparent;
-  font-size: 12px;
+}
+.pe-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pe-avatar-initial {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+}
+/* The name is edited in place: a pill field with a pen glyph, taking the
+   inputs' accent border + ring on focus. */
+.pe-name-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  cursor: text;
+  transition: border-color var(--dur-short) var(--ease-state),
+    box-shadow var(--dur-short) var(--ease-state);
+}
+.pe-name-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.pe-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+}
+.pe-name-ico {
+  width: 15px;
+  height: 15px;
   color: var(--text-secondary);
 }
-.badge-grid .bsel.active {
-  border-color: var(--accent);
+.pe-name-wrap:focus-within .pe-name-ico {
+  color: var(--accent);
 }
-.badge-grid .bsel img {
-  width: 48px;
-  height: 48px;
+.pe-badge {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  margin-bottom: 2px;
+}
+.pe-badge[hidden] {
+  display: none;
+}
+.pe-badge img {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
-/* "No badge" cell: a badge-x glyph in the muted cell colour (currentColor =
-   --text-secondary), centred by the cell's existing flex alignment. */
-.badge-grid .bsel-none svg {
-  width: 28px;
-  height: 28px;
+/* Masked lucide glyphs used here, tinted by currentColor. */
+.pe-glyph {
+  display: inline-block;
+  flex: none;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+/* Pickers: tiles shaped like what they set. */
+.pe-grid {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+.pe-grid--photo,
+.pe-grid--badge {
+  grid-template-columns: repeat(4, 1fr);
+}
+.pe-grid--cover {
+  grid-template-columns: repeat(2, 1fr);
+}
+/* Selection ring with a gap: a transparent border + 3px of padding around the
+   art; .active paints the border in the accent, so nothing covers the image. */
+.pe-tile {
+  display: block;
+  min-width: 0;
+  padding: 3px;
+  border: 2px solid transparent;
+  background: none;
+  cursor: pointer;
+  transition: border-color var(--dur-short) var(--ease-state),
+    transform var(--dur-short) var(--ease-state);
+}
+.pe-tile:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.pe-tile.active {
+  border-color: var(--accent);
+}
+.pe-tile img {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+  background: var(--surface-elevated);
+}
+.pe-tile--round {
+  border-radius: 50%;
+}
+.pe-tile--round img {
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+.pe-tile--wide {
+  border-radius: calc(var(--r-sm) + 5px);
+}
+.pe-tile--wide img {
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-sm);
+}
+.pe-tile--badge {
+  border-radius: calc(var(--r-md) + 5px);
+}
+.pe-tile--badge > * {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: var(--r-md);
+  background: var(--surface-elevated);
+}
+.pe-tile--badge img {
+  box-sizing: border-box;
+  padding: 18%;
+  object-fit: contain;
+}
+/* "No photo": the name's initial on a round tile, as the avatar shows it. */
+.pe-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  color: var(--accent);
+  font-size: 26px;
+  font-weight: 700;
+}
+/* "No cover": the header's default gradient (a fixed dark tile in both themes,
+   as the header is), marked with the blend glyph so it reads as a choice. */
+.pe-gradient {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-sm);
+  background: linear-gradient(160deg, #1f1f1f, #0a0a0a);
+  color: rgba(255, 255, 255, 0.55);
+}
+.pe-gradient-ico {
+  width: 24px;
+  height: 24px;
+}
+/* "No badge": the badge-x glyph in the muted tile colour. */
+.pe-none-badge {
+  color: var(--text-secondary);
+}
+.pe-none-badge svg {
+  width: 26px;
+  height: 26px;
+}
+/* Upload: the first round tile, an outlined circle with the image-up glyph;
+   dimmed while a photo uploads. */
+.pe-upload {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed color-mix(in srgb, var(--text-secondary) 45%, transparent);
+  color: var(--text-secondary);
+}
+.pe-upload.is-busy {
+  opacity: 0.45;
+  cursor: progress;
+}
+.pe-upload-ico {
+  width: 24px;
+  height: 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pe-tile,
+  .pe-name-wrap {
+    transition: none;
+  }
 }
 
 /* ============================= Settings ============================= */

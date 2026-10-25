@@ -55,6 +55,8 @@ const ICONS = [
   'popcorn', // ticket cinema-name field
   'wallet-cards', // My Tickets "Collection" view switch
   'check', // Edit ticket "Save"
+  'badge', // Edit profile "Badge" tab
+  'heart-plus', // Edit profile "no favourites" empty state
   // Kodi Now Playing toast.
   'volume-2', // audio track chip
   'captions', // subtitle track chip
