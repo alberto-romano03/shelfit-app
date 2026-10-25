@@ -98,17 +98,23 @@ const NEW_TICKET_TIME = '20:30';
 // release date for screenings whose real date is forgotten. Nothing is saved
 // until Add: `onConfirm({ cinema_date, cinema_time, cinema_name })` (async,
 // throws on failure, which keeps the popup open). Cancel adds nothing.
+// With `existing` (the movie is already a ticket) it becomes "Edit ticket": the
+// ticket is prefilled, Add becomes Save, and a Remove chip sits beside the
+// release shortcut. Remove asks for a second tap, then awaits `onRemove()`.
 //   movie: { id, tmdbId, title, backdropPath, releaseDate }
-export function openNewTicketModal({ movie, onConfirm }) {
+//   existing: { cinemaDate, cinemaTime, cinemaName }
+export function openNewTicketModal({ movie, existing = null, onConfirm, onRemove }) {
   return openModal((modal, close) => {
     const draft = {
       id: movie.id,
       tmdbId: movie.tmdbId,
       title: movie.title,
       backdropPath: movie.backdropPath,
-      cinemaDate: localTodayISO(),
-      cinemaTime: NEW_TICKET_TIME,
-      cinemaName: null,
+      // An existing ticket keeps its unset fields unset, so it shows the same
+      // fallbacks (release date, default time) as in My Tickets.
+      cinemaDate: existing ? existing.cinemaDate || null : localTodayISO(),
+      cinemaTime: existing ? existing.cinemaTime || null : NEW_TICKET_TIME,
+      cinemaName: (existing && existing.cinemaName) || null,
       releaseDate: movie.releaseDate || null,
     };
     let cinemas = [];
@@ -150,13 +156,14 @@ export function openNewTicketModal({ movie, onConfirm }) {
     // Release-date shortcut: writes into the ticket's own date field and fires
     // its change, the same path as a manual pick, so the ticket re-renders it.
     // Lit while the ticket shows the release date; absent when there is none.
-    let shortcut = null;
+    const shortcuts = [];
     if (draft.releaseDate) {
       const chip = el('button', { class: 'chip', type: 'button' }, [
         lucideIcon('clapperboard', 'btn-lucide'),
         el('span', { text: `${t('ticket.useRelease')} · ${formatTicketDate(draft.releaseDate)}` }),
       ]);
-      syncChip = () => chip.classList.toggle('active', draft.cinemaDate === draft.releaseDate);
+      syncChip = () =>
+        chip.classList.toggle('active', (draft.cinemaDate || draft.releaseDate) === draft.releaseDate);
       chip.addEventListener('click', () => {
         const input = host.querySelector('.cine-field-date .cine-input');
         if (!input) return;
@@ -164,12 +171,48 @@ export function openNewTicketModal({ movie, onConfirm }) {
         input.dispatchEvent(new Event('change'));
       });
       syncChip();
-      shortcut = el('div', { class: 'cine-new-shortcut' }, [chip]);
+      shortcuts.push(chip);
     }
 
+    // Remove (edit mode only): the first tap arms it for a few seconds, the
+    // second removes the ticket and closes.
+    if (existing && onRemove) {
+      const label = el('span', { text: t('common.remove') });
+      const removeChip = el('button', { class: 'chip chip-danger', type: 'button' }, [
+        lucideIcon('trash-2', 'btn-lucide'),
+        label,
+      ]);
+      let armTimer = 0;
+      const disarm = () => {
+        window.clearTimeout(armTimer);
+        armTimer = 0;
+        removeChip.classList.remove('armed');
+        label.textContent = t('common.remove');
+      };
+      removeChip.addEventListener('click', async () => {
+        if (!armTimer) {
+          removeChip.classList.add('armed');
+          label.textContent = t('ticket.removeConfirm');
+          armTimer = window.setTimeout(disarm, 3000);
+          return;
+        }
+        disarm();
+        removeChip.disabled = true;
+        try {
+          await onRemove();
+          close();
+        } catch (err) {
+          removeChip.disabled = false;
+          toast((err && err.message) || t('ticket.couldNotSave'), 'bad');
+        }
+      });
+      shortcuts.push(removeChip);
+    }
+    const shortcut = shortcuts.length ? el('div', { class: 'cine-new-shortcut' }, shortcuts) : null;
+
     const addBtn = el('button', { class: 'btn btn-primary' }, [
-      lucideIcon('ticket', 'btn-lucide'),
-      el('span', { text: t('ticket.add') }),
+      lucideIcon(existing ? 'check' : 'ticket', 'btn-lucide'),
+      el('span', { text: existing ? t('common.save') : t('ticket.add') }),
     ]);
     addBtn.addEventListener('click', async () => {
       addBtn.disabled = true;
@@ -187,7 +230,7 @@ export function openNewTicketModal({ movie, onConfirm }) {
     });
 
     modal.append(
-      el('h3', { text: t('ticket.newTitle') }),
+      el('h3', { text: existing ? t('ticket.editTitle') : t('ticket.newTitle') }),
       host,
       shortcut,
       el('hr', { class: 'status-sep' }),

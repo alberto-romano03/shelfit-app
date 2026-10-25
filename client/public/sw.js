@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v119'; // bumped: Now Playing light sweep + redesigned toast
+const CACHE = 'shelfit-shell-v120'; // bumped: Edit ticket popup (save / remove)
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

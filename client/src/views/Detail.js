@@ -684,7 +684,8 @@ export default async function Detail(container, params) {
   // When active it illuminates in a warm popcorn red, distinct from the amber of
   // the Owned toggle. The flag rides the same PATCH /api/media/:id as `owned`.
   // Turning it ON opens the "New ticket" popup and only lights up once the ticket
-  // is added (Cancel leaves it off); turning it OFF stays optimistic like Owned.
+  // is added (Cancel leaves it off). Tapping it while ON opens the same popup as
+  // "Edit ticket", prefilled, where the ticket can be saved or removed.
   const TICKET_ICON =
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg>';
   const cinemaBtn = el('button', { class: 'toggle-wide cinema-toggle' });
@@ -696,36 +697,38 @@ export default async function Detail(container, params) {
   }
   if (d.type === 'movie') {
     renderCinema();
-    cinemaBtn.addEventListener('click', async () => {
-      if (!d.watched_in_cinema) {
-        openNewTicketModal({
-          movie: {
-            id,
-            tmdbId: d.tmdb_id,
-            title: d.title_it,
-            backdropPath: d.backdrop_url,
-            releaseDate: (d.meta && d.meta.release_date) || null,
-          },
-          // Screening details first, then the flag: if the flag fails, the
-          // movie is simply not a ticket yet and the popup stays open to retry.
-          onConfirm: async (screening) => {
-            await api.updateCinema(id, screening);
-            await api.updateMedia(id, { watched_in_cinema: true });
-            d.watched_in_cinema = true;
-            renderCinema();
-          },
-        });
-        return;
-      }
-      d.watched_in_cinema = false; // optimistic
-      renderCinema();
-      try {
-        await api.updateMedia(id, { watched_in_cinema: false });
-      } catch (err) {
-        d.watched_in_cinema = true; // revert on failure
-        renderCinema();
-        toast(err.message, 'bad');
-      }
+    cinemaBtn.addEventListener('click', () => {
+      const editing = !!d.watched_in_cinema;
+      openNewTicketModal({
+        movie: {
+          id,
+          tmdbId: d.tmdb_id,
+          title: d.title_it,
+          backdropPath: d.backdrop_url,
+          releaseDate: (d.meta && d.meta.release_date) || null,
+        },
+        existing: editing
+          ? { cinemaDate: d.cinema_date, cinemaTime: d.cinema_time, cinemaName: d.cinema_name }
+          : null,
+        // Screening details first, then the flag: if the flag fails, the
+        // movie is simply not a ticket yet and the popup stays open to retry.
+        onConfirm: async (screening) => {
+          await api.updateCinema(id, screening);
+          if (!editing) await api.updateMedia(id, { watched_in_cinema: true });
+          d.cinema_date = screening.cinema_date;
+          d.cinema_time = screening.cinema_time;
+          d.cinema_name = screening.cinema_name;
+          d.watched_in_cinema = true;
+          renderCinema();
+        },
+        // Clearing the flag drops the movie from My Tickets; its screening
+        // details stay stored, as before.
+        onRemove: async () => {
+          await api.updateMedia(id, { watched_in_cinema: false });
+          d.watched_in_cinema = false;
+          renderCinema();
+        },
+      });
     });
   }
 

@@ -441,6 +441,7 @@ export default async function mediaRoutes(fastify) {
       watched_in_cinema: !!row.watched_in_cinema,
       cinema_date: row.cinema_date || null,
       cinema_time: row.cinema_time || null,
+      cinema_name: row.cinema_name || null,
       notes: row.notes,
       rewatch_count: row.rewatch_count,
       // Editable first-watch date (movies); null → the client falls back to

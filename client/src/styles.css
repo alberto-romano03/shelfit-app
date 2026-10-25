@@ -8982,8 +8982,23 @@ textarea.notes:focus,
    .active (the chip's own state) while the ticket shows the release date. */
 .cine-new-shortcut {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 8px;
   margin-top: 16px;
+}
+/* Edit ticket: Remove sits beside the shortcut in the danger tint (as
+   .menu-item-danger); .armed (waiting for the confirming second tap) fills it. */
+.cine-new-shortcut .chip-danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+.cine-new-shortcut .chip-danger.armed {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-weight: 600;
 }
 .cine-new-shortcut .chip {
   display: inline-flex;
