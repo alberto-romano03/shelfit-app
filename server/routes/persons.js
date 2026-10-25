@@ -19,10 +19,11 @@ import {
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 const ACCEPTED = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-// Which of a person's credits are already in the library, so the client can
-// split the filmography into "In your library" / "Also known for" without
-// shipping the whole library to the browser. items.tmdb_id is TEXT.
-const libraryIdsStmt = db.prepare('SELECT id, tmdb_id, type, title_it FROM items');
+// Which of a person's credits are already in the library, with the viewer's own
+// status / rating / favourite for each, so the person page can show "you and
+// them" (counts, average rating, badges on every card) without shipping the
+// whole library to the browser. items.tmdb_id is TEXT.
+const libraryIdsStmt = db.prepare('SELECT id, tmdb_id, type, title_it, status, rating, favorite FROM items');
 
 export default async function personRoutes(fastify) {
   // GET /api/persons/search?q= → TMDB person search for the "pick a person"
@@ -70,7 +71,13 @@ export default async function personRoutes(fastify) {
     }
     const library = {};
     for (const row of libraryIdsStmt.all()) {
-      library[`${row.type}:${row.tmdb_id}`] = { id: row.id, title: row.title_it };
+      library[`${row.type}:${row.tmdb_id}`] = {
+        id: row.id,
+        title: row.title_it,
+        status: row.status,
+        rating: row.rating || null,
+        favorite: !!row.favorite,
+      };
     }
     return { ...person, library };
   });

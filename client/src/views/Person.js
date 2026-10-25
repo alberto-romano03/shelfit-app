@@ -1,7 +1,10 @@
-// Person page (/person/:id) — a full-page view for one person, opened from The
-// Wall. Mirrors the title detail page's structure: hero photo + name, an options
-// menu in the top-right, a collapsible biography, and horizontally scrolling
-// poster rows for the filmography.
+// Person page (/person/:id) — the favourite person, opened from The Wall. Built
+// like the title detail page: a hero (their portrait, blurred into an ambient
+// wash) with back / options overlay buttons, the portrait overlapping it beside
+// the name. Then "you and them" (Home's stats box: titles in your library, seen,
+// your average rating, career years), the biography, their best-known roles as
+// backdrop cards with the character played, and the whole career as a
+// year-marked timeline filterable to your library.
 //
 // Everything renders from OUR cache: person data comes from /api/persons/:id
 // (which fetches from TMDB server-side and stores it), and the photo from
@@ -18,11 +21,14 @@ import {
   crossfadeSwap,
   lucideIcon,
   stateBlock,
+  poster,
+  cachedImg,
+  segmentedControl,
 } from '../ui.js';
 import { withBase } from '../basePath.js';
 import { collapsibleText } from '../collapsibleText.js';
 import { openPersonPicker } from '../pickers.js';
-import { t, locale } from '../i18n.js';
+import { t, locale, fmtNumber } from '../i18n.js';
 
 const TMDB_PERSON = 'https://www.themoviedb.org/person/';
 
@@ -53,49 +59,77 @@ function fmtDate(iso) {
   return d.toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-// One credit -> the card shape the rows render. `library` maps 'movie:123' to the
-// local item so in-library credits deep-link to the real detail page.
+// One credit -> the card shape the page renders. `library` maps 'movie:123' to
+// the viewer's own row (id, status, rating, favourite) so in-library credits
+// deep-link to the real detail page and carry their badge.
 function creditCard(c, library) {
   const type = c.media_type === 'tv' ? 'show' : 'movie';
   const key = `${type}:${c.id}`;
-  const inLib = library[key] || null;
   const folder = type === 'movie' ? 'movies' : 'shows';
   return {
     key,
     type,
     tmdb_id: c.id,
     title: c.title || c.name || '',
+    year: (c.release_date || c.first_air_date || '').slice(0, 4),
+    date: c.release_date || c.first_air_date || '',
+    // TMDB notes like "(voice)" or "(motion capture)" add noise to a one-liner.
+    character: String(c.character || '').replace(/\s*\(.*?\)\s*/g, ' ').trim(),
+    votes: c.vote_count || 0,
     vote: c.vote_average || 0,
-    inLib,
-    // Always a cache URL: /assets lazily fetches + stores any tmdb id, so "Also
-    // known for" posters get cached too, not just library titles.
+    hasBackdrop: !!c.backdrop_path,
+    inLib: library[key] || null,
+    // Always a cache URL: /assets lazily fetches + stores any tmdb id, so credits
+    // outside the library get their art cached too.
     poster_url: `/assets/${folder}/${c.id}/poster.webp`,
+    backdrop_url: `/assets/${folder}/${c.id}/backdrop.webp`,
   };
 }
 
+// In the library -> the real detail page; otherwise the preview page, where it
+// can be added.
+function openCredit(c) {
+  if (c.inLib) openDetail(`/detail/${c.inLib.id}`);
+  else openDetail(`/preview/${c.type}/${c.tmdb_id}`);
+}
+
+// The viewer's status on any card: their rating, or "to watch".
+function statusBadge(c) {
+  if (!c.inLib) return null;
+  if (c.inLib.rating) return el('div', { class: 'rating-badge person-badge', html: `★ ${c.inLib.rating}` });
+  if (c.inLib.status === 'plan_to_watch') {
+    return el('div', { class: 'person-badge person-badge--plan' }, [lucideIcon('calendar-plus', 'person-glyph')]);
+  }
+  return null;
+}
+
+// A plain poster rail (the "As director" row).
 function posterRow(title, cards) {
   if (!cards.length) return null;
   const rail = el('div', { class: 'hscroll' });
   for (const c of cards) {
-    const art = c.poster_url
-      ? el('img', { class: 'person-credit-img', src: withBase(c.poster_url), alt: c.title, loading: 'lazy' })
-      : el('div', { class: 'person-credit-fallback', text: c.title });
+    const art = poster(c.poster_url, c.title);
+    const badge = statusBadge(c);
+    if (badge) art.append(badge);
     const card = el('button', { class: 'person-credit', type: 'button' }, [
-      el('div', { class: 'poster-card person-credit-art' }, [art]),
+      art,
       el('div', { class: 'person-credit-title', text: c.title }),
     ]);
-    card.addEventListener('click', () => {
-      // In the library -> the real detail page; otherwise the preview page, where
-      // it can be added.
-      if (c.inLib) openDetail(`/detail/${c.inLib.id}`);
-      else openDetail(`/preview/${c.type}/${c.tmdb_id}`);
-    });
+    card.addEventListener('click', () => openCredit(c));
     rail.append(card);
   }
-  return el('div', { class: 'person-section' }, [
-    el('h3', { class: 'section-title', text: title }),
-    rail,
-  ]);
+  return el('div', { class: 'person-section' }, [el('h3', { class: 'section-title', text: title }), rail]);
+}
+
+// Whole years since an ISO birthday, or null.
+function ageFrom(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+  if (!m) return null;
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  let age = now.getFullYear() - Number(m[1]);
+  if (month < Number(m[2]) || (month === Number(m[2]) && now.getDate() < Number(m[3]))) age -= 1;
+  return age;
 }
 
 export async function Person(container, params) {
@@ -218,101 +252,196 @@ export async function Person(container, params) {
     container.innerHTML = '';
     container.append(fileInput);
 
-    // --- Header: photo, name, birth info, options button ---
-    const photo = el('img', {
-      class: 'person-photo',
-      // ?v busts the cache so a freshly uploaded photo shows immediately
-      src: withBase(`/api/persons/${tmdbId}/photo?v=${Date.now()}`),
-      alt: person.name || '',
-    });
-    photo.addEventListener('error', () =>
-      photo.replaceWith(el('div', { class: 'person-photo person-photo--empty' }))
-    );
+    // ?v busts the cache so a freshly uploaded photo shows immediately.
+    const photoUrl = withBase(`/api/persons/${tmdbId}/photo?v=${Date.now()}`);
 
-    // Birth date / place as icon+label rows (same language as the title page's
-    // metadata rows).
-    const infoRow = (icon, text) =>
-      text
-        ? el('div', { class: 'person-meta-row' }, [
-            lucideIcon(icon, 'person-meta-ico'),
-            el('span', { text }),
-          ])
-        : null;
-    const born = fmtDate(person.birthday);
+    // --- Hero: their own portrait, blown up, blurred and dimmed into an ambient
+    // wash (always about them, whatever their roles look like), fading into the
+    // page like the title hero. Back and options float on it.
+    const heroImg = el('img', { class: 'person-hero-img', src: photoUrl, alt: '' });
+    heroImg.addEventListener('error', () => heroImg.remove());
     const menuBtn = el('button', {
-      class: 'icon-btn person-menu-btn icon-btn--overlay',
+      class: 'icon-btn icon-btn--overlay',
       html: icons.more,
       'aria-label': t('common.more'),
     });
     menuBtn.addEventListener('click', openOptions);
-
-    // Back to wherever we came from (Home / The Wall) — same chrome as the other
-    // full-page views (Season, Settings, …).
-    container.append(
-      el('div', { class: 'person-back-row' }, [
+    const hero = el('div', { class: 'detail-hero person-hero' }, [
+      heroImg,
+      el('div', { class: 'person-hero-btn person-hero-btn--left' }, [
         el('button', {
-          class: 'icon-btn',
+          class: 'icon-btn icon-btn--overlay',
           html: icons.back,
           'aria-label': t('common.back'),
           onClick: () => history.back(),
         }),
-      ])
-    );
+      ]),
+      el('div', { class: 'person-hero-btn person-hero-btn--right' }, [menuBtn]),
+    ]);
 
-    container.append(
-      el('div', { class: 'person-head' }, [
-        photo,
-        // Bottom-anchored: the name grows UPWARD from the photo's bottom edge,
-        // exactly like the title detail head.
-        el('div', { class: 'person-head-text' }, [
-          el('h2', { class: 'person-name', text: person.name || t('person.unknown') }),
-          infoRow('cake', born),
-          infoRow('earth', person.place_of_birth || ''),
+    // --- Head: the portrait overlapping the hero (Detail's poster head), the
+    // name growing upward beside it.
+    const photo = el('img', { src: photoUrl, alt: person.name || '' });
+    photo.addEventListener('error', () => photo.replaceWith(el('div', { class: 'person-photo-empty' })));
+    const metaRow = (icon, text) =>
+      text
+        ? el('div', { class: 'person-meta-row' }, [lucideIcon(icon, 'person-glyph person-meta-ico'), el('span', { text })])
+        : null;
+    const age = ageFrom(person.birthday);
+    const born = [fmtDate(person.birthday), age != null ? t('person.age', { n: age }) : ''].filter(Boolean).join(' · ');
+    const head = el('div', { class: 'detail-head person-head' }, [
+      el('div', { class: 'person-photo' }, [photo]),
+      el('div', { class: 'person-head-text' }, [
+        el('div', { class: 'person-eyebrow' }, [
+          el('span', { class: 'person-eyebrow-ico', html: icons.heart }),
+          el('span', { text: t('person.favorite') }),
         ]),
-        menuBtn,
-      ])
-    );
+        el('h2', { class: 'person-name', text: person.name || t('person.unknown') }),
+        metaRow('cake', born),
+        metaRow('earth', person.place_of_birth || ''),
+      ]),
+    ]);
 
-    // --- Biography (shared collapsible with the title detail page) ---
-    if (person.biography) container.append(...collapsibleText(person.biography));
+    container.append(hero, head);
 
-    // TMDB link — same button as the title detail page (a real button in the
-    // page, not an options-menu row).
-    const tmdbBtn = el('button', {
-      class: 'toggle-wide tmdb-toggle active',
-      type: 'button',
-      'aria-label': t('person.tmdbAria'),
-    });
-    tmdbBtn.innerHTML =
-      `<img class="tmdb-logo-img" src="${withBase('/icons/tmdb/tmdb-logo.svg')}" alt="" aria-hidden="true"><span>${t('person.tmdbButton')}</span>`;
-    tmdbBtn.addEventListener('click', () => openExternal(`${TMDB_PERSON}${tmdbId}`));
-    container.append(tmdbBtn);
-
-    // --- Filmography ---
+    // --- Credits: one entry per title (TMDB lists a title once per role).
     const library = person.library || {};
     const cast = (person.credits && person.credits.cast) || [];
     const crew = (person.credits && person.credits.crew) || [];
-
-    // De-dupe: a title can appear several times across cast/crew.
-    const seen = new Set();
-    const uniq = (list) =>
-      list
+    const uniq = (list) => {
+      const seen = new Set();
+      return list
         .map((c) => creditCard(c, library))
         .filter((c) => c.title && !seen.has(c.key) && seen.add(c.key));
-
+    };
     const acting = uniq(cast);
-    const inLibrary = acting.filter((c) => c.inLib);
-    const notInLibrary = acting
-      .filter((c) => !c.inLib)
-      .sort((a, b) => b.vote - a.vote)
-      .slice(0, 20);
+    const dated = acting.filter((c) => c.year);
+    const inLib = dated.filter((c) => c.inLib);
 
-    const rows = [
-      posterRow(t('person.inLibrary'), inLibrary),
-      posterRow(t('person.alsoKnownFor'), notInLibrary),
-    ];
+    // --- You and them: Home's stats box, about this person. Career years count
+    // from their first credit after birth (archive footage can predate it).
+    if (acting.length) {
+      const watched = inLib.filter((c) => c.inLib.status !== 'plan_to_watch');
+      const rated = inLib.filter((c) => c.inLib.rating);
+      const avg = rated.length ? rated.reduce((n, c) => n + c.inLib.rating, 0) / rated.length : null;
+      const birthYear = Number(String(person.birthday || '').slice(0, 4)) || 0;
+      const years = dated.map((c) => Number(c.year)).filter((y) => y >= birthYear);
+      const since = years.length ? Math.min(...years) : null;
+      const statCard = (icon, value, label) =>
+        el('div', { class: 'stat-card' }, [
+          lucideIcon(icon, 'stat-ico'),
+          el('div', { class: 'stat-txt' }, [
+            el('div', { class: 'value', text: value }),
+            el('div', { class: 'label', text: label }),
+          ]),
+        ]);
+      const firstName = (person.name || '').split(' ')[0];
+      container.append(
+        el('div', { class: 'section-title', text: t('person.youAnd', { name: firstName }) }),
+        el('div', { class: 'stats-grid person-stats' }, [
+          statCard('library-big', fmtNumber(inLib.length), t('person.statLibrary', { total: fmtNumber(acting.length) })),
+          statCard('eye', fmtNumber(watched.length), t('person.statSeen')),
+          statCard(
+            'star',
+            avg ? avg.toLocaleString(locale(), { maximumFractionDigits: 1 }) : '–',
+            t('person.statRating')
+          ),
+          statCard(
+            'clapperboard',
+            since ? fmtNumber(new Date().getFullYear() - since) : '–',
+            since ? t('person.statCareer', { year: since }) : t('person.statCareerShort')
+          ),
+        ])
+      );
+    }
 
-    // Directing credits get their own row, same in/out-of-library split.
+    // --- Biography (shared collapsible with the title detail page) ---
+    if (person.biography) {
+      container.append(
+        el('div', { class: 'section-title', text: t('person.biography') }),
+        ...collapsibleText(person.biography)
+      );
+    }
+
+    // --- Best-known roles: wide backdrop cards with the character played.
+    const known = acting
+      .filter((c) => c.hasBackdrop)
+      .sort((a, b) => b.votes - a.votes)
+      .slice(0, 10);
+    if (known.length) {
+      const rail = el('div', { class: 'hscroll person-known' });
+      for (const c of known) {
+        const art = el('div', { class: 'person-role-art' }, [cachedImg(c.backdrop_url, { alt: '' }), statusBadge(c)]);
+        const card = el('button', { class: 'person-role', type: 'button' }, [
+          art,
+          el('div', { class: 'person-role-title', text: c.title }),
+          el('div', {
+            class: 'person-role-sub',
+            text: [c.character ? t('person.asCharacter', { name: c.character }) : '', c.year].filter(Boolean).join(' · '),
+          }),
+        ]);
+        card.addEventListener('click', () => openCredit(c));
+        rail.append(card);
+      }
+      container.append(el('div', { class: 'section-title', text: t('person.knownFor') }), rail);
+    }
+
+    // --- Career: a horizontal timeline, newest first, a year marker over each
+    // year's titles on one continuous line; filter All / In your library.
+    if (dated.length) {
+      const timeline = el('div', { class: 'hscroll person-timeline' });
+      const paintTimeline = (onlyLib) => {
+        const list = (onlyLib ? inLib : dated).slice().sort((a, b) => b.date.localeCompare(a.date));
+        const groups = new Map();
+        for (const c of list) {
+          if (!groups.has(c.year)) groups.set(c.year, []);
+          groups.get(c.year).push(c);
+        }
+        timeline.replaceChildren(
+          ...[...groups].map(([year, cards]) =>
+            el('div', { class: 'person-year' }, [
+              el('div', { class: 'person-year-mark' }, [el('span', { class: 'person-year-label', text: year })]),
+              el(
+                'div',
+                { class: 'person-year-items' },
+                cards.map((c) => {
+                  const art = poster(c.poster_url, c.title);
+                  const badge = statusBadge(c);
+                  if (badge) art.append(badge);
+                  const card = el('button', { class: 'person-credit', type: 'button' }, [
+                    art,
+                    el('div', { class: 'person-credit-title', text: c.title }),
+                    el('div', { class: 'person-credit-sub', text: c.character }),
+                  ]);
+                  card.addEventListener('click', () => openCredit(c));
+                  return card;
+                })
+              ),
+            ])
+          )
+        );
+        timeline.scrollLeft = 0;
+      };
+      const filter = segmentedControl({
+        options: [
+          ['all', t('person.filterAll'), 'layers'],
+          ['lib', t('person.filterLibrary'), 'library-big'],
+        ],
+        value: 'all',
+        ariaLabel: t('person.career'),
+        onChange: (v) => paintTimeline(v === 'lib'),
+      });
+      paintTimeline(false);
+      container.append(
+        el('div', { class: 'person-career-head' }, [
+          el('div', { class: 'section-title', text: t('person.career') }),
+          filter.el,
+        ]),
+        timeline
+      );
+    }
+
+    // Directing credits keep their own rail, in-library first.
     const directed = uniq(crew.filter((c) => c.job === 'Director'));
     if (directed.length) {
       const dIn = directed.filter((c) => c.inLib);
@@ -320,12 +449,10 @@ export async function Person(container, params) {
         .filter((c) => !c.inLib)
         .sort((a, b) => b.vote - a.vote)
         .slice(0, 20);
-      rows.push(posterRow(t('person.asDirector'),[...dIn, ...dOut]));
+      container.append(posterRow(t('person.asDirector'), [...dIn, ...dOut]));
     }
 
-    const built = rows.filter(Boolean);
-    built.forEach((r) => container.append(r));
-    if (!built.length) {
+    if (!acting.length && !directed.length) {
       container.append(
         stateBlock({
           icon: 'clapperboard',
@@ -334,6 +461,17 @@ export async function Person(container, params) {
         })
       );
     }
+
+    // TMDB link — same button as the title detail page.
+    const tmdbBtn = el('button', {
+      class: 'toggle-wide tmdb-toggle active person-tmdb',
+      type: 'button',
+      'aria-label': t('person.tmdbAria'),
+    });
+    tmdbBtn.innerHTML =
+      `<img class="tmdb-logo-img" src="${withBase('/icons/tmdb/tmdb-logo.svg')}" alt="" aria-hidden="true"><span>${t('person.tmdbButton')}</span>`;
+    tmdbBtn.addEventListener('click', () => openExternal(`${TMDB_PERSON}${tmdbId}`));
+    container.append(tmdbBtn);
   }
 
   // Skeleton → content (and every later repaint, e.g. after a photo change)

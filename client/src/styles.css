@@ -9980,32 +9980,57 @@ textarea.notes:focus,
 }
 
 /* ========================= Person page ========================= */
-.person-back-row {
-  display: flex;
-  align-items: center;
-  margin: 2px 0 10px;
+/* Hero: the person's own portrait, blown up, blurred and dimmed into an ambient
+   wash under the usual fade (.detail-hero::after). Back / options float on it. */
+.person-hero {
+  overflow: hidden;
 }
-.person-head {
-  position: relative;
-  display: flex;
-  gap: 14px;
-  /* Bottom-anchor the right column to the photo's bottom edge so the name and
-     info grow UPWARD from it — same rule as .detail-head. */
-  align-items: flex-end;
-  height: 144px;
-  margin: 6px 0 16px;
-}
-.person-photo {
-  width: 108px;
-  height: 144px;
-  flex: 0 0 108px;
-  border-radius: var(--r-md);
+.person-hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  object-position: center top;
+  object-position: center 30%;
+  transform: scale(1.25);
+  filter: blur(22px) saturate(1.2) brightness(0.7);
+}
+.person-hero::after {
+  z-index: 1; /* the fade sits over the <img> */
+}
+.person-hero-btn {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top));
+  z-index: 3;
+}
+.person-hero-btn--left {
+  left: 8px;
+}
+.person-hero-btn--right {
+  right: 8px;
+}
+/* Head: the portrait at the title poster's size, overlapping the hero
+   (.detail-head), the name bottom-anchored beside it. */
+.person-photo {
+  width: 110px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  overflow: hidden;
   background: var(--surface-elevated);
   box-shadow: 0 4px 16px var(--shadow);
 }
-.person-photo--empty {
+.person-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+.person-photo-empty {
+  width: 100%;
+  height: 100%;
   background:
     radial-gradient(circle at 50% 34%, var(--text-secondary) 0 17%, transparent 18%),
     radial-gradient(ellipse 34% 30% at 50% 92%, var(--text-secondary) 0 60%, transparent 61%),
@@ -10013,92 +10038,233 @@ textarea.notes:focus,
   opacity: 0.75;
 }
 .person-head-text {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
-  padding-right: 44px; /* clear the absolutely-positioned menu button */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 2px;
+}
+.person-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.person-eyebrow-ico {
+  display: inline-flex;
+}
+.person-eyebrow-ico svg {
+  width: 12px;
+  height: 12px;
 }
 .person-name {
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.15;
+  margin: 0 0 2px;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-wrap: balance;
 }
-.person-sub {
-  margin-top: 6px;
+.person-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   font-size: 13px;
   color: var(--text-secondary);
 }
-.person-menu-btn {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 2;
-}
-.person-section {
-  margin-top: 18px;
-}
-.person-credit {
-  flex: 0 0 104px;
-  width: 104px;
-  border: none;
-  background: none;
-  padding: 0;
-  color: var(--text-primary);
-  text-align: left;
-  cursor: pointer;
-}
-.person-credit-art {
-  aspect-ratio: 2 / 3;
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--surface-elevated);
-  margin-bottom: 6px;
-}
-.person-credit-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.person-credit-fallback {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  font-size: 11px;
-  line-height: 1.25;
-  text-align: center;
-  color: var(--text-secondary);
-}
-.person-credit-title {
-  font-size: 12px;
-  font-weight: 600;
+.person-meta-row span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* Person birth date / place rows — icon + label, like the title metadata rows. */
-.person-meta-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 5px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.person-meta-ico {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
-  background-color: var(--text-secondary);
+/* Masked lucide glyphs on this page, tinted by currentColor. */
+.person-glyph {
+  display: inline-block;
+  flex: none;
+  background-color: currentColor;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
   mask-position: center;
   -webkit-mask-size: contain;
   mask-size: contain;
+}
+.person-meta-ico {
+  width: 14px;
+  height: 14px;
+}
+/* "You and them": Home's stats box, under its section title. The career label
+   can run to two lines. */
+.person-stats {
+  margin-top: 0;
+}
+.person-stats .stat-card .label {
+  line-height: 1.25;
+}
+/* The viewer's status on any card: their rating (the library grid's badge) or
+   a "to watch" glyph, bottom-left over the art. */
+.person-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 2;
+}
+.person-badge--plan {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+}
+.person-badge--plan .person-glyph {
+  width: 13px;
+  height: 13px;
+}
+/* Best-known roles: wide backdrop cards, title + "as <character> · year". */
+.person-role {
+  flex: 0 0 236px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.person-role-art {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--surface-elevated);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+.person-role-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.person-role-title {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.person-role-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Career: section title + All / In library control on one row, then a
+   timeline: one continuous line with a year pill over each year's titles
+   (the grid divider's pill, laid horizontally). */
+.person-career-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 22px 0 10px;
+}
+.person-career-head .section-title {
+  margin: 0;
+}
+.person-career-head .seg {
+  --seg-h: 34px;
+  flex: none;
+}
+.person-timeline {
+  gap: 0;
+  padding-bottom: 8px;
+}
+.person-year {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+.person-year-mark {
+  position: relative;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding-right: 12px;
+}
+.person-year-mark::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: color-mix(in srgb, var(--text-primary) 20%, transparent);
+}
+.person-year-label {
+  position: relative;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.person-year-items {
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px 0 0;
+}
+/* A poster credit (timeline and the director rail). */
+.person-section {
+  margin-top: 18px;
+}
+.person-credit {
+  flex: 0 0 104px;
+  width: 104px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.person-credit .rating-badge {
+  z-index: 2;
+}
+.person-credit-title {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.person-credit-sub {
+  min-height: 14px;
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.person-tmdb {
+  margin-top: 22px;
 }
 
 /* ============================================================================
