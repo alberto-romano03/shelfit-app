@@ -1136,6 +1136,7 @@ const RD_ART_FADE_FROM = 0.25; // burst fraction where the incoming art starts f
 const RD_ART_FADE_SPAN = 0.45; // …over this fraction of the burst
 const RD_SWITCH_MS = 280; // type switch — each half (exit, then enter)
 const RD_SWITCH_SCALE = 0.92; // how far the card shrinks while away
+const RD_DECODE_CAP_MS = 1500; // longest a shuffle waits for the next art to decode
 
 // --- Rediscover Your Collection modal -------------------------------------
 // Backed by a prefetch queue (shelfQueue). The shared queue is warmed in the
@@ -1227,9 +1228,28 @@ function openRediscoverModal() {
       cd.classList.toggle('has-full', mode === 'disc');
       cd.classList.toggle('cover-full', mode === 'cover');
     }
+    // Resolve with a src that is fetched AND decoded (capped at RD_DECODE_CAP_MS).
+    // The queue prefetches bytes, not pixels, and a background-image paints
+    // nothing until it is decoded, which on a phone can outlast the whole spin:
+    // the incoming layer then faded in still empty and, once the old layer was
+    // hidden, the disc briefly showed neither title.
+    function readyImage(url) {
+      return imageCache
+        .load(url)
+        .catch(() => null)
+        .then((u) => {
+          const src = u || url;
+          const probe = new Image();
+          probe.src = src;
+          const decoded = probe.decode ? probe.decode().catch(() => {}) : Promise.resolve();
+          return Promise.race([decoded, new Promise((r) => setTimeout(r, RD_DECODE_CAP_MS))]).then(
+            () => src
+          );
+        });
+    }
     function setLayerImage(layer, url, token) {
-      imageCache.load(url).then((u) => {
-        if (token === renderToken) layer.style.backgroundImage = `url("${u || url}")`;
+      return readyImage(url).then((src) => {
+        if (token === renderToken) layer.style.backgroundImage = `url("${src}")`;
       });
     }
 
@@ -1322,8 +1342,8 @@ function openRediscoverModal() {
     }
 
     // `immediate` skips the spin-burst — used by the type switch, which does its
-    // own fade and must not also spin.
-    function renderPick(item, immediate = false) {
+    // own fade and must not also spin. Resolves once the shuffle has started.
+    async function renderPick(item, immediate = false) {
       if (!item) return;
       const token = ++renderToken;
       const { mode, url } = artOf(item);
@@ -1344,15 +1364,18 @@ function openRediscoverModal() {
         return;
       }
 
-      // Shuffle: paint the new art onto the other layer at opacity 0; the frame
-      // loop spins the disc up, blurs, and crossfades it in over the old art.
-      // The metadata rides along on `burst.item` and is applied at the peak, so
-      // the text and the artwork change in the same instant.
+      // Shuffle: the old title stays fully on the disc until the new art is
+      // decoded, then the new art goes onto the other layer at opacity 0 and the
+      // frame loop spins the disc up, blurs, and crossfades it in over the old
+      // one. The metadata rides along on `burst.item` and is applied at the peak,
+      // so the text and the artwork change in the same instant.
+      const src = await readyImage(url);
+      if (token !== renderToken) return; // superseded (type switch / message)
       const inc = otherLayer();
       inc.style.zIndex = '2';
       currentLayer.style.zIndex = '1';
       inc.style.opacity = '0';
-      setLayerImage(inc, url, token);
+      inc.style.backgroundImage = `url("${src}")`;
       burst = { start: null, mode, inc, token, item, committed: false };
     }
     function emptyMessage() {
@@ -1371,7 +1394,8 @@ function openRediscoverModal() {
       shuffling = true;
       try {
         const item = await queue().next();
-        if (item) renderPick(item);
+        // Awaited so the tap guard covers the (usually instant) decode wait too.
+        if (item) await renderPick(item);
         else setMessage(emptyMessage());
       } finally {
         // Release once the burst has played out, so taps can't stack up.
