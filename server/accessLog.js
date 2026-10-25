@@ -14,6 +14,7 @@ export const EVENTS = {
   LOGIN: 'login',
   MAGIC_LINK: 'magic_link',
   LOGOUT_ALL: 'logout_all',
+  INVITE: 'invite', // a member set their password from an invite
 };
 
 const RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
@@ -24,9 +25,9 @@ const insertStmt = db.prepare(
    VALUES (?, ?, ?, ?, ?, ?)`
 );
 const recentStmt = db.prepare(
-  `SELECT event, success, created_at
-     FROM access_log
-    ORDER BY created_at DESC
+  `SELECT a.event, a.success, a.created_at, u.display_name
+     FROM access_log a LEFT JOIN users u ON u.id = a.user_id
+    ORDER BY a.created_at DESC
     LIMIT ?`
 );
 const pruneStmt = db.prepare('DELETE FROM access_log WHERE created_at < ?');
@@ -60,6 +61,7 @@ export function getRecentAccess(limit = 20) {
       event: r.event,
       success: !!r.success,
       created_at: r.created_at,
+      user: r.display_name || null, // the account it targeted, when known
     }));
   } catch {
     return [];

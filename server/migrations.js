@@ -210,6 +210,24 @@ export const MIGRATIONS = [
       db.exec("DELETE FROM stats_cache WHERE key = 'summary'");
     },
   },
+  {
+    // One-time links with which a member sets their own password: when the master
+    // adds them, and again whenever the master resets it. Only a SHA-256 of the
+    // token is stored; a row is deleted the moment it is used.
+    version: 3,
+    name: 'household invites',
+    up(db) {
+      db.exec(`
+        CREATE TABLE invites (
+          token_hash TEXT PRIMARY KEY,
+          user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_invites_user ON invites(user_id);
+      `);
+    },
+  },
 ];
 
 // Filesystem half of v1: the one custom profile photo moves from

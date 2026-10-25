@@ -8446,6 +8446,18 @@ textarea.notes:focus,
 .magic-form-actions .btn {
   flex: 1;
 }
+/* Household: a member's action rows inside their modal, and the full-width
+   backup button offered above the remove confirmation. The add form and the
+   one-time invite reveal reuse the magic-link blocks above. */
+.household-actions {
+  margin-top: 14px;
+}
+.household-backup {
+  margin: 16px 0 4px;
+}
+.household-backup .btn {
+  width: 100%;
+}
 .magic-result-head {
   font-weight: 700;
   font-size: 15px;

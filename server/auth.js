@@ -27,6 +27,7 @@ import {
 import { clientIp } from './security.js';
 import { logAccess, getRecentAccess, EVENTS } from './accessLog.js';
 import { getUser, getMaster, pickerUsers, isPickable, avatarFile, fileVersion } from './users.js';
+import { findInvite, clearInvites, pruneInvites } from './invites.js';
 
 // The app is served under this sub-path by the reverse proxy (see Caddyfile),
 // which STRIPS the prefix before forwarding, so incoming request paths are at
@@ -45,6 +46,10 @@ const LEGACY_SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const SCRYPT = { N: 1 << 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 const KEYLEN = 64;
 const SALT_BYTES = 32;
+
+// Password length a member may choose (the master's comes from APP_PASSWORD).
+export const MIN_PASSWORD = 8;
+const MAX_PASSWORD = 200;
 
 const COOKIE = 'shelfit_session';
 const YEAR_SECONDS = 365 * 24 * 60 * 60;
@@ -70,6 +75,16 @@ const touchSessionStmt = db.prepare('UPDATE sessions SET last_seen_at = ? WHERE 
 const deleteSessionStmt = db.prepare('DELETE FROM sessions WHERE token_hash = ?');
 const deleteUserSessionsStmt = db.prepare('DELETE FROM sessions WHERE user_id = ?');
 const pruneSessionsStmt = db.prepare('DELETE FROM sessions WHERE last_seen_at < ?');
+// A member's live sessions, for Settings > Devices. rowid is the public handle;
+// the token hash never leaves the server.
+const listSessionsStmt = db.prepare(
+  `SELECT s.rowid AS id, s.token_hash, s.label, s.created_at, s.last_seen_at
+     FROM sessions s JOIN users u ON u.id = s.user_id
+    WHERE s.user_id = ? AND s.generation = u.session_generation
+    ORDER BY s.last_seen_at DESC`
+);
+const getSessionByIdStmt = db.prepare('SELECT token_hash FROM sessions WHERE rowid = ? AND user_id = ?');
+const deleteSessionByIdStmt = db.prepare('DELETE FROM sessions WHERE rowid = ? AND user_id = ?');
 const countPasswordUsersStmt = db.prepare(
   'SELECT COUNT(*) AS c FROM users WHERE disabled = 0 AND password_hash IS NOT NULL'
 );
@@ -247,13 +262,15 @@ export function revokeAllSessions(userId) {
   })();
 }
 
-// Prune idle sessions now (boot) and once daily. The interval is unref'd so it
-// never keeps the process alive on its own.
+// Prune idle sessions and expired invites now (boot) and once daily. The
+// interval is unref'd so it never keeps the process alive on its own.
 export function startSessionCleanup(logger) {
   const sweep = () => {
     try {
       const n = pruneSessionsStmt.run(Date.now() - YEAR_MS).changes;
       if (n && logger) logger.info(`sessions: pruned ${n} idle session(s)`);
+      const i = pruneInvites();
+      if (i && logger) logger.info(`invites: pruned ${i} expired invite(s)`);
     } catch (err) {
       if (logger) logger.warn(`session cleanup failed: ${err.message}`);
     }
@@ -436,7 +453,10 @@ function scriptJson(value) {
 // is public (see isPublic), so it loads without a session, and as a separate URL
 // it is downloaded once and browser-cached (Caddy sends a week's max-age) instead
 // of riding along, base64-inflated, in every no-store copy of this page.
-function loginPageHtml(profiles) {
+//
+// `invite` is null, { name } for a valid invite (the page opens on "choose your
+// password"), or { invalid: true } (the picker shows a notice instead).
+function loginPageHtml(profiles, invite = null) {
   const logoTag = `<img class="logo" src="${BASE}/icons/shelf-iticon-browser.png" alt="" width="56" height="56">`;
   return `<!doctype html>
 <html lang="en">
@@ -554,6 +574,8 @@ function loginPageHtml(profiles) {
   .link:hover{color:var(--text-primary)}
   .link[hidden]{display:none}
   .error{color:var(--danger);font-size:14px;min-height:18px;margin-top:4px}
+  .notice{color:var(--danger);font-size:14px;margin:-8px 0 20px}
+  .notice[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -563,6 +585,9 @@ function loginPageHtml(profiles) {
 
     <section class="view" id="picker" hidden>
       <h2 data-it="Chi sta guardando?" data-en="Who's watching?">Who's watching?</h2>
+      <p class="notice" id="notice" role="alert" hidden
+        data-it="Questo invito non è più valido. Chiedine uno nuovo."
+        data-en="This invite is no longer valid. Ask for a new one.">This invite is no longer valid. Ask for a new one.</p>
       <ul class="profiles" id="profiles"></ul>
     </section>
 
@@ -585,11 +610,39 @@ function loginPageHtml(profiles) {
         <button id="back" class="link" type="button" data-it="Non sei tu?" data-en="Not you?" hidden>Not you?</button>
       </form>
     </section>
+
+    <section class="view" id="invite" hidden>
+      <div class="who" id="iwho"></div>
+      <h2 data-it="Scegli la tua password" data-en="Choose your password">Choose your password</h2>
+      <p class="sub" data-it="La conoscerai solo tu: è quella con cui entrerai in shelfit." data-en="Only you will know it: it's how you'll sign in to shelfit.">Only you will know it: it's how you'll sign in to shelfit.</p>
+      <form id="fi" autocomplete="on">
+        <input id="iuname" class="sr-only" type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
+        <input id="ipw" type="password" name="new-password" autocomplete="new-password"
+          data-it-placeholder="Nuova password (almeno 8 caratteri)" data-en-placeholder="New password (at least 8 characters)"
+          placeholder="New password (at least 8 characters)">
+        <input id="ipw2" type="password" autocomplete="new-password"
+          data-it-placeholder="Ripeti la password" data-en-placeholder="Repeat the password"
+          placeholder="Repeat the password">
+        <button id="ibtn" class="primary" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span data-it="Salva ed entra" data-en="Save and come inside">Save and come inside</span></button>
+        <div class="error" id="ierr" role="alert"
+          data-it-short="La password deve avere almeno 8 caratteri."
+          data-en-short="The password needs at least 8 characters."
+          data-it-mismatch="Le due password non coincidono."
+          data-en-mismatch="The two passwords don't match."
+          data-it-invalid="Questo invito non è più valido. Chiedine uno nuovo."
+          data-en-invalid="This invite is no longer valid. Ask for a new one."
+          data-it-limit="Troppi tentativi. Riprova più tardi."
+          data-en-limit="Too many attempts. Try again later."
+          data-it-network="Errore di rete. Riprova."
+          data-en-network="Network error. Try again."></div>
+      </form>
+    </section>
   </main>
 <script>
   (function(){
     var BASE='${BASE}';
     var PROFILES=${scriptJson(profiles)};
+    var INVITE=${scriptJson(invite)};
     // Language: the app's stored choice, else the browser's. Both languages ship
     // in data attributes; fill every translatable node from its own.
     var lang='en';
@@ -598,6 +651,8 @@ function loginPageHtml(profiles) {
     document.documentElement.setAttribute('lang',lang);
     var nodes=document.querySelectorAll('[data-'+lang+']');
     for(var i=0;i<nodes.length;i++)nodes[i].textContent=nodes[i].getAttribute('data-'+lang);
+    var phs=document.querySelectorAll('[data-'+lang+'-placeholder]');
+    for(var k=0;k<phs.length;k++)phs[k].setAttribute('placeholder',phs[k].getAttribute('data-'+lang+'-placeholder'));
 
     var picker=document.getElementById('picker'),signin=document.getElementById('signin'),
         list=document.getElementById('profiles'),who=document.getElementById('who'),
@@ -656,7 +711,47 @@ function loginPageHtml(profiles) {
       if(ev.key==='Escape'&&!signin.hidden&&PROFILES.length>1)showPicker();
     });
 
-    if(PROFILES.length===1)choose(PROFILES[0]);else showPicker();
+    // An invite link: read the token, then drop it from the address bar so it
+    // doesn't linger in history. A valid one opens "choose your password".
+    var inviteToken=null;
+    if(INVITE){
+      try{
+        inviteToken=new URLSearchParams(window.location.search).get('invite');
+        history.replaceState(null,'',BASE+'/login');
+      }catch(e){}
+    }
+    if(INVITE&&!INVITE.invalid&&inviteToken){
+      var inviteView=document.getElementById('invite'),fi=document.getElementById('fi'),
+          ipw=document.getElementById('ipw'),ipw2=document.getElementById('ipw2'),
+          ibtn=document.getElementById('ibtn'),ierr=document.getElementById('ierr');
+      var imsg=function(key){return ierr.getAttribute('data-'+lang+'-'+key)||'';};
+      var iwho=document.getElementById('iwho');
+      iwho.appendChild(avatar({name:INVITE.name}));iwho.appendChild(nameEl({name:INVITE.name}));
+      document.getElementById('iuname').value=INVITE.name;
+      inviteView.hidden=false;
+      ipw.focus();
+      fi.addEventListener('submit',function(ev){
+        ev.preventDefault();
+        ierr.textContent='';
+        if(ipw.value.length<8){ierr.textContent=imsg('short');ipw.focus();return;}
+        if(ipw.value!==ipw2.value){ierr.textContent=imsg('mismatch');ipw2.focus();ipw2.select();return;}
+        ibtn.disabled=true;
+        fetch(BASE+'/api/auth/invite',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({token:inviteToken,password:ipw.value})
+        }).then(function(r){
+          if(r.ok){window.location.replace(BASE+'/');return;}
+          ibtn.disabled=false;
+          ierr.textContent = r.status===410 ? imsg('invalid') : r.status===429 ? imsg('limit') : imsg('short');
+        }).catch(function(){
+          ibtn.disabled=false;ierr.textContent=imsg('network');
+        });
+      });
+      return; // the picker stays hidden while choosing a password
+    }
+    if(INVITE&&INVITE.invalid)document.getElementById('notice').hidden=false;
+
+    if(PROFILES.length===1&&!(INVITE&&INVITE.invalid))choose(PROFILES[0]);else showPicker();
 
     // Generic message when arriving from an invalid/expired magic link: never
     // says why (expired vs unknown vs revoked vs rate-limited).
@@ -698,6 +793,34 @@ const AVATAR_MIME = {
   '.gif': 'image/gif',
 };
 
+// --- roles -----------------------------------------------------------------
+// Routes only the master may call: running the instance (household accounts,
+// cache and API budgets, metadata language, imports from the server folder, the
+// Kodi configuration) and the instance-wide access log. Everything else is open to
+// any member and already scoped to the caller's own data. Kept as one list,
+// enforced by the gate, so the boundary can be read (and tested) in one place.
+//
+// [method or null for any, path pattern, optional exception]
+const MASTER_ONLY = [
+  [null, /^\/api\/household(\/|$)/],
+  // Per-title refresh / clear (Detail options) stay open: the cache is shared
+  // and lazily rebuilt, so neither can hurt anyone's data.
+  [null, /^\/api\/admin\//, (p) => /^\/api\/admin\/cache\/[a-z]+\/\d+(\/refresh)?$/.test(p)],
+  [null, /^\/api\/usage(\/|$)/],
+  [null, /^\/api\/import(\/|$)/],
+  ['PATCH', /^\/api\/settings\/metadata-language$/],
+  ['PATCH', /^\/api\/kodi\/enabled$/],
+  [null, /^\/api\/kodi\/instances(\/|$)/],
+  ['POST', /^\/api\/kodi\/(test|sync)$/],
+  ['GET', /^\/api\/kodi\/icons$/],
+  ['GET', /^\/api\/auth\/access-log$/],
+];
+export function isMasterOnly(method, p) {
+  return MASTER_ONLY.some(
+    ([m, re, except]) => (!m || m === method) && re.test(p) && !(except && except(p))
+  );
+}
+
 // Which account a login attempt targets. Without a user_id the request is
 // accepted only while a single account can sign in (the single-user case, and
 // API clients written before profiles existed); otherwise it is ambiguous.
@@ -732,6 +855,7 @@ export function registerAuth(fastify, { configured }) {
     // The picker's avatars, shown before anyone has signed in.
     if (request.method === 'GET' && /^\/api\/auth\/profiles\/\d+\/avatar$/.test(p)) return true;
     if (request.method === 'POST' && p === '/api/auth/login') return true;
+    if (request.method === 'POST' && p === '/api/auth/invite') return true; // set a password from an invite
     if (request.method === 'POST' && p === '/api/auth/logout') return true; // just clears a cookie
     // The magic-link REDEEM endpoint is itself an auth mechanism, so it must be
     // reachable without a session. Only the token URL is public; the management
@@ -754,13 +878,17 @@ export function registerAuth(fastify, { configured }) {
       return;
     }
     if (isPublic(request)) return;
+    const p = (request.raw.url || '').split('?')[0];
     const user = sessionUser(request);
     if (user) {
       request.user = user;
+      if (user.role !== 'master' && isMasterOnly(request.method, p)) {
+        reply.code(403).send({ error: 'forbidden' });
+        return reply;
+      }
       return;
     }
 
-    const p = (request.raw.url || '').split('?')[0];
     if (p.startsWith('/api/') || p.startsWith('/assets/') || p.startsWith('/badges/')) {
       reply.code(401).send({ error: 'unauthorized' });
     } else {
@@ -769,12 +897,85 @@ export function registerAuth(fastify, { configured }) {
     return reply; // halt the pipeline
   });
 
-  // Standalone login page: the profile picker.
-  fastify.get('/login', async (_request, reply) => {
+  // Standalone login page: the profile picker. With ?invite=<token> it opens on
+  // "choose your password" for the invited member instead (or, when the invite
+  // is no longer valid, on the picker with a notice saying so). The invite lives
+  // under /login on purpose: the service worker never answers /login from its
+  // cache, so the link works on a device that already has the app installed.
+  fastify.get('/login', async (request, reply) => {
+    let invite = null;
+    const token = request.query && request.query.invite;
+    if (typeof token === 'string' && token) {
+      const found = findInvite(token);
+      invite = found ? { name: found.display_name } : { invalid: true };
+    }
     reply
       .header('Content-Type', 'text/html; charset=utf-8')
       .header('Cache-Control', 'no-store')
-      .send(loginPageHtml(pickerProfiles()));
+      .header('Referrer-Policy', 'no-referrer') // keep an invite token out of any Referer
+      .send(loginPageHtml(pickerProfiles(), invite));
+  });
+
+  // POST /api/auth/invite { token, password }: a member sets their own password
+  // from an invite, and is signed in. Token guessing is capped by the same
+  // per-IP failure limit as magic links (only failures count).
+  fastify.post('/api/auth/invite', async (request, reply) => {
+    const ip = clientIp(request);
+    if (isMagicRateLimited(ip)) {
+      reply.code(429);
+      return { error: 'Too many attempts. Try again later.' };
+    }
+    const body = request.body || {};
+    const invite = findInvite(body.token);
+    if (!invite) {
+      recordMagicFailure(ip);
+      logAccess(EVENTS.INVITE, request, false);
+      reply.code(410);
+      return { error: 'invite_invalid' };
+    }
+    const password = body.password;
+    if (typeof password !== 'string' || password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
+      reply.code(400);
+      return { error: 'password_length' };
+    }
+    clearMagicFailures(ip);
+    db.transaction(() => {
+      setPasswordStmt.run(hashPassword(password), invite.user_id);
+      clearInvites(invite.user_id);
+      setLastLoginStmt.run(Date.now(), invite.user_id);
+    })();
+    logAccess(EVENTS.INVITE, request, true, invite.user_id);
+    setSessionCookie(reply, request, createSession(invite.user_id, request));
+    return { ok: true };
+  });
+
+  // GET /api/auth/sessions: the caller's signed-in devices, newest activity first.
+  fastify.get('/api/auth/sessions', async (request) => {
+    const token = sessionTokenFrom(request);
+    const current = token ? hashToken(token) : null;
+    return {
+      sessions: listSessionsStmt.all(request.user.id).map((s) => ({
+        id: s.id,
+        label: s.label,
+        created_at: s.created_at,
+        last_seen_at: s.last_seen_at,
+        current: s.token_hash === current,
+      })),
+    };
+  });
+
+  // DELETE /api/auth/sessions/:id: sign one of the caller's devices out.
+  fastify.delete('/api/auth/sessions/:id', async (request, reply) => {
+    const id = parseInt(request.params.id, 10);
+    const row = Number.isInteger(id) ? getSessionByIdStmt.get(id, request.user.id) : null;
+    if (!row) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    deleteSessionByIdStmt.run(id, request.user.id);
+    const token = sessionTokenFrom(request);
+    if (token && hashToken(token) === row.token_hash) clearSessionCookie(reply, request);
+    return { ok: true };
   });
 
   // GET /api/auth/profiles/:id/avatar: a picker tile's image. Public, but only
@@ -935,10 +1136,11 @@ export function registerAuth(fastify, { configured }) {
   });
 }
 
-// Build the browser-facing magic-link URL. Prefers the configured public origin
+// Browser-facing URL of a path inside the app (e.g. '/login?invite=…'), for links
+// a member copies to another device. Prefers the configured public origin
 // (PUBLIC_URL); otherwise reconstructs it from the EXTERNAL scheme+host the
 // proxy chain forwards, so it's never localhost or a LAN IP for a real request.
-function magicLinkUrl(request, token) {
+export function publicAppUrl(request, appPath) {
   let origin = PUBLIC_URL;
   if (!origin) {
     const proto = (request.headers['x-forwarded-proto'] || '').split(',')[0].trim() ||
@@ -948,5 +1150,9 @@ function magicLinkUrl(request, token) {
       .trim();
     origin = host ? `${proto}://${host}` : '';
   }
-  return `${origin}${BASE}/api/auth/magic/${token}`;
+  return `${origin}${BASE}${appPath}`;
+}
+
+function magicLinkUrl(request, token) {
+  return publicAppUrl(request, `/api/auth/magic/${token}`);
 }

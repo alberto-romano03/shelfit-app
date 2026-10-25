@@ -301,6 +301,28 @@ function buildApi(signal) {
     // Recent authentication events (hashed identifiers only) for the Security panel.
     accessLog: () => api.get('/api/auth/access-log'),
 
+    // This member's signed-in devices; any other one can be signed out.
+    sessions: () => api.get('/api/auth/sessions'),
+    revokeSession: (id) => api.del(`/api/auth/sessions/${id}`),
+
+    // Household (master only). The invite URL is returned ONLY by addMember and
+    // reinviteMember, once.
+    householdMembers: () => api.get('/api/household/members'),
+    addMember: (display_name) => api.post('/api/household/members', { display_name }),
+    updateMember: (id, body) => api.patch(`/api/household/members/${id}`, body),
+    reinviteMember: (id) => api.post(`/api/household/members/${id}/invite`),
+    removeMember: (id) => api.del(`/api/household/members/${id}`),
+    exportMember: async (id) => {
+      const opts = { credentials: 'same-origin' };
+      if (signal) opts.signal = signal;
+      const res = await fetch(withBase(`/api/household/members/${id}/export`), opts);
+      if (!res.ok) throw new Error(t('api.exportFailed', { status: res.status }));
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename="?([^"]+)"?/);
+      return { blob, filename: m ? m[1] : 'shelfit_library.xml' };
+    },
+
     // Magic links (passwordless login). The token is returned ONLY by createMagic.
     magicLinks: () => api.get('/api/auth/magic'),
     createMagic: (label, expiry) => api.post('/api/auth/magic', { label, expiry }),

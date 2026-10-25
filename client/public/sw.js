@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v134'; // bumped: no em dashes in UI strings
+const CACHE = 'shelfit-shell-v135'; // bumped: household settings, devices, role-aware tabs
 const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
 const KEEP = [CACHE, DATA];
 

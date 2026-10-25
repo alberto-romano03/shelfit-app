@@ -39,6 +39,9 @@ const ALLOWED = {
     'SELECT 1 FROM items WHERE type = ? AND tmdb_id = ? LIMIT 1', // is the shared cache still used?
     'SELECT * FROM items ${where}', // `where` always begins with user_id = ?
   ],
+  'routes/household.js': [
+    'SELECT 1 FROM items WHERE type = ? AND tmdb_id = ? LIMIT 1', // removing a member: is the cache still used?
+  ],
   'kodi.js': [
     'SELECT title_it, title_orig, year FROM items WHERE tmdb_id = ? AND type = ? LIMIT 1', // catalog title
     'SELECT status, rewatch_count FROM items WHERE id = ?', // row already matched to the viewer

@@ -11,6 +11,8 @@ import { getPref, setPref } from '../prefs.js';
 import { pushSupported, enablePush, disablePush } from '../push.js';
 import { buildKodiSettings } from './kodiSettings.js';
 import { buildMagicLinks } from './magicLinks.js';
+import { buildHousehold } from './household.js';
+import { buildDevices } from './devices.js';
 import { canInstall, isIOS, openAddToHome } from '../addToHome.js';
 import {
   el,
@@ -44,6 +46,14 @@ export default async function Settings(container) {
     if (pollTimer) clearInterval(pollTimer);
     ac.abort();
   });
+
+  // Who is signed in decides what this page offers: running the instance
+  // (household, Kodi, cache, API budgets, metadata language, TV Time import) is
+  // the master's; everyone gets their own preferences, lists, backup and account.
+  // The server enforces the same split, so this only keeps members from seeing
+  // controls that would answer "forbidden". No login configured = the owner.
+  const authP = api.authStatus().catch(() => null);
+  const isMaster = (s) => !s || !s.enabled || !s.user || s.user.role === 'master';
 
   const header = el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' } }, [
     el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
@@ -667,15 +677,17 @@ export default async function Settings(container) {
   // --- Account (log out) — only shown when login is enabled ---
   const accountSection = el('div', { class: 'settings-section' });
   accountSection.style.display = 'none';
-  // Magic Links live alongside the account section; only shown when auth is on.
+  // Magic Links and Devices live alongside the account section; only shown when
+  // auth is on.
   const magicSection = buildMagicLinks(api);
   magicSection.style.display = 'none';
-  api
-    .authStatus()
+  const devicesSection = el('div');
+  authP
     .then((s) => {
       if (!s || !s.enabled) return; // auth disabled → nothing to log out of
       accountSection.style.display = '';
       magicSection.style.display = '';
+      devicesSection.replaceWith(buildDevices(api));
       const logoutRow = settingsRow({
         icon: 'log-out',
         label: t('settings.account.logout'),
@@ -716,7 +728,8 @@ export default async function Settings(container) {
       });
 
       accountSection.append(settingsHeader('shield', t('settings.account.title')), logoutRow.el);
-      buildAccessLog(accountSection);
+      // The access log covers every account, so it is the master's to read.
+      if (isMaster(s)) buildAccessLog(accountSection);
       accountSection.append(settingsRule(), logoutAllRow.el);
       // Reveal the Account tab chip only when there's actually an account to
       // manage (never an empty tab). chipByKey is populated below, before this
@@ -736,6 +749,7 @@ export default async function Settings(container) {
       login: t('settings.access.login'),
       magic_link: t('settings.access.magicLink'),
       logout_all: t('settings.access.logoutAll'),
+      invite: t('settings.access.invite'),
     };
     // A chevron row: it expands rather than acting, so the Account group stays
     // tidy until you ask for the history.
@@ -786,7 +800,7 @@ export default async function Settings(container) {
           list.append(
             el('div', { class: 'settings-row' }, [
               el('div', {}, [
-                el('span', { text: EVENT_LABELS[e.event] || e.event }),
+                el('span', { text: (EVENT_LABELS[e.event] || e.event) + (e.user ? ` · ${e.user}` : '') }),
                 el('span', { class: 'muted', style: { marginLeft: '8px', fontSize: '12px' }, text: when }),
               ]),
               el('span', {
@@ -1012,20 +1026,27 @@ export default async function Settings(container) {
 
   const kodiSection = buildKodiSettings(api);
 
+  // Filled with the Household section once the master is confirmed.
+  const householdSection = el('div');
+
   // ------ Tabbed layout (chips) -----------------------------------------
   // The existing sections are re-parented into per-tab panels; nothing about how
   // each section works changes — only one panel is visible at a time. Tabs are
   // driven by what actually exists (no empty tabs; Account appears only when a
-  // login is configured).
+  // login is configured, the instance tabs only for the master).
   const wrapPanel = (...sections) => el('div', { class: 'settings-panel' }, sections);
   const TAB_DEFS = [
     { key: 'general', label: t('settings.tab.general'), panel: wrapPanel(appearanceSection, installSection, notificationsSection) },
     { key: 'library', label: t('settings.tab.library'), panel: wrapPanel(metadataSection, listsSection, backupSection, importSection) },
-    { key: 'kodi', label: 'Kodi', panel: wrapPanel(kodiSection) },
-    { key: 'advanced', label: t('settings.tab.advanced'), panel: wrapPanel(usageSection, cacheSection) },
+    { key: 'household', label: t('settings.tab.household'), panel: wrapPanel(householdSection), conditional: true },
+    { key: 'kodi', label: 'Kodi', panel: wrapPanel(kodiSection), conditional: true },
+    { key: 'advanced', label: t('settings.tab.advanced'), panel: wrapPanel(usageSection, cacheSection), conditional: true },
     // Account chip stays hidden until authStatus confirms a login is enabled.
-    { key: 'account', label: t('settings.tab.account'), panel: wrapPanel(accountSection, magicSection), conditional: true },
+    { key: 'account', label: t('settings.tab.account'), panel: wrapPanel(accountSection, devicesSection, magicSection), conditional: true },
   ];
+  // The master's sections inside the shared Library tab, hidden until confirmed.
+  metadataSection.style.display = 'none';
+  importSection.style.display = 'none';
 
   // The tab strip uses the app's scrolling segmented track — same pattern as the
   // Movies/Series status filter, since this is likewise a single choice with more
@@ -1097,21 +1118,35 @@ export default async function Settings(container) {
   // Cache size and TV Time import files are NEVER scanned automatically — the
   // user triggers each with its own button (see cacheSection / importSection).
 
-  api
-    .usage()
-    .then((d) => renderUsage(d.usage || []))
-    .catch((err) => {
-      if (isAbortError(err)) return;
-      renderUsage([]);
-    });
+  // The instance controls appear for the master only; for a member nothing of
+  // them is fetched at all.
+  authP.then((s) => {
+    if (!isMaster(s)) return;
+    metadataSection.style.display = '';
+    importSection.style.display = '';
+    for (const key of ['kodi', 'advanced']) chipByKey[key].style.display = '';
+    if (s && s.enabled) {
+      householdSection.replaceWith(buildHousehold(api));
+      chipByKey.household.style.display = '';
+    }
+    tabBar.refresh(); // the track just got wider: re-measure the chips
 
-  api
-    .importStatus()
-    .then((status) => {
-      renderStatus(status);
-      if (status.running) startPolling();
-    })
-    .catch(() => {});
+    api
+      .usage()
+      .then((d) => renderUsage(d.usage || []))
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        renderUsage([]);
+      });
+
+    api
+      .importStatus()
+      .then((status) => {
+        renderStatus(status);
+        if (status.running) startPolling();
+      })
+      .catch(() => {});
+  });
 
   async function startImport() {
     startRow.setDisabled(true);

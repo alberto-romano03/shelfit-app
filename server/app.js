@@ -39,20 +39,21 @@ import favoriteRoutes from './routes/favorites.js';
 import personRoutes from './routes/persons.js';
 import settingsRoutes from './routes/settings.js';
 import imageRoutes from './routes/images.js';
+import householdRoutes from './routes/household.js';
 
 // `quiet` disables request logging (tests).
 export async function buildApp({ quiet = false } = {}) {
   const fastify = Fastify({
     logger: quiet ? false : {
-      // Custom request serializer so magic-link tokens NEVER reach the logs: the
-      // token segment of /api/auth/magic/<token> is redacted before pino writes
-      // the request line. Otherwise mirrors Fastify's default req fields.
+      // Custom request serializer so sign-in tokens NEVER reach the logs: the
+      // token of /api/auth/magic/<token> and of /login?invite=<token> is redacted
+      // before pino writes the request line. Otherwise mirrors Fastify's default
+      // req fields.
       serializers: {
         req(request) {
-          const url = (request.url || '').replace(
-            /(\/api\/auth\/magic\/)[a-f0-9]{64}/gi,
-            '$1[redacted]'
-          );
+          const url = (request.url || '')
+            .replace(/(\/api\/auth\/magic\/)[a-f0-9]{64}/gi, '$1[redacted]')
+            .replace(/([?&]invite=)[a-f0-9]{64}/gi, '$1[redacted]');
           return {
             method: request.method,
             url,
@@ -231,6 +232,7 @@ export async function buildApp({ quiet = false } = {}) {
   await fastify.register(personRoutes);
   await fastify.register(settingsRoutes);
   await fastify.register(imageRoutes);
+  await fastify.register(householdRoutes);
   // Share Target (GET /share) — an explicit route so it is matched ahead of the
   // SPA static handler / not-found fallback and reaches this handler, not the shell.
   await fastify.register(shareRoutes);
