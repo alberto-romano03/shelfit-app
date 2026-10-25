@@ -12,7 +12,7 @@
 // row. Scroll position is remembered per season (in memory) for the session.
 
 import { createApi, isAbortError } from '../api.js';
-import { navigate, onCleanup } from '../router.js';
+import { navigate, openDetail, onCleanup } from '../router.js';
 import {
   el,
   icons,
@@ -73,11 +73,14 @@ function seasonSkeleton() {
   const view = el('div', { class: 'season-view' });
 
   // Header — the back button is chrome (available immediately); only the
-  // data-driven title is a shimmer.
+  // data-driven series link and title are shimmers.
   view.append(
-    el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '22px' } }, [
+    el('div', { class: 'season-head' }, [
       el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
-      skelLine({ width: '150px', height: '20px', margin: '0' }),
+      el('div', { class: 'season-head-text' }, [
+        skelLine({ width: '96px', height: '11px', margin: '0 0 6px' }),
+        skelLine({ width: '150px', height: '20px', margin: '0' }),
+      ]),
     ])
   );
 
@@ -178,9 +181,26 @@ export default async function Season(container, params) {
   pageStatus[1] = 'loaded';
 
   // --- Chrome -------------------------------------------------------------
-  const header = el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '22px' } }, [
+  // The series title above the season name, as a link to the series page (the
+  // season can be reached straight from What's Next, which skips it).
+  const seriesLink = first.show_title
+    ? el(
+        'button',
+        {
+          class: 'season-series-link',
+          type: 'button',
+          'aria-label': t('season.openSeries', { title: first.show_title }),
+          onClick: () => openDetail(`/detail/${id}`),
+        },
+        [el('span', { class: 'season-series-name', text: first.show_title }), el('span', { class: 'season-series-chev', html: icons.forward })]
+      )
+    : null;
+  const header = el('div', { class: 'season-head' }, [
     el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
-    el('h2', { style: { margin: 0, fontSize: '20px' }, text: data.name || t('season.title', { num: n }) }),
+    el('div', { class: 'season-head-text' }, [
+      seriesLink,
+      el('h2', { class: 'season-title', text: data.name || t('season.title', { num: n }) }),
+    ]),
   ]);
 
   const markAllBtn = el(

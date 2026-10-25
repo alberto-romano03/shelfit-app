@@ -1746,6 +1746,62 @@ body.season-active .ep-scroller {
   gap: 10px;
   margin-bottom: 6px;
 }
+/* Season header: back button, then the series link (an .ai-eyebrow-style label)
+   over the season name. The series name stays on one line and ellipses to the
+   screen width; the season name below always shows in full. */
+.season-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.season-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.season-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+.season-series-link {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  /* A finger-sized hit area; the negative margins keep the label's place. */
+  margin: -6px 0 -4px;
+  padding: 8px 8px 8px 0;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  transition: color var(--dur-short) var(--ease-state);
+}
+.season-series-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.season-series-chev {
+  display: inline-flex;
+  flex: none;
+}
+.season-series-chev svg {
+  width: 13px;
+  height: 13px;
+}
+.season-series-link:active {
+  color: var(--text-primary);
+}
+@media (hover: hover) {
+  .season-series-link:hover {
+    color: var(--text-primary);
+  }
+}
 .season-actions .btn {
   flex: 1;
   margin-bottom: 0;

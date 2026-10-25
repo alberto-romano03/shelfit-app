@@ -585,6 +585,8 @@ export default async function mediaRoutes(fastify) {
 
     const baseResp = {
       item_id: row.id,
+      // The series' title, for the season page's link back to the series.
+      show_title: row.title_it || row.title_orig || null,
       season_number: seasonNumber,
       name: sMeta.name,
       overview: sMeta.overview,

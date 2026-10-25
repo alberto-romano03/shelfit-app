@@ -208,7 +208,9 @@ export function openNewTicketModal({ movie, existing = null, onConfirm, onRemove
       });
       shortcuts.push(removeChip);
     }
-    const shortcut = shortcuts.length ? el('div', { class: 'cine-new-shortcut' }, shortcuts) : null;
+    // An array so a movie with neither chip appends nothing (native append would
+    // turn a null into the text "null").
+    const shortcut = shortcuts.length ? [el('div', { class: 'cine-new-shortcut' }, shortcuts)] : [];
 
     const addBtn = el('button', { class: 'btn btn-primary' }, [
       lucideIcon(existing ? 'check' : 'ticket', 'btn-lucide'),
@@ -232,7 +234,7 @@ export function openNewTicketModal({ movie, existing = null, onConfirm, onRemove
     modal.append(
       el('h3', { text: existing ? t('ticket.editTitle') : t('ticket.newTitle') }),
       host,
-      shortcut,
+      ...shortcut,
       el('hr', { class: 'status-sep' }),
       el('div', { class: 'modal-actions' }, [
         el('button', { class: 'btn btn-secondary', onClick: close }, [
