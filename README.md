@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="client/public/icons/icon-512.png" alt="shelfIt" width="140" />
+<img src="client/public/icons/icon-512.png" alt="shelfit-app" width="140" />
 
 # shelfit-app
 
@@ -17,7 +17,7 @@
 
 ---
 
-shelfIt is a personal media library for one person and their household. It pulls
+shelfit-app is a personal media library for one person and their household. It pulls
 rich metadata and artwork from The Movie Database, lays your collection out as a
 tactile shelf of DVD spines and disc art, and tracks what you own, what you have
 watched, per-episode progress for series, ratings, and viewing statistics. It is
@@ -32,7 +32,7 @@ has a private library behind their own password; one **master** account, created
 from `APP_PASSWORD` on first boot, runs the instance. All data lives in a single
 SQLite database and cache folder that you own.
 
-> **In a hurry?** Jump to [Running shelfIt](#running-shelfit). There are two
+> **In a hurry?** Jump to [Running shelfit-app](#running-shelfit-app). There are two
 > supported setups: [**A. localhost / LAN only**](#a-localhost--lan-only)
 > (five small edits, no proxy) and [**B. Tailscale + Caddy**](#b-tailscale--caddy-recommended)
 > (keep the defaults, reach it over your tailnet). Read
@@ -46,7 +46,7 @@ SQLite database and cache folder that you own.
 - [Tech stack](#tech-stack)
 - [Prerequisites](#prerequisites)
 - [The `/shelfit/` base path](#the-shelfit-base-path-read-this-first)
-- [Running shelfIt](#running-shelfit)
+- [Running shelfit-app](#running-shelfit-app)
   - [A. localhost / LAN only](#a-localhost--lan-only)
   - [B. Tailscale + Caddy](#b-tailscale--caddy-recommended)
   - [Serving it under a different sub-path](#serving-it-under-a-different-sub-path)
@@ -152,7 +152,7 @@ SQLite database and cache folder that you own.
   keeps the home screen, What's Next and Plan to Watch pages working offline.
 - Push notifications for new episodes of the shows you are watching and for
   titles lent to you.
-- Share a TMDB link from any app and shelfIt opens that title.
+- Share a TMDB link from any app and shelfit-app opens that title.
 - English or Italian interface, a separate language for titles and plots, and a
   system, dark or light theme.
 
@@ -225,13 +225,13 @@ hostname, each under its own `/prefix`.
 | **A.** localhost / LAN | `/` | `http://<host>:3000/` | none |
 | **B.** Tailscale (as shipped) | `/shelfit/` | `https://<machine>.<tailnet>.ts.net/shelfit/` and `http://localhost/shelfit/` | Caddy |
 
-## Running shelfIt
+## Running shelfit-app
 
 Common to both setups:
 
 ```bash
-git clone <your-repo-url> shelfit
-cd shelfit
+git clone https://github.com/alberto-romano03/shelfit-app.git
+cd shelfit-app
 cp .env.example .env
 ```
 
@@ -282,7 +282,7 @@ so magic links point at an address those devices can reach.
 
 ### B. Tailscale + Caddy (recommended)
 
-Caddy sits in front of shelfIt and listens on the host only; Tailscale brings
+Caddy sits in front of shelfit-app and listens on the host only; Tailscale brings
 HTTPS to every device signed in to your tailnet. Nothing is reachable from the
 internet or the LAN, and the router needs no configuration. The examples use
 `myserver.tail1234.ts.net`; replace it with your host's Tailscale name (shown on
@@ -292,7 +292,7 @@ the Machines page of the admin console).
 laptop that should reach the app, all in the same tailnet. In the admin console,
 under **DNS**, enable **MagicDNS** and **HTTPS Certificates**.
 
-**2. Start shelfIt.** The shipped `docker-compose.yml` publishes no port and
+**2. Start shelfit-app.** The shipped `docker-compose.yml` publishes no port and
 joins the shared `webproxy` network, where Caddy finds it by container name:
 
 ```bash
@@ -404,7 +404,7 @@ Replace the `handle_path` block above with:
 	}
 ```
 
-Rate limiting is done by shelfIt itself: Caddy's `rate_limit` directive needs a
+Rate limiting is done by shelfit-app itself: Caddy's `rate_limit` directive needs a
 plugin the stock `caddy:2-alpine` image lacks.
 
 </details>
@@ -487,7 +487,7 @@ files, see [setup A](#a-localhost--lan-only)), the **API budget caps** and
 ## Data layout
 
 Everything persistent lives under `data/`, mounted into the container as
-`/app/data`. Back up (or exclude, for a public repo) this whole directory.
+`/app/data`. Back up this whole directory.
 
 | Path | Contents |
 | --- | --- |
@@ -500,12 +500,6 @@ Everything persistent lives under `data/`, mounted into the container as
 | `data/kodi.key` | Key used to encrypt stored Kodi credentials at rest. |
 | `data/backups/` | Database snapshots: your manual ones, plus the verified copy taken automatically before every schema upgrade (`shelfit-pre-v<N>-<date>.db`). |
 | `data/caddy/` | Reverse-proxy state (certificates, ACME account) — only present when Caddy stores its data here. |
-
-> **Public repository note:** `data/` contains private data (the database, cached
-> artwork, imported personal history, TLS/ACME keys, and the Kodi encryption key).
-> Keep it out of any public mirror. The default `.gitignore` ignores the
-> regenerable `data/cache/` and `data/profile/`; a public clone should exclude the
-> entire `data/` tree.
 
 ## Settings tour
 
@@ -555,7 +549,7 @@ Like handing a friend a DVD from your shelf:
    see this", and tap the member.
 2. Their devices with notifications on get a generic "*name* wants to lend you
    something…" (no title or note on the lock screen).
-3. When they open shelfIt, a popup shows your note as its headline (or "*name*
+3. When they open shelfit-app, a popup shows your note as its headline (or "*name*
    wants to lend you this DVD" without one), the poster with a "From *name* ♥"
    sticky note, the title and year. **Borrow it** adds the title to their Plan to
    Watch; **No, thanks** declines for good; tapping outside asks again next time.
@@ -581,7 +575,7 @@ shown, and no notification is sent for it.
 3. Run `docker compose exec shelfit node server/importKodi.js`. The titles go into
    the master's library.
 
-### Another shelfIt instance (XML)
+### Another shelfit-app instance (XML)
 
 Export from **Settings → Library → Backup** on the source instance and import the
 file on the target. The merge is additive and never deletes; see
@@ -592,12 +586,12 @@ file on the target. The merge is additive and never deletes; see
 1. Enable the JSON-RPC / remote-control interface in Kodi
    (**Settings → Services → Control**), noting host, port, and any username /
    password.
-2. In shelfIt open **Settings → Kodi** and add an instance; credentials are stored
+2. In shelfit-app open **Settings → Kodi** and add an instance; credentials are stored
    server-side and encrypted at rest (`data/kodi.key`), and passwords are never
    sent back to the browser. Use **Test** to verify, then make it active. The
    browser never talks to Kodi directly — all calls go through the server.
 3. On a title's detail page, use **Play on Kodi** to start playback.
-4. Leave the integration enabled and shelfIt will also **sync** once a day at
+4. Leave the integration enabled and shelfit-app will also **sync** once a day at
    22:00 (or on demand with **Sync now**): it advances watch status for titles it
    already knows and queues anything new for review. It never downgrades a status
    and never deletes, and nothing is written until the review sheet is confirmed.
@@ -714,7 +708,7 @@ files were changed. See [The `/shelfit/` base path](#the-shelfit-base-path-read-
 **`502 Bad Gateway` from Caddy.**
 The proxy cannot reach the container: make sure both are on the `webproxy`
 network (`docker network create webproxy`, then recreate both projects) and that
-the `reverse_proxy` target matches shelfIt's `container_name` and port.
+the `reverse_proxy` target matches the app's `container_name` (`shelfit`) and port.
 
 **The `ts.net` address does not load (setup B).**
 Check that the device has Tailscale connected, that `tailscale serve status` on
@@ -766,7 +760,7 @@ Docker rebuild with a service-worker cache bump.
 
 ## License
 
-The **source code** of shelfIt is released under the [MIT License](LICENSE) —
+The **source code** of shelfit-app is released under the [MIT License](LICENSE) —
 take it, read it, fork it, modify it, ship it, build something else out of it.
 Attribution is the only condition: keep the copyright and permission notice with
 any substantial copy of the code. There is no obligation to open-source your
@@ -777,7 +771,7 @@ agree that your contribution is licensed under MIT.
 
 ### Third-party assets and attribution
 
-The MIT license covers the code **only**. Everything visual that shelfIt bundles,
+The MIT license covers the code **only**. Everything visual that shelfit-app bundles,
 downloads or displays belongs to its respective owner and is **not** relicensed
 here. If you reuse this code, replace these assets or satisfy their terms
 yourself.
@@ -795,14 +789,14 @@ yourself.
 | Screenshots in `brand/screenshot/` | Contain film and TV artwork © the respective studios | Shown for illustration only |
 
 > This product uses the TMDB API but is **not** endorsed or certified by TMDB.
-> shelfIt is not affiliated with, endorsed by, or sponsored by TMDB, Fanart.tv,
+> shelfit-app is not affiliated with, endorsed by, or sponsored by TMDB, Fanart.tv,
 > Google, the XBMC Foundation, TV Time, or any studio or rights holder whose
 > artwork it displays. All trademarks and artwork are the property of their
 > respective owners.
 
 ### Personal, non-commercial use
 
-shelfIt is a personal project, built to catalogue one household's own media
+shelfit-app is a personal project, built to catalogue one household's own media
 library, and it is meant to be used that way: **privately, for personal,
 non-commercial purposes.** It is not a product, not a service, and not intended
 to be sold, resold, hosted as a paid offering, or used to distribute or

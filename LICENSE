@@ -31,10 +31,9 @@ remains the property of its respective owners and is used here under the terms
 each owner sets. See the "Third-party assets and attribution" section of
 README.md for the list.
 
-shelfIt is a personal, non-commercial project intended for private use with
-your own media library. Several of the assets it bundles or fetches (notably
-the JoyPixels animated emoji, The Movie Database and Fanart.tv content, and
-third-party logos and trademarks) are licensed for personal, non-commercial use
-only. Reusing the code commercially is permitted by the MIT license above, but
-you must then supply your own assets and comply with the terms of any API you
-call.
+shelfit-app is a personal, non-commercial project intended for private use with
+your own media library. Several of the assets it fetches or displays (notably
+The Movie Database and Fanart.tv content, and third-party logos and trademarks)
+are licensed for personal, non-commercial use only. Reusing the code
+commercially is permitted by the MIT license above, but you must then supply
+your own assets and comply with the terms of any API you call.
