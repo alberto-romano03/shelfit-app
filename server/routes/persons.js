@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import db from '../db.js';
 import { sniffMime } from '../images.js';
 import { tmdbGet } from '../tmdb.js';
+import { getTmdbLanguage } from '../language.js';
 import {
   ensurePerson,
   customPhotoPath,
@@ -37,7 +38,7 @@ export default async function personRoutes(fastify) {
     if (!q) return { results: [] };
     let data;
     try {
-      data = await tmdbGet('/search/person', { query: q, language: 'it-IT' }, { signal: request.raw.signal });
+      data = await tmdbGet('/search/person', { query: q, language: getTmdbLanguage() }, { signal: request.raw.signal });
     } catch (err) {
       reply.code(502);
       return { error: err.message || 'person search failed' };

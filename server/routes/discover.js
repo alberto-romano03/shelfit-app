@@ -7,6 +7,7 @@ import db from '../db.js';
 import { ensureGenres } from '../genres.js';
 import { discover, IMG_SIZES } from '../tmdb.js';
 import { clientAbortSignal } from '../http.js';
+import { getTmdbLanguage } from '../language.js';
 
 // Local image proxy (cached 1 day) — keeps the phone off the TMDB CDN and
 // avoids a full show rebuild just to preview a suggestion.
@@ -105,7 +106,7 @@ export default async function discoverRoutes(fastify) {
     const genreList = kind === 'movie' ? genreData.movie : genreData.tv;
 
     const params = {
-      language: 'it-IT',
+      language: getTmdbLanguage(),
       include_adult: false,
       'vote_count.gte': 50, // always — avoid obscure low-data titles
       sort_by: 'popularity.desc',

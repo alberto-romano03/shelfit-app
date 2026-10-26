@@ -8,6 +8,7 @@ import { tmdbGet, discover, IMG_SIZES } from '../tmdb.js';
 import { ensureGenres } from '../genres.js';
 import { allowed } from '../usage.js';
 import { clientAbortSignal } from '../http.js';
+import { getTmdbLanguage } from '../language.js';
 
 // GET /api/explore — one response with every Explore row for the Search page.
 // All TMDB calls happen HERE (the client never touches TMDB). The expensive
@@ -17,7 +18,10 @@ import { clientAbortSignal } from '../http.js';
 const TTL_MS = (parseInt(process.env.EXPLORE_TTL_MIN, 10) || 90) * 60 * 1000;
 const PER_ROW = 20; // cap posters per row
 
-let memo = null; // { at, sections: [{ key, title, items: [baseItem] }] }
+// The rows are fetched in the metadata language, so the memo remembers which one:
+// after a change in Settings > Library the next request rebuilds instead of
+// serving the old language until the TTL runs out.
+let memo = null; // { at, lang, sections: [{ key, title, items: [baseItem] }] }
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
 const allItemsStmt = db.prepare('SELECT id, tmdb_id, type FROM items WHERE user_id = ?');
@@ -62,10 +66,13 @@ function arr(v) {
   return [];
 }
 
-async function buildSections(signal) {
+async function buildSections(signal, language) {
   const genres = await ensureGenres({ signal });
+  // "Now in theaters" needs a country. The language tag's region is the only
+  // locale the instance knows (it-IT → Italian cinemas, en-US → American ones).
+  const region = language.split('-')[1];
   const dParams = (extra) => ({
-    language: 'it-IT',
+    language,
     include_adult: false,
     'vote_count.gte': 100,
     sort_by: 'popularity.desc',
@@ -75,12 +82,12 @@ async function buildSections(signal) {
 
   // Fire everything concurrently; a single failed row must not sink the page.
   const calls = await Promise.allSettled([
-    tmdbGet('/trending/all/week', { language: 'it-IT' }, { signal }),
-    tmdbGet('/movie/now_playing', { language: 'it-IT', region: 'IT' }, { signal }),
-    tmdbGet('/movie/popular', { language: 'it-IT' }, { signal }),
-    tmdbGet('/tv/popular', { language: 'it-IT' }, { signal }),
-    tmdbGet('/movie/top_rated', { language: 'it-IT' }, { signal }),
-    tmdbGet('/tv/on_the_air', { language: 'it-IT' }, { signal }),
+    tmdbGet('/trending/all/week', { language }, { signal }),
+    tmdbGet('/movie/now_playing', { language, region }, { signal }),
+    tmdbGet('/movie/popular', { language }, { signal }),
+    tmdbGet('/tv/popular', { language }, { signal }),
+    tmdbGet('/movie/top_rated', { language }, { signal }),
+    tmdbGet('/tv/on_the_air', { language }, { signal }),
     // Mood rows (labelled by feeling, not genre). These six are the Search
     // page's mood strip; the same definitions Dust It Off uses in
     // routes/discover.js, so a mood means the same thing in both places.
@@ -162,10 +169,11 @@ export default async function exploreRoutes(fastify) {
   fastify.get('/api/explore', async (request, reply) => {
     const signal = clientAbortSignal(request, reply);
 
-    if (!memo || Date.now() - memo.at >= TTL_MS) {
+    const lang = getTmdbLanguage();
+    if (!memo || memo.lang !== lang || Date.now() - memo.at >= TTL_MS) {
       try {
-        const sections = await buildSections(signal);
-        if (sections.length) memo = { at: Date.now(), sections };
+        const sections = await buildSections(signal, lang);
+        if (sections.length) memo = { at: Date.now(), lang, sections };
       } catch (err) {
         if (err && err.name === 'AbortError') {
           reply.hijack();
