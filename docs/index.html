@@ -1,0 +1,2695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0a0a" />
+<meta name="color-scheme" content="dark" />
+<title>shelfit</title>
+<meta name="description" content="A self-hosted app for the movies and TV your household owns and watches, with the charm of the old video store." />
+<meta property="og:title" content="shelfit" />
+<meta property="og:description" content="Everything you watch, on one shelf." />
+<meta property="og:image" content="assets/icon-512.png" />
+<link rel="icon" type="image/png" href="assets/shelf-iticon-browser.png" />
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+
+<style>
+/* ==========================================================================
+   shelfit presentation page
+
+   The components are the app's own markup and CSS (client/src/styles.css,
+   client/index.html, client/src/showcase.js), each block labelled with its
+   source. "Page" at the end composes them: the tiles, grids and rhythm,
+   drawn from the same tokens.
+   ========================================================================== */
+
+/* ---- styles.css · Theme tokens (dark, the app default) ---- */
+:root {
+  --bg: #0a0a0a;
+  --surface: #1a1a1a;
+  --surface-elevated: #2a2a2a;
+  --text-primary: #ffffff;
+  --text-secondary: #999999;
+  --accent: #e5a00d;
+  --stars: #e5a00d;
+  --success: #4caf50;
+  --danger: #e5484d;
+  --border: rgba(255, 255, 255, 0.08);
+  --shadow: rgba(0, 0, 0, 0.5);
+  --pos-paper-edge: #2a2a2a;
+  --pos-paper-shadow: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.16));
+  --nav-h: 60px;
+  --header-h: 64px;
+  --dur-short: 180ms;
+  --dur-medium: 280ms;
+  --dur-long: 300ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 0.68, 0.2);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-state: ease;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+  --frame-gold-label: #e0b43c;
+}
+
+/* ---- styles.css · Reset ---- */
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+  overscroll-behavior-y: none;
+}
+img {
+  display: block;
+  max-width: 100%;
+}
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+::-webkit-scrollbar {
+  display: none;
+}
+img,
+svg,
+button,
+.brand,
+.brand-logo {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* ---- styles.css · App header + brand ---- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+.app-header h1 {
+  font-size: 20px;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+.app-header h1 span {
+  color: var(--accent);
+}
+.header-actions {
+  display: flex;
+  gap: 4px;
+}
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--text-primary);
+}
+.icon-btn:active {
+  background: var(--surface-elevated);
+}
+.icon-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* ---- styles.css · App logo idle slide (the disc slides into the slot) ---- */
+.brand { position: relative; }
+.brand-line {
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 26px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+}
+.brand-logo-slot {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 6px;
+  line-height: 0;
+}
+.logo-idle-run .brand-logo { animation: logo-idle 2.4s ease-in-out; will-change: transform; }
+.logo-idle-run .brand-line { animation: brand-line-glow 2.4s ease-in-out; }
+@keyframes logo-idle {
+  0% { transform: translateX(0) rotate(0deg) scale(1); }
+  30% { transform: translateX(-30px) rotate(230deg) scale(0.4); }
+  40% { transform: translateX(-30px) rotate(300deg) scale(0.35); }
+  56% { transform: translateX(-30px) rotate(400deg) scale(0.35); }
+  74% { transform: translateX(-14px) rotate(520deg) scale(0.72); }
+  100% { transform: translateX(0) rotate(720deg) scale(1); }
+}
+@keyframes brand-line-glow {
+  0%, 100% { opacity: 0; }
+  30%, 70% { opacity: 1; box-shadow: 0 0 10px var(--accent), 0 0 4px var(--accent); }
+}
+
+/* ---- index.html · Splash (disc sucked into the DVD-player slot) ---- */
+.splash-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.splash-clip {
+  width: 148px;
+  height: 148px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.splash-logo {
+  width: 148px;
+  height: 148px;
+  will-change: transform;
+  animation: splash-logo 1.5s forwards;
+}
+.splash-slot {
+  width: 190px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #2a2a2a, #e5a00d, #2a2a2a);
+  transform: scaleX(0);
+  opacity: 0;
+  animation: splash-slot 1.5s forwards;
+}
+.splash-word {
+  margin-top: 22px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: #ffffff;
+  opacity: 0;
+  animation: splash-word 1.5s forwards;
+}
+.splash-word span {
+  color: #e5a00d;
+}
+@keyframes splash-logo {
+  0% {
+    transform: translateY(0) scale(0.9) rotate(0deg);
+    animation-timing-function: ease-out;
+  }
+  16% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    animation-timing-function: ease;
+  }
+  52% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    animation-timing-function: linear;
+  }
+  100% {
+    transform: translateY(170px) scale(0.86) rotate(540deg);
+  }
+}
+@keyframes splash-word {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  100% { opacity: 1; }
+}
+@keyframes splash-slot {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+    box-shadow: 0 0 0 rgba(229, 160, 13, 0);
+  }
+  22% {
+    transform: scaleX(1);
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(229, 160, 13, 0.25);
+  }
+  88% {
+    box-shadow: 0 0 10px rgba(229, 160, 13, 0.35);
+  }
+  96% {
+    box-shadow: 0 0 22px rgba(229, 160, 13, 0.8);
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(229, 160, 13, 0.3);
+  }
+}
+
+/* ---- styles.css · Buttons ---- */
+.btn {
+  transition: background-color var(--dur-short) var(--ease-state),
+    color var(--dur-short) var(--ease-state),
+    opacity var(--dur-short) var(--ease-state),
+    transform var(--dur-short) var(--ease-state);
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px;
+  border-radius: var(--r-pill);
+  font-weight: 600;
+  min-height: 48px;
+  text-align: center;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn-primary {
+  background: var(--accent);
+  color: #000;
+}
+.btn-secondary {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+.btn:disabled {
+  opacity: 0.4;
+}
+.btn svg {
+  width: 18px;
+  height: 18px;
+  vertical-align: -3px;
+}
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 22px 0 10px;
+}
+
+/* ---- styles.css · Segmented control ---- */
+.seg {
+  --seg-h: 38px;
+  --seg-pad: 4px;
+  --seg-count: 2;
+  --seg-i: 0;
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(var(--seg-count), minmax(96px, 1fr));
+  align-items: stretch;
+  height: var(--seg-h);
+  padding: var(--seg-pad);
+  border-radius: var(--r-pill);
+  background: var(--surface-elevated);
+  isolation: isolate;
+}
+.seg-chip {
+  position: absolute;
+  z-index: 0;
+  top: var(--seg-pad);
+  left: var(--seg-pad);
+  width: calc((100% - var(--seg-pad) * 2) / var(--seg-count));
+  height: calc(100% - var(--seg-pad) * 2);
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  transform: translateX(calc(100% * var(--seg-i)));
+  transition: transform var(--dur-short) var(--ease-out);
+}
+.seg-opt {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  border: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px;
+  background: none;
+  border-radius: var(--r-pill);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-short) var(--ease-state);
+}
+.seg-opt[aria-checked='true'] {
+  color: #000;
+}
+.seg-opt:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.seg:active .seg-chip {
+  transform: translateX(calc(100% * var(--seg-i))) scale(0.97);
+}
+
+/* ---- styles.css · Showcase illustrations (.sc-*) ---- */
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+  }
+}
+.sc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  align-self: stretch;
+  padding: 11px 15px;
+  border-radius: var(--r-pill);
+  font-weight: 600;
+  font-size: 14px;
+  border: 1.5px solid color-mix(in srgb, #7ed99a 60%, transparent);
+  background: color-mix(in srgb, #7ed99a 15%, transparent);
+  color: #7ed99a;
+}
+.sc-status .sc-ic { width: 17px; height: 17px; flex: none; }
+.sc-status .sc-cur { flex: 1; text-align: left; }
+.sc-status .sc-caret { width: 16px; height: 16px; opacity: 0.8; }
+.sc-shelf {
+  position: relative;
+  width: 100%;
+  max-width: 236px;
+}
+.sc-spines {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 8px;
+  height: 150px;
+  padding: 0 0 0 12px;
+}
+.sc-spine {
+  width: 30px;
+  height: 132px;
+  border-radius: 3px 3px 2px 2px;
+  position: relative;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.32);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.sc-spine .sc-band {
+  width: 100%;
+  height: 28px;
+  margin-top: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  display: grid;
+  place-items: center;
+}
+.sc-spine .sc-band svg { width: 14px; height: 14px; color: #111; }
+.sc-spine.sc-lift {
+  transform: translateY(-14px);
+  animation: sc-lift 3.8s var(--ease-in-out) infinite;
+}
+.sc-spine.sc-s1 { background: linear-gradient(#3a2a52, #241636); }
+.sc-spine.sc-s2 { background: linear-gradient(#124b44, #08322c); }
+.sc-spine.sc-s3 { background: linear-gradient(#7a3a1a, #4a2410); }
+.sc-shelf .sc-disc-out {
+  position: absolute;
+  right: 2px;
+  bottom: 20px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #f0f2f4, #c2c7cd 55%, #9aa0a7 100%);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.4);
+}
+.sc-shelf .sc-disc-out::after {
+  content: '';
+  position: absolute;
+  inset: 40%;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 0 0 6px #fff;
+}
+.sc-ledge {
+  height: 8px;
+  border-radius: 3px;
+  margin-top: 2px;
+  background: linear-gradient(#4a3a2a, #2a2015);
+  box-shadow: 0 7px 12px rgba(0, 0, 0, 0.35);
+}
+.sc-dust {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+.sc-dust-stage {
+  position: relative;
+  width: 118px;
+}
+.sc-dust-card {
+  position: relative;
+  width: 118px;
+  height: 164px;
+  border-radius: var(--r-md);
+  background: linear-gradient(150deg, #6b4fbf, #2c1f4f);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.sc-dust-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), transparent 55%);
+}
+.sc-spark {
+  position: absolute;
+  color: var(--accent);
+}
+.sc-spark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: drop-shadow(0 2px 5px rgba(229, 160, 13, 0.5));
+}
+.sc-spark.sc-a { width: 34px; height: 34px; top: -16px; right: -16px; animation: sc-twinkle 2.6s var(--ease-in-out) infinite; }
+.sc-spark.sc-b { width: 22px; height: 22px; top: 58px; left: -18px; animation: sc-twinkle 2.6s var(--ease-in-out) 0.6s infinite; }
+.sc-spark.sc-c { width: 18px; height: 18px; bottom: -10px; right: 10px; animation: sc-twinkle 2.6s var(--ease-in-out) 1.2s infinite; }
+.sc-moods {
+  display: flex;
+  gap: 8px;
+}
+.sc-mood {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 13px;
+  border-radius: var(--r-pill);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+}
+.sc-mood.sc-on {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.sc-next {
+  width: 260px;
+  position: relative;
+  padding-left: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sc-next::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-secondary) 30%, transparent);
+}
+.sc-tl {
+  position: relative;
+  background: var(--surface-elevated);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  text-align: left;
+}
+.sc-tl::before {
+  content: '';
+  position: absolute;
+  left: -27px;
+  top: 16px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--bg);
+}
+.sc-tl.sc-watch::before { border: 4px solid var(--accent); }
+.sc-tl.sc-soon::before { border: 4px solid var(--success); }
+.sc-tl-t { font-weight: 600; font-size: 14px; }
+.sc-tl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+}
+.sc-tl-chip.sc-ep { background: var(--accent); color: #fff; }
+.sc-tl-chip.sc-cal { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.sc-tl-chip svg { width: 13px; height: 13px; }
+.sc-kodi-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--r-pill);
+  font-weight: 600;
+  font-size: 14px;
+  background: color-mix(in srgb, #17b2e7 15%, transparent);
+  border: 1.5px solid color-mix(in srgb, #17b2e7 55%, transparent);
+  color: color-mix(in srgb, #17b2e7 82%, var(--text-primary));
+}
+.sc-kodi-chip svg { width: 17px; height: 17px; }
+@keyframes sc-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes sc-lift { 0%, 72%, 100% { transform: translateY(0); } 84% { transform: translateY(-14px); } }
+@keyframes sc-twinkle { 0%, 100% { opacity: 0.6; transform: scale(0.85) rotate(0); } 50% { opacity: 1; transform: scale(1.12) rotate(18deg); } }
+
+/* ---- styles.css · The Shelf: DVD boxset spines + potted plant ---- */
+.dvd-shelf {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.dvd-spines {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 4px;
+  transform: translateX(6px);
+}
+.dvd-plant + .dvd-spine {
+  margin-left: 14px;
+}
+.dvd-plant {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  height: 120px;
+  margin: 0 -4px 0 -6px;
+  pointer-events: none;
+  user-select: none;
+  display: flex;
+  align-items: flex-end;
+}
+.dvd-plant svg {
+  height: 100%;
+  width: auto;
+  display: block;
+}
+.dvd-spine {
+  position: relative;
+  height: 178px;
+  border: none;
+  padding: 0;
+  border-radius: 3px 3px 2px 2px;
+  cursor: pointer;
+  overflow: hidden;
+  color: var(--text-primary);
+  transition: transform 0.2s var(--ease-out);
+}
+.dvd-spine-band {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  background: #1560bd;
+}
+.dvd-spine-band svg {
+  width: 13px;
+  height: 13px;
+  color: #fff;
+  display: block;
+}
+.dvd-spine-brand {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  line-height: 1;
+  color: #fff;
+}
+.spine-shelf {
+  width: 50px;
+  background-color: #6d5a44;
+}
+.spine-dust {
+  width: 58px;
+  background-color: #3f4a63;
+}
+.spine-rom {
+  width: 44px;
+  background-color: #6a3b46;
+}
+.dvd-spine-label {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  color: #f3ede2;
+}
+.dvd-spine-label-text {
+  white-space: nowrap;
+  transform: rotate(-90deg);
+  text-box: trim-both cap alphabetic;
+}
+.spine-shelf .dvd-spine-label {
+  font-family: 'Didot', 'Bodoni MT', 'Baskerville', 'Hoefler Text', Georgia, serif;
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+.spine-dust .dvd-spine-label {
+  font-family: 'Rockwell', 'Rockwell Nova', 'Courier New', Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.spine-rom .dvd-spine-label {
+  font-family: ui-monospace, 'Consolas', 'Courier New', monospace;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.dvd-spine.extracting {
+  transform: translateY(-10px);
+}
+.dvd-shelf-surface {
+  height: 12px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--surface-elevated) 70%, #5a4632 30%);
+}
+
+/* ---- styles.css · The Desk: POS receipt printer ---- */
+.pos-printer {
+  display: block;
+  width: min(420px, 94%);
+  margin: 20px auto 0;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.pos-printer:active {
+  transform: scale(0.97);
+}
+.pos-body {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 92px;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: linear-gradient(160deg, #2a2a2e 0%, #1a1a1d 45%, #101012 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 3px 8px rgba(0, 0, 0, 0.25);
+}
+.pos-label {
+  position: relative;
+  color: #e9e5d8;
+  border: 1px solid rgba(233, 229, 216, 0.65);
+  border-radius: 3px;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.pos-slot {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 74%;
+  height: 7px;
+  border-radius: 4px 4px 0 0;
+  background: #0a0a0b;
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.9),
+    0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+.pos-paper {
+  display: block;
+  position: relative;
+  z-index: 1;
+  width: 60%;
+  height: 52px;
+  margin: -8px auto 0;
+  background: var(--pos-paper-edge);
+  filter: var(--pos-paper-shadow);
+  --torn-edge: polygon(
+    0% 0%, 100% 0%,
+    100% calc(100% - 5px),
+    95% 100%, 90% calc(100% - 5px), 85% 100%, 80% calc(100% - 5px),
+    75% 100%, 70% calc(100% - 5px), 65% 100%, 60% calc(100% - 5px),
+    55% 100%, 50% calc(100% - 5px), 45% 100%, 40% calc(100% - 5px),
+    35% 100%, 30% calc(100% - 5px), 25% 100%, 20% calc(100% - 5px),
+    15% 100%, 10% calc(100% - 5px), 5% 100%, 0% calc(100% - 5px)
+  );
+  clip-path: var(--torn-edge);
+  transform: translateY(-44px);
+  transition: transform 1.05s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pos-paper-sheet {
+  position: absolute;
+  top: 0;
+  right: 1px;
+  bottom: 1px;
+  left: 1px;
+  background: #fffdf6;
+  clip-path: var(--torn-edge);
+}
+.pos-printer.printed .pos-paper {
+  transform: translateY(0);
+}
+
+/* ---- styles.css · Cinema ticket (renderTicket) ---- */
+.cine-ticket {
+  --paper: #fefefd;
+  --ink: #2a241d;
+  --ink-soft: #857a68;
+  --paper-edge: rgba(42, 36, 29, 0.16);
+  width: min(300px, 78vw);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 20px;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.05));
+  overflow: visible;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+}
+.cine-top {
+  background: var(--paper);
+  border-radius: 20px 20px 0 0;
+  overflow: hidden;
+}
+.cine-banner {
+  width: 100%;
+  height: 128px;
+  background: #1b1712;
+  overflow: hidden;
+}
+.cine-body { padding: 14px 18px 10px; }
+.cine-title {
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.2px;
+  margin-bottom: 12px;
+}
+.cine-adminrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--ink-soft);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--paper-edge);
+}
+.cine-datetime {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+}
+.cine-field {
+  position: relative;
+  flex: 6 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.02);
+  cursor: pointer;
+  overflow: hidden;
+}
+.cine-field-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  pointer-events: none;
+}
+.cine-input-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cine-field-time { flex-grow: 4; }
+.cine-cinemarow {
+  padding-bottom: 12px;
+}
+.cine-tear {
+  position: relative;
+  height: 20px;
+  margin: -1px 0;
+  background: var(--paper);
+  -webkit-mask-image:
+    radial-gradient(circle 9px at left center, transparent 0 9px, #000 9.5px),
+    radial-gradient(circle 9px at right center, transparent 0 9px, #000 9.5px);
+  mask-image:
+    radial-gradient(circle 9px at left center, transparent 0 9px, #000 9.5px),
+    radial-gradient(circle 9px at right center, transparent 0 9px, #000 9.5px);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+.cine-tear::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 50%;
+  margin-top: -1px;
+  border-top: 2px dashed var(--paper-edge);
+}
+.cine-stub {
+  background: var(--paper);
+  border-radius: 0 0 20px 20px;
+  padding: 8px 18px 18px;
+  text-align: center;
+}
+.cine-barcode {
+  height: 46px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--ink) 0 3px,
+    transparent 3px 6px,
+    var(--ink) 6px 8px,
+    transparent 8px 13px,
+    var(--ink) 13px 18px,
+    transparent 18px 20px,
+    var(--ink) 20px 22px,
+    transparent 22px 27px
+  );
+}
+.cine-code {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--ink-soft);
+}
+
+/* ---- styles.css · Kodi Now Playing (header label) ---- */
+.np-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #17b2e8;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  line-height: 1;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.np-indicator::after {
+  content: '';
+  width: 1px;
+  height: 16px;
+  margin-left: 4px;
+  background: var(--border);
+}
+.np-indicator.active {
+  visibility: visible;
+  opacity: 1;
+}
+.np-indicator-label {
+  white-space: nowrap;
+  background: linear-gradient(
+    100deg,
+    #17b2e8 0%,
+    #17b2e8 40%,
+    color-mix(in srgb, #17b2e8 40%, var(--text-primary)) 50%,
+    #17b2e8 60%,
+    #17b2e8 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: np-sweep 16s ease-in-out infinite;
+}
+@keyframes np-sweep {
+  0% { background-position: 100% 0; }
+  50%, 100% { background-position: -150% 0; }
+}
+.np-audio {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  display: inline-flex;
+  animation: np-audio-pulse 4.8s ease-in-out infinite;
+}
+.np-indicator:active .np-audio,
+.np-indicator:active .np-indicator-label {
+  animation-play-state: paused;
+}
+.np-audio svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+@keyframes np-audio-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* ---- styles.css · Network status pill (offline toast that collapses to a disc) ---- */
+.net-toast {
+  --net-toast-icon: 18px;
+  --net-toast-collapsed: 44px;
+  position: fixed;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);
+  width: var(--net-w, fit-content);
+  max-width: calc(100% - 32px);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 18px;
+  overflow: hidden;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  border-radius: var(--r-pill);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  box-shadow: 0 8px 28px var(--shadow);
+  z-index: 300;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(100% + var(--nav-h) + env(safe-area-inset-bottom) + 32px));
+  transition:
+    transform var(--dur-medium) var(--ease-out),
+    opacity var(--dur-medium) var(--ease-out),
+    width 0.4s var(--ease-in-out),
+    padding 0.4s var(--ease-in-out);
+}
+.net-toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+.net-toast-icon {
+  position: relative;
+  flex: 0 0 var(--net-toast-icon);
+  width: var(--net-toast-icon);
+  height: var(--net-toast-icon);
+}
+.net-toast-disc {
+  position: absolute;
+  inset: 0;
+  transition: opacity var(--dur-medium) var(--ease-in-out);
+}
+.net-toast-disc svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.net-toast-disc--broken { opacity: 1; color: #ef9a9a; }
+.net-toast-disc--spark { opacity: 0; color: #a5d6a7; }
+.net-toast.online .net-toast-disc--broken { opacity: 0; }
+.net-toast.online .net-toast-disc--spark { opacity: 1; }
+.net-toast-text {
+  min-width: 0;
+  transition: opacity var(--dur-short) var(--ease-state);
+}
+.net-toast-text.net-toast-text--swap {
+  opacity: 0;
+}
+.net-toast--opening .net-toast-text {
+  white-space: nowrap;
+}
+.net-toast--measuring,
+.net-toast--measuring * {
+  transition: none !important;
+  animation: none !important;
+}
+.net-toast.collapsed {
+  width: var(--net-toast-collapsed);
+  min-height: var(--net-toast-collapsed);
+  padding: 0;
+  justify-content: center;
+}
+.net-toast.collapsed .net-toast-text {
+  display: none;
+}
+.net-toast.collapsed .net-toast-disc--broken {
+  animation: net-toast-pulse 1.5s ease-in-out infinite;
+}
+.net-toast.collapsed.online .net-toast-disc--broken {
+  animation: none;
+}
+@keyframes net-toast-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+
+/* ---- styles.css · Rating controls (stars, favourite heart, phrase) ---- */
+.stars svg {
+  width: 30px;
+  height: 30px;
+}
+.star-on {
+  color: var(--stars);
+}
+.star-off {
+  color: var(--text-secondary);
+  opacity: 0.4;
+}
+
+.rating-wrap { text-align: center; margin-top: 16px; }
+.rating-wrap .field-label { text-align: center; }
+.rating-wrap .stars { display: flex; justify-content: center; }
+/* Stars + favourite heart share a centered row. */
+.rating-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
+/* Favourite: a red heart sitting in a grey circle (muted until active). */
+.fav-btn {
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: color-mix(in srgb, var(--text-secondary) 26%, transparent);
+  color: color-mix(in srgb, var(--text-secondary) 60%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, color var(--dur-short) var(--ease-state), background-color var(--dur-short) var(--ease-state);
+}
+.fav-btn svg { width: 20px; height: 20px; }
+.fav-btn.active { color: #e5484d; }
+.fav-btn:active { transform: scale(0.88); }
+/* Heartbeat "da-dum" when a title is added to favourites (triggered in
+   Detail.js): two quick scale pulses (in sync with the double haptic) plus a
+   radiating ring burst. */
+.fav-btn.fav-wobble {
+  animation: fav-wobble 620ms ease-in-out both;
+}
+@keyframes fav-wobble {
+  0% { transform: scale(1); }
+  14% { transform: scale(1.32); } /* first beat */
+  28% { transform: scale(0.97); }
+  42% { transform: scale(1.32); } /* second beat */
+  56% { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+/* Radiating pulse ring that bursts outward from the heart. */
+.fav-btn.fav-wobble::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid #e5484d;
+  pointer-events: none;
+  animation: fav-ring 700ms ease-out forwards;
+}
+@keyframes fav-ring {
+  0% { opacity: 0.7; transform: scale(0.85); }
+  100% { opacity: 0; transform: scale(2.2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fav-btn.fav-wobble {
+    animation: none;
+  }
+  .fav-btn.fav-wobble::after {
+    display: none;
+  }
+}
+/* The rating phrase is a single inline-block element (so gradient sweeps clip to
+   the letters) with a reserved min-height so it never shifts surrounding layout.
+   Each star level gets its own entrance animation (.rp-1 … .rp-5); Detail.js
+   replays it from scratch on every rating change via a reflow. */
+.rating-phrase {
+  display: inline-block;
+  margin-top: 6px;
+  min-height: 18px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+/* ---- 1★ "Not for me": droops in, loses energy, sags dimmed. ---- */
+.rating-phrase.rp-1 {
+  color: var(--text-secondary);
+  animation: rp-droop 800ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+}
+@keyframes rp-droop {
+  0% { opacity: 0; transform: translateY(-9px) scaleY(1.15); }
+  30% { opacity: 1; transform: translateY(3px) scaleY(0.88); }
+  55% { transform: translateY(0) scaleY(1.04) rotate(-1.5deg); }
+  75% { transform: translateY(2px) scaleY(0.97) rotate(1.2deg); }
+  100% { opacity: 0.72; transform: translateY(1px) scale(0.96) rotate(-1deg); }
+}
+
+/* ---- 2★ "Disappointing": hesitant, stutters, falters, trembles in. ---- */
+.rating-phrase.rp-2 {
+  animation: rp-stutter 860ms ease-out both;
+}
+@keyframes rp-stutter {
+  0% { opacity: 0; transform: translateX(-6px); }
+  14% { opacity: 0.4; transform: translateX(-3px); }
+  24% { opacity: 0.16; transform: translateX(-4px); } /* falters back */
+  40% { opacity: 0.5; transform: translateX(-1px); }
+  46% { opacity: 0.48; transform: translateX(-2px); } /* uneasy pause */
+  62% { opacity: 0.9; transform: translateX(1px); }
+  72% { transform: translateX(-1.5px); }
+  82% { transform: translateX(1.5px); } /* tremble */
+  91% { transform: translateX(-0.5px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* ---- 3★ "Decent": deadpan, mechanical stepped slide, deliberately flat. ---- */
+.rating-phrase.rp-3 {
+  opacity: 1;
+  animation: rp-deadpan 640ms steps(5, end) both;
+}
+@keyframes rp-deadpan {
+  from { transform: translateX(-30px); }
+  to { transform: translateX(0); }
+}
+
+/* ---- 4★ "Really good": bouncy overshoot + warm gradient sweep. ---- */
+.rating-phrase.rp-4 {
+  background: linear-gradient(90deg, var(--accent), #ff8a3c, #ffd670, var(--accent));
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: rp-pop 760ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    rp-sweep 760ms ease-out both;
+}
+@keyframes rp-pop {
+  0% { opacity: 0; transform: scale(0.6); }
+  50% { opacity: 1; transform: scale(1.18); }
+  70% { transform: scale(0.94); }
+  85% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+@keyframes rp-sweep {
+  from { background-position: 220% 0; }
+  to { background-position: 0% 0; }
+}
+
+/* ---- 5★ "Excellent!": bursts in spinning, rainbow-cycles, then glows. ---- */
+.rating-phrase.rp-5 {
+  background: linear-gradient(90deg, #ff5e62, #ff9966, #ffd36e, #7ee8fa, #a18cd1, #ff5e62);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: rp-burst 820ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    rp-rainbow 3s linear infinite,
+    rp-glow 2.2s ease-in-out 820ms infinite;
+}
+@keyframes rp-burst {
+  0% { opacity: 0; transform: scale(0.3) rotate(-12deg); }
+  55% { opacity: 1; transform: scale(1.25) rotate(6deg); }
+  75% { transform: scale(0.95) rotate(-3deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes rp-rainbow {
+  from { background-position: 0% 50%; }
+  to { background-position: 220% 50%; }
+}
+@keyframes rp-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 190, 80, 0.45)); }
+  50% { filter: drop-shadow(0 0 8px rgba(255, 140, 60, 0.85)); }
+}
+
+/* Respect reduced-motion: land straight on the visible resting state. */
+@media (prefers-reduced-motion: reduce) {
+  .rating-phrase.rp-1,
+  .rating-phrase.rp-2,
+  .rating-phrase.rp-3,
+  .rating-phrase.rp-4,
+  .rating-phrase.rp-5 {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* ---- styles.css · Rate-O-Matic card ---- */
+.rom-stack {
+  position: relative;
+  height: min(48vh, 390px);
+  aspect-ratio: 2 / 3;
+  margin-inline: auto;
+}
+/* A card IS its poster: full bleed, the poster corner and a soft float shadow
+   (not a framed panel). */
+.rom-card {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface-elevated);
+  box-shadow: 0 10px 30px var(--shadow);
+  transform-origin: center;
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.38s ease;
+  touch-action: none; /* we own the horizontal drag gesture */
+  will-change: transform, opacity;
+}
+.rom-card .rom-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* Bottom scrim carrying the type, title and year (fixed dark ink: it sits on
+   artwork in both themes). */
+.rom-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.55) 45%, transparent 100%);
+  pointer-events: none;
+}
+.rom-info {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 14px;
+  color: #fff;
+  pointer-events: none;
+}
+.rom-type {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.rom-title {
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-wrap: balance;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.rom-year {
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+}
+/* What letting go will do, stamped across the card while it is dragged: the
+   accent "★ n · Save", or a dark outlined "Skip". */
+.rom-stamp {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--r-pill);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.rom-stamp-star {
+  display: inline-flex;
+}
+.rom-stamp-star svg {
+  width: 18px;
+  height: 18px;
+}
+.rom-stamp.is-save {
+  background: color-mix(in srgb, var(--accent) 88%, transparent);
+  color: #000;
+}
+.rom-stamp.is-skip {
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+}
+/* The one rating row, fixed under the deck; height reserved for the stars plus
+   the rating phrase, so choosing a rating never nudges the footer. */
+.rom-rate {
+  min-height: 64px;
+  margin-top: 6px;
+}
+.rom-rate .rating-wrap {
+  margin-top: 8px;
+}
+/* Darkening veil over the background card (front card's veil is invisible). */
+.rom-veil {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.38s ease;
+}
+.rom-front {
+  z-index: 2;
+}
+.rom-front .rom-veil {
+  opacity: 0;
+}
+.rom-back {
+  z-index: 1;
+  pointer-events: none;
+}
+.rom-back .rom-veil {
+  opacity: 0.5;
+}
+.rom-back .rom-info {
+  opacity: 0; /* the card waiting behind shows only its art */
+}
+
+/* ---- styles.css · Kodi Now Playing toast ---- */
+.np-toast {
+  --poster-w: 60px;
+  --np-pad: 10px;
+  position: fixed;
+  top: 72px; /* refined to the header's bottom on open (JS) */
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: min(420px, calc(100% - 24px));
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: var(--np-pad);
+  background: var(--surface-elevated);
+  border-radius: calc(var(--r-sm) + var(--np-pad));
+  box-shadow: 0 8px 28px var(--shadow);
+  /* Vertical equivalent of the server toast: slide down from above. */
+  transform: translateY(calc(-100% - 120px));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform var(--dur-medium) var(--ease-out), opacity var(--dur-medium) var(--ease-out);
+}
+.np-toast.show {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.np-toast.dismissing {
+  transition: transform var(--dur-medium) var(--ease-in), opacity var(--dur-medium) var(--ease-in);
+}
+/* A true 2:3 poster (60 x 90) at the small media radius. The card already
+   floats, so the poster gets only a whisper of depth (half the --shadow token,
+   tight to the edge) rather than a lift of its own. */
+.np-toast-poster {
+  flex: 0 0 var(--poster-w);
+  width: var(--poster-w);
+  aspect-ratio: 2 / 3;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--shadow) 50%, transparent);
+  overflow: hidden;
+}
+.np-toast-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.np-toast-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  padding-right: 4px;
+}
+.np-toast-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+/* Which Kodi is playing: the instance's name in the app's micro-label type.
+   Only the tv glyph keeps Kodi's blue (the avatar ring's and header label's),
+   as a quiet cue; it goes grey while Kodi is paused. */
+.np-toast-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.np-toast-source .btn-lucide {
+  width: 14px;
+  height: 14px;
+  color: #17b2e8;
+}
+.np-toast-source-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-toast.paused .np-toast-source .btn-lucide {
+  color: var(--text-secondary);
+}
+.np-toast-title {
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-toast-meta {
+  margin-top: -2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Audio (language · codec) and subtitles: two flat pills with their glyphs, on
+   the --surface step below the card. */
+.np-toast-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.np-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.np-chip .btn-lucide {
+  width: 13px;
+  height: 13px;
+}
+
+/* ---- styles.css · Skeleton (ghost-frame) loading ---- */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-elevated) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: var(--r-sm);
+}
+.skel-line {
+  height: 12px;
+  border-radius: 6px;
+  display: block;
+}
+.skel-line.lg {
+  height: 22px;
+}
+.skel-line.sm {
+  height: 9px;
+}
+
+/* ---- styles.css · Toast ---- */
+.toast {
+  position: fixed;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 11px 18px;
+  border-radius: var(--r-pill);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  box-shadow: 0 8px 28px var(--shadow);
+  animation: toast-in var(--dur-medium) var(--ease-out);
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+}
+@keyframes toast-out {
+  to {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+.toast.toast-out {
+  animation: toast-out var(--dur-medium) var(--ease-in) forwards;
+}
+.toast-ico {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+.toast--ok .toast-ico {
+  color: #a5d6a7;
+}
+
+/* ---- server/auth.js · Profile picker ("Who's at the counter?"), scoped to .counter ---- */
+.counter h2 { font-size: 20px; font-weight: 600; margin: 0 0 24px; text-align: center; }
+.counter .profiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px 20px; margin: 0; padding: 0; list-style: none; }
+.counter .profile {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100px; padding: 0;
+  background: none; border: none; color: var(--text-secondary); font: inherit; font-size: 14px; cursor: pointer;
+  transition: color var(--dur-short) var(--ease-state);
+}
+.counter .profile .name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.counter .profile:hover, .counter .profile:focus-visible { color: var(--text-primary); outline: none; }
+.counter .tile-media { position: relative; display: inline-flex; flex-shrink: 0; transition: transform var(--dur-short) var(--ease-state); }
+.counter .avatar {
+  width: 84px; height: 84px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-elevated); color: var(--accent); font-size: 34px; font-weight: 700;
+  box-shadow: 0 0 0 0 transparent;
+  transition: box-shadow var(--dur-short) var(--ease-state);
+}
+.counter .profile:hover .avatar, .counter .profile:focus-visible .avatar { box-shadow: 0 0 0 3px var(--accent); }
+.counter .profile:active .tile-media { transform: scale(.96); }
+
+/* ---- styles.css · Lending a title (.lend-*, poster card, disc hub) ---- */
+.poster-card {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-elevated);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+.detail-disc-hub {
+  position: absolute;
+  left: 41.5%;
+  top: 41.5%;
+  width: 17%;
+  height: 17%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(246, 247, 249, 0.9), rgba(200, 204, 212, 0.55));
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+.detail-disc-hole {
+  position: absolute;
+  left: 46.5%;
+  top: 46.5%;
+  width: 7%;
+  height: 7%;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.6);
+}
+@keyframes detail-disc-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes cine-float {
+  0%,
+  100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.lend-stage {
+  display: flex;
+  justify-content: center;
+  padding: 38px 0 22px;
+}
+.lend-float {
+  position: relative;
+  margin-right: 46px;
+  animation: cine-float 4.2s ease-in-out infinite;
+}
+.lend-case {
+  --bluray-bar: rgba(100, 160, 255, 0.88);
+  --bluray-bar-height: 8px;
+  --bluray-bar-radius: 5px;
+  position: relative;
+  z-index: 1;
+  width: 150px;
+  transform: rotate(-3deg);
+}
+.lend-case .poster-card {
+  border-radius: 0;
+  box-shadow:
+    0 4px 16px var(--shadow),
+    3px 3px 0 -1px rgba(0, 0, 0, 0.28),
+    6px 6px 0 -2px rgba(0, 0, 0, 0.2),
+    9px 10px 22px rgba(0, 0, 0, 0.38);
+}
+.lend-case::before,
+.lend-case::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--bluray-bar-height);
+  background: var(--bluray-bar);
+  z-index: 3;
+  pointer-events: none;
+}
+.lend-case::before {
+  bottom: 100%;
+  border-radius: var(--bluray-bar-radius) var(--bluray-bar-radius) 0 0;
+}
+.lend-case::after {
+  top: 100%;
+  border-radius: 0 0 var(--bluray-bar-radius) var(--bluray-bar-radius);
+}
+.lend-disc {
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  right: -46px;
+  width: 132px;
+  aspect-ratio: 1 / 1;
+  transform: translateY(-50%);
+}
+.lend-disc-spin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--surface-elevated);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), 0 4px 14px rgba(0, 0, 0, 0.45);
+  animation: detail-disc-spin 18s linear infinite;
+}
+.lend-note {
+  position: absolute;
+  z-index: 4;
+  top: -18px;
+  right: -26px;
+  max-width: 120px;
+  padding: 7px 10px 8px;
+  border-radius: 3px;
+  background: #ffd84a;
+  color: #3b2f00;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  transform: rotate(7deg);
+  overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lend-float,
+  .lend-disc-spin {
+    animation: none;
+  }
+}
+
+/* ---- styles.css · Reduced motion (the app's own fallbacks) ---- */
+@media (prefers-reduced-motion: reduce) {
+  .splash-logo,
+  .splash-slot,
+  .splash-word {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .sc-spine.sc-lift,
+  .sc-spark { animation: none !important; }
+  .dvd-spine { transition: none; }
+  .dvd-spine.extracting { transform: none; }
+  .pos-paper { transform: translateY(0); transition: none; }
+  .np-audio { animation: none; opacity: 1; }
+  .np-indicator-label { animation: none; }
+  .seg-chip,
+  .seg-opt { transition: none; }
+  .skeleton { animation: none; }
+  .toast,
+  .toast.toast-out { animation-name: backdropIn; }
+}
+
+/* ==========================================================================
+   Page
+   ========================================================================== */
+html { scroll-behavior: smooth; scroll-padding-top: var(--header-h); }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { overflow-x: hidden; }
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.wrap { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-secondary);
+}
+
+/* Header: the app bar, with section links between brand and actions */
+.app-header { border-bottom: 1px solid transparent; transition: border-color var(--dur-medium) var(--ease-state); }
+.app-header.scrolled { border-bottom-color: var(--border); }
+.app-header h1 { color: var(--text-primary); }
+.site-nav { display: flex; gap: 2px; }
+.site-nav a {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: var(--r-pill);
+  transition: color var(--dur-short) var(--ease-state), background-color var(--dur-short) var(--ease-state);
+}
+.site-nav a:hover { color: var(--text-primary); background: var(--surface); }
+@media (max-width: 700px) { .site-nav { display: none; } }
+
+/* Hero: the splash, then one sentence */
+.hero { position: relative; padding: 64px 0 96px; text-align: center; overflow: hidden; }
+.hero::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -160px;
+  width: 900px;
+  height: 640px;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 11%, transparent), transparent);
+  pointer-events: none;
+}
+.hero .splash-stage { position: relative; margin-bottom: 40px; }
+.hero h2 {
+  position: relative;
+  font-size: clamp(36px, 6.4vw, 64px);
+  line-height: 1.04;
+  letter-spacing: -1.6px;
+  margin: 0 auto 18px;
+  max-width: 13ch;
+  text-wrap: balance;
+}
+.hero h2 span { color: var(--accent); }
+.lede {
+  position: relative;
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1.55;
+  max-width: 34ch;
+  margin: 0 auto 30px;
+  text-wrap: balance;
+}
+.cta-row { position: relative; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.cta-row .btn { flex: 0 0 auto; padding: 13px 24px; }
+
+/* Sections */
+.block { padding: 96px 0 0; }
+.head { text-align: center; margin: 0 auto 40px; max-width: 560px; }
+.head h3 { font-size: clamp(28px, 4vw, 40px); line-height: 1.1; letter-spacing: -0.8px; margin: 10px 0 0; text-wrap: balance; }
+.head p { color: var(--text-secondary); margin: 12px 0 0; font-size: 16px; line-height: 1.55; }
+
+/* Tour: the first-launch sheet, inline */
+@media (max-width: 480px) { .tour .showcase { height: 580px; } }
+
+/* Features: a bento of live tiles */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+.tile {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  overflow: hidden;
+}
+.tile.w3 { grid-column: span 3; }
+.tile.w4 { grid-column: span 4; }
+.tile.tall { grid-row: span 2; }
+.viz {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  padding: 28px 20px 8px;
+  overflow: hidden;
+}
+.tile-copy { padding: 4px 22px 22px; }
+.tile-copy h4 { font-size: 17px; letter-spacing: -0.2px; margin: 0 0 4px; }
+.tile-copy p { font-size: 14px; line-height: 1.5; color: var(--text-secondary); margin: 0; }
+@media (max-width: 900px) {
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tile, .tile.w3 { grid-column: span 1; }
+  .tile.w4 { grid-column: span 2; }
+}
+@media (max-width: 600px) {
+  .tiles { grid-template-columns: minmax(0, 1fr); }
+  .tile, .tile.w3, .tile.w4 { grid-column: span 1; }
+  .tile.tall { grid-row: auto; }
+}
+
+/* Tile visuals: app components, sized for a tile */
+.counter { width: 100%; }
+.lend-stage { padding: 20px 0 10px; }
+.lend-art { background: linear-gradient(150deg, #0e7c6b, #08322c); }
+.poster-card.lend-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), transparent 55%); }
+.shelf-viz { width: min(340px, 100%); }
+.ticket-float { width: min(300px, 100%); animation: sc-float 4.2s var(--ease-in-out) infinite; filter: drop-shadow(0 18px 22px rgba(0, 0, 0, 0.35)); }
+/* The app sizes the ticket to the viewport (min(300px, 78vw)); in a tile it
+   follows the tile instead, so a two-column tablet grid never clips it. */
+.ticket-float .cine-ticket { width: 100%; }
+.cine-banner.art {
+  position: relative;
+  background:
+    radial-gradient(120% 90% at 80% 10%, rgba(229, 160, 13, 0.55), transparent 55%),
+    radial-gradient(90% 80% at 15% 90%, rgba(194, 68, 95, 0.55), transparent 60%),
+    linear-gradient(150deg, #3a2a52, #160f24);
+}
+.cine-banner.art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), transparent 55%);
+}
+.rate-viz { width: 100%; padding-top: 10px; }
+.rate-viz .rom-stack { height: 190px; }
+.rate-viz .rating-wrap { margin-top: 14px; }
+.rate-viz .stars button { padding: 2px; }
+.rate-viz .stars svg { width: 26px; height: 26px; display: block; }
+.track-viz { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; }
+.track-viz .sc-detail { max-width: 270px; }
+.track-viz .seg { --seg-h: 34px; }
+.track-viz .seg-opt { padding: 0 10px; font-size: 12px; }
+.mini-grid { display: grid; grid-template-columns: repeat(4, 40px); gap: 8px; }
+.mini-grid span {
+  height: 58px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+  transition: opacity var(--dur-medium) var(--ease-state), transform var(--dur-medium) var(--ease-out);
+}
+.mini-grid span.dim { opacity: 0.12; transform: scale(0.92); }
+.pos-viz { width: 100%; }
+.pos-viz .pos-printer { margin-top: 0; }
+.kodi-viz { width: min(300px, 100%); display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.kodi-viz .np-indicator::after { display: none; }
+.kodi-viz .np-toast { position: relative; top: auto; width: 100%; z-index: 1; }
+.btn-lucide { display: inline-flex; flex: none; }
+.btn-lucide svg { width: 100%; height: 100%; display: block; }
+.kodi-viz .sc-kodi-chip { padding: 8px 16px; font-size: 13px; }
+.ghost { width: min(240px, 100%); display: grid; gap: 10px; }
+.ghost .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ghost .row span { height: 78px; }
+.net-viz .net-toast {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  bottom: auto;
+  margin-top: -22px;
+  transform: translateY(36px);
+  z-index: 2;
+}
+.net-viz .net-toast.show { transform: translateY(0); }
+
+/* Everything else: a quiet two-line list */
+.more {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 26px 20px;
+}
+.more li { display: flex; gap: 12px; align-items: flex-start; }
+.more .ico {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tone) 15%, var(--surface-elevated));
+  color: var(--tone);
+}
+.more .ico svg { width: 17px; height: 17px; }
+.more b { display: block; font-size: 14px; margin-top: 1px; }
+.more span:last-child { font-size: 13px; color: var(--text-secondary); }
+@media (max-width: 900px) { .more { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .more { grid-template-columns: minmax(0, 1fr); gap: 18px; } }
+
+/* Gallery rail */
+.rail {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 6px max(16px, calc((100vw - 1080px) / 2 + 16px)) 24px;
+  scroll-padding-inline: max(16px, calc((100vw - 1080px) / 2 + 16px));
+  -webkit-overflow-scrolling: touch;
+}
+.shot { flex: 0 0 220px; scroll-snap-align: start; margin: 0; text-align: center; }
+.phone {
+  aspect-ratio: 1170 / 2532;
+  border-radius: 28px;
+  padding: 6px;
+  background: #151515;
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+.phone img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 23px;
+  background: var(--surface);
+  opacity: 0;
+  transition: opacity 0.34s var(--ease-state);
+}
+.phone img.in { opacity: 1; }
+.shot figcaption { margin-top: 12px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.rail-nav { display: flex; justify-content: center; gap: 8px; }
+.rail-nav .icon-btn { background: var(--surface); border: 1px solid var(--border); }
+.rail-nav .icon-btn:hover { background: var(--surface-elevated); }
+
+/* Install */
+.install { max-width: 620px; margin: 0 auto; }
+.cmd {
+  position: relative;
+  margin: 0;
+  padding: 18px 56px 18px 20px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 14px/1.75 ui-monospace, 'SFMono-Regular', Consolas, 'Courier New', monospace;
+  color: #d6d6d6;
+}
+.cmd .c { color: #6f6f6f; }
+.cmd-wrap { position: relative; }
+.cmd-wrap .icon-btn { position: absolute; top: 8px; right: 8px; color: var(--text-secondary); }
+.cmd-wrap .icon-btn:hover { color: var(--text-primary); background: var(--surface-elevated); }
+.cmd-wrap .icon-btn svg { width: 18px; height: 18px; }
+.install p { text-align: center; color: var(--text-secondary); font-size: 14px; margin: 16px 0 0; }
+.toast { bottom: calc(24px + env(safe-area-inset-bottom)); }
+
+/* Footer */
+footer { margin-top: 112px; padding: 32px 0 calc(40px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
+.foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.foot .brand h1 { font-size: 18px; margin: 0; letter-spacing: -0.5px; }
+.foot .brand h1 span { color: var(--accent); }
+.foot nav { display: flex; gap: 18px; font-size: 14px; font-weight: 600; }
+.fine { margin: 18px 0 0; font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
+
+/* Blocks rise in once, with the app's slide-up feel */
+@media (prefers-reduced-motion: reduce) {
+  .ticket-float { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="app-header" id="top">
+  <a class="brand" href="#top" aria-label="shelfit">
+    <span class="brand-line" aria-hidden="true"></span>
+    <span class="brand-logo-slot"><img class="brand-logo" src="assets/shelf-iticon-browser.png" alt="" /></span>
+    <h1>shelf<span>it</span></h1>
+  </a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="#features">Features</a>
+    <a href="#gallery">Gallery</a>
+    <a href="#install">Install</a>
+  </nav>
+  <div class="header-actions">
+    <a class="icon-btn" href="https://github.com/alberto-romano03/shelfit" aria-label="shelfit on GitHub" data-ico="github"></a>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap">
+    <div class="splash-stage" aria-hidden="true">
+      <div class="splash-clip"><img class="splash-logo" src="assets/shelf-iticon-browser.png" alt="" /></div>
+      <div class="splash-slot"></div>
+      <div class="splash-word">shelf<span>it</span></div>
+    </div>
+    <h2>Everything you watch, <span>on one shelf.</span></h2>
+    <p class="lede">A self-hosted home for the films and series your household owns and watches, with the charm of the old video store.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/alberto-romano03/shelfit"><span data-ico="github"></span><span>View on GitHub</span></a>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="features">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">Features</div>
+      <h3>A video store you run yourself.</h3>
+      <p>Movies and series, tracked the way you collect them.</p>
+    </div>
+
+    <div class="tiles">
+      <article class="tile w3">
+        <div class="viz">
+          <div class="counter">
+            <h2>Who's at the counter?</h2>
+            <ul class="profiles">
+              <li><button class="profile" type="button"><span class="tile-media" aria-hidden="true"><span class="avatar">A</span></span><span class="name">Alex</span></button></li>
+              <li><button class="profile" type="button"><span class="tile-media" aria-hidden="true"><span class="avatar">S</span></span><span class="name">Sam</span></button></li>
+              <li><button class="profile" type="button"><span class="tile-media" aria-hidden="true"><span class="avatar">M</span></span><span class="name">Mia</span></button></li>
+            </ul>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>For the whole household</h4><p>Everyone picks their profile, with their own library and password.</p></div>
+      </article>
+
+      <article class="tile w3">
+        <div class="viz">
+          <div class="lend-stage">
+            <div class="lend-float">
+              <div class="lend-disc"><div class="lend-disc-spin lend-art"><div class="detail-disc-hub"></div><div class="detail-disc-hole"></div></div></div>
+              <div class="lend-case"><div class="poster-card lend-art"></div></div>
+              <div class="lend-note">From Sam ♥</div>
+            </div>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>Lend a title</h4><p>Suggest a film to someone at home, with a short note.</p></div>
+      </article>
+
+      <article class="tile w4">
+        <div class="viz">
+          <div class="shelf-viz">
+            <div class="dvd-shelf">
+              <div class="dvd-spines">
+                <div class="dvd-plant" aria-hidden="true" id="plant"></div>
+                <button class="dvd-spine spine-shelf" type="button" data-go="btts"><span class="dvd-spine-band"><span data-ico="disc-3"></span><span class="dvd-spine-brand">shelfit</span></span><span class="dvd-spine-label"><span class="dvd-spine-label-text">Back to the Shelf</span></span></button>
+                <button class="dvd-spine spine-dust" type="button" data-go="dust"><span class="dvd-spine-band"><span data-ico="disc-3"></span><span class="dvd-spine-brand">shelfit</span></span><span class="dvd-spine-label"><span class="dvd-spine-label-text">Dust It Off</span></span></button>
+                <button class="dvd-spine spine-rom" type="button" data-go="rate"><span class="dvd-spine-band"><span data-ico="disc-3"></span><span class="dvd-spine-brand">shelfit</span></span><span class="dvd-spine-label"><span class="dvd-spine-label-text">Rate-O-Matic</span></span></button>
+              </div>
+              <div class="dvd-shelf-surface"></div>
+            </div>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>The Shelf</h4><p>Three boxsets on your home screen. Pull one out to pick tonight's film.</p></div>
+      </article>
+
+      <article class="tile tall">
+        <div class="viz">
+          <div class="ticket-float">
+            <div class="cine-ticket">
+              <div class="cine-top">
+                <div class="cine-banner art"></div>
+                <div class="cine-body">
+                  <div class="cine-title">Dune: Part Two</div>
+                  <div class="cine-adminrow"><span>ADMIT ONE</span><span>ROW F · SEAT 12</span></div>
+                  <div class="cine-datetime">
+                    <span class="cine-field"><span class="cine-field-icon" data-ico="calendar"></span><span class="cine-input-label">1 Mar 2024</span></span>
+                    <span class="cine-field cine-field-time"><span class="cine-field-icon" data-ico="clock"></span><span class="cine-input-label">21:00</span></span>
+                  </div>
+                  <div class="cine-cinemarow"><span class="cine-field"><span class="cine-field-icon" data-ico="popcorn"></span><span class="cine-input-label">Cinema Paradiso</span></span></div>
+                </div>
+              </div>
+              <div class="cine-tear"></div>
+              <div class="cine-stub"><div class="cine-barcode" aria-hidden="true"></div><div class="cine-code">SHF-3194</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>Cinema tickets</h4><p>Saw it on the big screen? Keep the ticket in your collection.</p></div>
+      </article>
+
+      <article class="tile" id="dust">
+        <div class="viz">
+          <div class="sc-dust">
+            <div class="sc-dust-stage">
+              <div class="sc-dust-card"></div>
+              <div class="sc-spark sc-a" data-ico="spark"></div><div class="sc-spark sc-b" data-ico="spark"></div><div class="sc-spark sc-c" data-ico="spark"></div>
+            </div>
+            <div class="sc-moods"><span class="sc-mood sc-on">Tense</span><span class="sc-mood">Short</span><span class="sc-mood">90s–00s</span></div>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>Dust It Off</h4><p>Pick a mood and get something new to watch.</p></div>
+      </article>
+
+      <article class="tile" id="rate">
+        <div class="viz">
+          <div class="rate-viz">
+            <div class="rom-stack">
+              <div class="rom-card rom-back" style="transform: translateY(-14px) scale(0.92) rotate(3deg)"><div class="rom-poster" style="background: linear-gradient(150deg, #2f6fa8, #16324b)"></div><div class="rom-scrim"></div><div class="rom-info"><div class="rom-type">TV Series</div><div class="rom-title">Severance</div></div><div class="rom-veil"></div></div>
+              <div class="rom-card rom-front" style="transform: rotate(-2deg)"><div class="rom-poster" style="background: linear-gradient(150deg, #c88a16, #5e400a)"></div><div class="rom-scrim"></div><div class="rom-info"><div class="rom-type">Movie</div><div class="rom-title">Dune: Part Two</div><div class="rom-year">2024</div></div><div class="rom-veil"></div></div>
+            </div>
+            <div class="rating-wrap">
+              <div class="rating-row"><div class="stars" id="stars"></div><button class="fav-btn" id="fav" type="button" aria-label="Favourite" aria-pressed="false" data-ico="heart"></button></div>
+              <div class="rating-phrase" id="phrase"></div>
+            </div>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>Rate-O-Matic</h4><p>Score everything you never rated, one poster at a time.</p></div>
+      </article>
+
+      <article class="tile" id="btts">
+        <div class="viz">
+          <div class="sc-shelf">
+            <div class="sc-spines">
+              <span class="sc-spine sc-s1"><span class="sc-band" data-ico="disc-sc"></span></span>
+              <span class="sc-spine sc-s2 sc-lift"><span class="sc-band" data-ico="disc-sc"></span></span>
+              <span class="sc-spine sc-s3"><span class="sc-band" data-ico="disc-sc"></span></span>
+              <span class="sc-disc-out"></span>
+            </div>
+            <div class="sc-ledge"></div>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>Back to the Shelf</h4><p>Spin your shelf and land on an old favourite.</p></div>
+      </article>
+
+      <article class="tile">
+        <div class="viz">
+          <div class="sc-next">
+            <div class="sc-tl sc-watch"><div class="sc-tl-t">Severance</div><span class="sc-tl-chip sc-ep">S2 · E4</span></div>
+            <div class="sc-tl sc-soon"><div class="sc-tl-t">The Bear</div><span class="sc-tl-chip sc-cal"><span data-ico="calendar"></span><span>New ep · Fri 14</span></span></div>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>What's Next</h4><p>Your next episodes, and the ones about to air.</p></div>
+      </article>
+
+      <article class="tile">
+        <div class="viz">
+          <div class="track-viz">
+            <div class="sc-status" style="align-self:center"><span class="sc-ic" data-ico="circle-play"></span><span class="sc-cur">Watching</span><span class="sc-caret" data-ico="chevron-down"></span></div>
+            <div class="seg" id="seg" role="radiogroup" aria-label="Filter" style="--seg-count:3">
+              <span class="seg-chip" aria-hidden="true"></span>
+              <button class="seg-opt" role="radio" aria-checked="true" type="button">All</button>
+              <button class="seg-opt" role="radio" aria-checked="false" type="button">Watching</button>
+              <button class="seg-opt" role="radio" aria-checked="false" type="button">Owned</button>
+            </div>
+            <div class="mini-grid" id="miniGrid"></div>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>Your library</h4><p>Status, ownership and progress, down to the episode.</p></div>
+      </article>
+
+      <article class="tile">
+        <div class="viz">
+          <div class="pos-viz">
+            <button class="pos-printer" id="printer" type="button" aria-label="Print the receipt">
+              <span class="pos-body"><span class="pos-label">Your Monthly Receipt</span><span class="pos-slot" aria-hidden="true"></span></span>
+              <span class="pos-paper" aria-hidden="true"><span class="pos-paper-sheet"></span></span>
+            </button>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>Monthly receipt</h4><p>Your month as a 90s rental receipt, ready to share.</p></div>
+      </article>
+
+      <article class="tile">
+        <div class="viz">
+          <div class="kodi-viz">
+            <span class="np-indicator active"><span class="np-audio" data-ico="play-fill"></span><span class="np-indicator-label">Now playing</span></span>
+            <div class="np-toast show">
+              <div class="np-toast-poster" style="background: linear-gradient(150deg, #2f6fa8, #16324b)"></div>
+              <div class="np-toast-body"><div class="np-toast-text">
+                <div class="np-toast-source"><span class="btn-lucide" data-ico="tv"></span><span class="np-toast-source-name">Kodi</span></div>
+                <div class="np-toast-title">Severance</div>
+                <div class="np-toast-meta">S02 · E04 · Woe's Hollow</div>
+                <div class="np-toast-chips"><span class="np-chip"><span class="btn-lucide" data-ico="volume-2"></span><span>English · 5.1</span></span><span class="np-chip"><span class="btn-lucide" data-ico="captions"></span><span>English</span></span></div>
+              </div></div>
+            </div>
+            <div class="sc-kodi-chip"><span data-ico="circle-play"></span><span>Play on Kodi</span></div>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>Kodi</h4><p>Play any title on your TV and see what's playing.</p></div>
+      </article>
+
+      <article class="tile">
+        <div class="viz net-viz">
+          <div class="ghost" aria-hidden="true">
+            <span class="skeleton skel-line lg" style="width:60%"></span>
+            <div class="row"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
+            <span class="skeleton skel-line sm"></span>
+          </div>
+          <div class="net-toast" id="netToast" role="status">
+            <span class="net-toast-icon"><span class="net-toast-disc net-toast-disc--broken" data-ico="globe-off"></span><span class="net-toast-disc net-toast-disc--spark" data-ico="eject"></span></span>
+            <span class="net-toast-text" id="netText"></span>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>Works offline</h4><p>Install it like an app. It keeps going without a connection.</p></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="block">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">And more</div>
+      <h3>Everything else on the shelf.</h3>
+    </div>
+    <ul class="more" id="more"></ul>
+  </div>
+</section>
+
+<section class="block" id="gallery">
+  <div class="wrap">
+    <div class="head">
+      <div class="eyebrow">Gallery</div>
+      <h3>On your phone.</h3>
+    </div>
+  </div>
+  <div class="rail" id="rail"></div>
+  <div class="rail-nav"><button class="icon-btn" type="button" id="railPrev" aria-label="Previous" data-ico="chevron-left"></button><button class="icon-btn" type="button" id="railNext" aria-label="Next" data-ico="chevron-right"></button></div>
+</section>
+
+<section class="block" id="install">
+  <div class="wrap install">
+    <div class="head">
+      <div class="eyebrow">Install</div>
+      <h3>Runs at home, in Docker.</h3>
+    </div>
+    <div class="cmd-wrap">
+<pre class="cmd" id="cmd">git clone https://github.com/alberto-romano03/shelfit.git
+cd shelfit && cp .env.example .env
+<span class="c"># add TMDB_API_KEY and APP_PASSWORD to .env</span>
+docker compose up -d --build</pre>
+      <button class="icon-btn" type="button" id="copy" aria-label="Copy commands" data-ico="copy"></button>
+    </div>
+    <p>You need Docker and a free TMDB key. The <a href="https://github.com/alberto-romano03/shelfit#readme">README</a> covers the rest.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div class="brand"><img class="brand-logo" src="assets/shelf-iticon-browser.png" alt="" /><h1>shelf<span>it</span></h1></div>
+      <nav aria-label="Links">
+        <a href="https://github.com/alberto-romano03/shelfit">GitHub</a>
+        <a href="https://github.com/alberto-romano03/shelfit/blob/main/LICENSE">MIT License</a>
+        <a href="#top">Top</a>
+      </nav>
+    </div>
+    <p class="fine">This product uses the TMDB API but is not endorsed or certified by TMDB. Kodi is a trademark of the XBMC Foundation. Film and TV artwork in the screenshots belongs to its rights holders.</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var L = function (inner, sw) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (sw || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
+  };
+  var ICONS = {
+    // showcase.js
+    'spark': '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.9 5.7a2 2 0 0 0 1.3 1.3L21 11l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 20l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 11l5.8-1.9a2 2 0 0 0 1.3-1.3z"/></svg>',
+    'disc-sc': L('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/>'),
+    'circle-play': L('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/>'),
+    'chevron-down': L('<path d="m6 9 6 6 6-6"/>', 2.4),
+    'chevron-left': L('<path d="m15 18-6-6 6-6"/>', 2.4),
+    'chevron-right': L('<path d="m9 18 6-6-6-6"/>', 2.4),
+    // Home.js spine band (Lucide disc-3)
+    'disc-3': L('<circle cx="12" cy="12" r="10"/><path d="M6 12c0-1.7.7-3.2 1.8-4.2"/><circle cx="12" cy="12" r="2"/><path d="M18 12c0 1.7-.7 3.2-1.8 4.2"/>'),
+    'play-fill': '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>',
+    'github': '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>',
+    // Lucide
+    'calendar': L('<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>', 2.2),
+    'clock': L('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
+    'popcorn': L('<path d="M18 8a2 2 0 0 0 0-4 2 2 0 0 0-4 0 2 2 0 0 0-4 0 2 2 0 0 0-4 0 2 2 0 0 0 0 4"/><path d="M10 22 9 8"/><path d="m14 22 1-14"/><path d="M20 8c.5 0 .9.4.8 1l-2.6 12c-.1.5-.7 1-1.2 1H7c-.6 0-1.1-.4-1.2-1L3.2 9c-.1-.6.3-1 .8-1Z"/>'),
+    'tv': L('<path d="m17 2-5 5-5-5"/><rect width="20" height="15" x="2" y="7" rx="2"/>'),
+    'users': L('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>'),
+    'book-search': L('<path d="M11 22H5.5a1 1 0 0 1 0-5h4.501"/><path d="m21 22-1.879-1.878"/><path d="M3 19.5v-15A2.5 2.5 0 0 1 5.5 2H18a1 1 0 0 1 1 1v8"/><circle cx="17" cy="18" r="3"/>'),
+    'list-plus': L('<path d="M11 12H3"/><path d="M16 6H3"/><path d="M16 18H3"/><path d="M18 9v6"/><path d="M21 12h-6"/>'),
+    'languages': L('<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>'),
+    'bell': L('<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>'),
+    'file-down': L('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/>'),
+    'file-up': L('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 12v6"/><path d="m15 15-3-3-3 3"/>'),
+    'shield': L('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>')
+  };
+  // Home.js PLANT_SVG ("Plant Garden 2", SVG Repo, CC0).
+  var PLANT_SVG =
+    '<svg viewBox="50 0 412 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<path fill="#91cf96" d="M168.712,247.172C149.75,105.975,57.378,79.448,57.378,79.448C155.93,37.65,229.772,62.499,241.178,247.172H168.712z"/>' +
+    '<path fill="#5aba63" d="M244.44,247.172h-3.24c-4.696-76.006-19.968-124.928-43.193-153.273C204.972,31.17,267.162,0,313.384,0c-16.94,16.931-42.567,43.352-44.006,133.42C256.993,160.035,247.998,196.89,244.44,247.172"/>' +
+    '<path fill="#91cf96" d="M303.67,247.172h-59.207c19.827-280.47,209.028-143.122,210.158-141.241C377.168,105.931,323.082,178.45,303.67,247.172"/>' +
+    '<polygon fill="#7f5b53" points="57.382,291.31 428.141,291.31 428.141,247.172 57.382,247.172"/>' +
+    '<polygon fill="#7f5b53" points="384.003,512 101.52,512 92.692,476.69 392.83,476.69"/>' +
+    '<polygon fill="#af8066" points="361.934,476.69 392.83,291.31 92.692,291.31 123.589,476.69"/>' +
+    '<path fill="#d9aa94" d="M207.451,353.103h-8.828c-4.873,0-8.828-3.946-8.828-8.828c0-4.882,3.955-8.828,8.828-8.828h8.828c4.873,0,8.828,3.946,8.828,8.828C216.279,349.158,212.324,353.103,207.451,353.103"/>' +
+    '<path fill="#d9aa94" d="M251.589,423.724h-8.828c-4.873,0-8.828-3.946-8.828-8.828c0-4.882,3.955-8.828,8.828-8.828h8.828c4.873,0,8.828,3.946,8.828,8.828C260.416,419.778,256.462,423.724,251.589,423.724"/>' +
+    '<path fill="#d9aa94" d="M373.656,406.356c-0.486-0.079-0.918-0.291-1.421-0.291h-85.336c-4.873,0-8.828,3.955-8.828,8.828c0,4.882,3.955,8.828,8.828,8.828h83.862L373.656,406.356z"/>' +
+    '<path fill="#d9aa94" d="M163.313,335.448H101.52c-0.503,0-0.945,0.203-1.421,0.291l2.895,17.364h60.319c4.873,0,8.828-3.946,8.828-8.828C172.141,339.394,168.186,335.448,163.313,335.448"/>' +
+    '</svg>';
+  // The favourite heart and the filled star (ui.js icons.heart, starSvg).
+  var HEART = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+  var STAR_ON = '<svg viewBox="0 0 24 24" class="star-on" fill="currentColor" stroke="currentColor" stroke-width="1.5"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 17.8 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z"/></svg>';
+
+  ICONS.heart = HEART;
+  ICONS['globe-off'] = L('<path d="M10.114 4.462A14.5 14.5 0 0 1 12 2a10 10 0 0 1 9.313 13.643"/><path d="M15.557 15.556A14.5 14.5 0 0 1 12 22 10 10 0 0 1 4.929 4.929"/><path d="M15.892 10.234A14.5 14.5 0 0 0 12 2a10 10 0 0 0-3.643.687"/><path d="M17.656 12H22"/><path d="M19.071 19.071A10 10 0 0 1 12 22 14.5 14.5 0 0 1 8.44 8.45"/><path d="M2 12h10"/><path d="m2 2 20 20"/>');
+  ICONS.eject = L('<path d="M4 13a1 1 0 0 1-.72-1.695l7.257-7.668a2 2 0 0 1 2.926 0l7.256 7.668A1 1 0 0 1 20 13z"/><rect x="3" y="17" width="18" height="4" rx="1"/>');
+  ICONS['volume-2'] = L('<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>');
+  ICONS.captions = L('<rect width="18" height="14" x="3" y="5" rx="2" ry="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/>');
+  ICONS.copy = L('<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>');
+  ICONS['circle-check'] = L('<circle cx="12" cy="12" r="10"/><path d="m16 9-5.5 5.5L8 12"/>');
+  var STAR_OFF = STAR_ON.replace('class="star-on" fill="currentColor"', 'class="star-off" fill="none"');
+
+  var $ = function (id) { return document.getElementById(id); };
+  var paint = function (root) {
+    (root || document).querySelectorAll('[data-ico]').forEach(function (n) {
+      var svg = ICONS[n.getAttribute('data-ico')];
+      if (svg && !n.firstChild) n.innerHTML = svg;
+    });
+  };
+
+  // Header: hairline once scrolled; the logo's idle slide into its slot.
+  var header = document.querySelector('.app-header');
+  var brand = header.querySelector('.brand');
+  var onScroll = function () { header.classList.toggle('scrolled', window.scrollY > 8); };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+  function idle() {
+    if (reduce || brand.classList.contains('logo-idle-run')) return;
+    brand.classList.add('logo-idle-run');
+    setTimeout(function () { brand.classList.remove('logo-idle-run'); }, 2500);
+  }
+  brand.addEventListener('mouseenter', idle);
+  setInterval(idle, 20000);
+
+  // Hero: the splash plays, then the disc comes back out of the slot (reverse).
+  // Only the direction changes between runs, which would not restart a finished
+  // animation, so each run clears it first.
+  var logo = document.querySelector('.hero .splash-logo');
+  if (!reduce && logo) {
+    var into = true;
+    var play = function (v) { logo.style.animation = 'none'; void logo.offsetWidth; logo.style.animation = v; };
+    logo.addEventListener('animationend', function () {
+      setTimeout(function () {
+        play(into ? 'splash-logo 1.5s reverse both' : 'splash-logo 1.5s forwards');
+        into = !into;
+      }, into ? 900 : 5200);
+    });
+  }
+
+  // The Shelf: a spine slides off (the app's extraction), then its tile is shown.
+  $('plant').innerHTML = PLANT_SVG;
+  document.querySelectorAll('.dvd-spine').forEach(function (s) {
+    s.addEventListener('click', function () {
+      if (s.classList.contains('extracting')) return;
+      s.classList.add('extracting');
+      setTimeout(function () {
+        s.classList.remove('extracting');
+        $(s.getAttribute('data-go')).scrollIntoView({ block: 'center' });
+      }, 200);
+    });
+  });
+
+  // Rate-O-Matic: the rating row from ratingControls.js. Tapping the current
+  // star clears it; each level replays its own phrase entrance.
+  var PHRASES = { 1: 'Not for me', 2: 'Disappointing', 3: 'Decent', 4: 'Really good', 5: 'Excellent!' };
+  var stars = $('stars'), phrase = $('phrase'), fav = $('fav'), rating = null, favorite = false;
+  function renderStars() {
+    stars.innerHTML = '';
+    for (var k = 1; k <= 5; k++) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', k + ' / 5');
+      b.innerHTML = k <= (rating || 0) ? STAR_ON : STAR_OFF;
+      b.addEventListener('click', (function (k) { return function () { rating = rating === k ? null : k; renderStars(); }; })(k));
+      stars.appendChild(b);
+    }
+    phrase.classList.remove('rp-1', 'rp-2', 'rp-3', 'rp-4', 'rp-5');
+    phrase.textContent = rating ? PHRASES[rating] : '';
+    void phrase.offsetWidth;
+    if (rating) phrase.classList.add('rp-' + rating);
+  }
+  renderStars();
+  fav.addEventListener('animationend', function (e) { if (e.animationName === 'fav-wobble') fav.classList.remove('fav-wobble'); });
+  fav.addEventListener('click', function () {
+    favorite = !favorite;
+    fav.classList.toggle('active', favorite);
+    fav.setAttribute('aria-pressed', String(favorite));
+    fav.classList.remove('fav-wobble');
+    if (favorite) { void fav.offsetWidth; fav.classList.add('fav-wobble'); }
+  });
+
+  // Your library: the segmented filter (ui.js segmentedControl) over a poster grid.
+  var GRID = [['#b5651d', '#5e2f12', 1, 0], ['#2f6fa8', '#16324b', 0, 1], ['#0e7c6b', '#08322c', 1, 1], ['#6b4fbf', '#2c1f4f', 0, 0],
+              ['#c2445f', '#5a1f2c', 1, 0], ['#c88a16', '#5e400a', 0, 1], ['#3e6b4f', '#24312a', 0, 0], ['#2f6fa8', '#1e2a33', 1, 1]];
+  var mini = $('miniGrid');
+  GRID.forEach(function (g) {
+    var s = document.createElement('span');
+    s.style.background = 'linear-gradient(150deg,' + g[0] + ',' + g[1] + ')';
+    mini.appendChild(s);
+  });
+  var seg = $('seg'), opts = [].slice.call(seg.querySelectorAll('.seg-opt'));
+  opts.forEach(function (o, i) {
+    o.addEventListener('click', function () {
+      seg.style.setProperty('--seg-i', i);
+      opts.forEach(function (x, j) { x.setAttribute('aria-checked', String(j === i)); });
+      [].slice.call(mini.children).forEach(function (c, k) { c.classList.toggle('dim', i > 0 && !GRID[k][i + 1]); });
+    });
+  });
+
+  // Monthly receipt: prints once on view, again on tap.
+  var printer = $('printer');
+  printer.addEventListener('click', function () {
+    printer.classList.remove('printed');
+    setTimeout(function () { printer.classList.add('printed'); }, 450);
+  });
+
+  // Works offline: the network pill's sequence from network.js
+  // (message, then a disc, then recovered, then the message again).
+  var net = $('netToast'), netText = $('netText'), timers = [];
+  function measure(text) {
+    var was = net.classList.contains('collapsed');
+    net.classList.add('net-toast--measuring');
+    net.classList.remove('collapsed');
+    net.style.removeProperty('--net-w');
+    netText.textContent = text;
+    var w = Math.ceil(net.getBoundingClientRect().width);
+    if (was) net.classList.add('collapsed');
+    void net.offsetWidth;
+    net.classList.remove('net-toast--measuring');
+    return w;
+  }
+  function netCycle() {
+    timers.forEach(clearTimeout);
+    timers = [];
+    var at = function (ms, fn) { timers.push(setTimeout(fn, ms)); };
+    net.classList.remove('online', 'collapsed', 'show');
+    net.style.setProperty('--net-w', measure('DVD error: the server stopped spinning') + 'px');
+    at(300, function () { net.classList.add('show'); });
+    at(3400, function () { net.classList.add('collapsed'); });
+    at(6400, function () { net.classList.add('online'); });
+    at(7600, function () {
+      var w = measure('Disc cleaned, video incoming');
+      net.classList.add('net-toast--opening');
+      void net.offsetWidth;
+      net.style.setProperty('--net-w', w + 'px');
+      net.classList.remove('collapsed');
+      at(420, function () { net.classList.remove('net-toast--opening'); });
+    });
+    at(11000, function () { net.classList.remove('show'); });
+    at(12600, netCycle);
+  }
+
+  // Everything else.
+  var MORE = [
+    ['book-search', '#7db6f0', 'Search & Explore', 'Preview before you add'],
+    ['users', '#9aa2f0', 'Favourite Person', "Their career and what you've seen"],
+    ['list-plus', '#6fd4c4', 'Collections & lists', 'Box sets and your own lists'],
+    ['bell', '#7ed99a', 'Notifications', 'New episodes as they air'],
+    ['file-up', '#e6bd5c', 'Imports', 'From TV Time and Kodi'],
+    ['file-down', '#57c98a', 'Backups', 'Merge-only XML export'],
+    ['languages', '#74d0e0', 'English & Italian', 'Switch any time'],
+    ['shield', '#e77c86', 'Private by design', 'One household, your own server']
+  ];
+  var more = $('more');
+  MORE.forEach(function (m) {
+    var li = document.createElement('li');
+    li.innerHTML = '<span class="ico" style="--tone:' + m[1] + '">' + ICONS[m[0]] + '</span><span><b></b><span></span></span>';
+    li.querySelector('b').textContent = m[2];
+    li.querySelector('b + span').textContent = m[3];
+    more.appendChild(li);
+  });
+
+  // Gallery.
+  var SHOTS = [['login', "Who's at the counter?"], ['home', 'Home'], ['home_2', 'The Desk & The Wall'], ['movies', 'Movies'], ['details', 'Detail'],
+    ['whats-next', "What's Next"], ['loan', 'Lend a title'], ['household', 'Household'], ['btts', 'Back to the Shelf'],
+    ['dustitoff', 'Dust It Off'], ['rateomatic', 'Rate-O-Matic'], ['receipt', 'Monthly receipt'], ['cinema', 'My Tickets']];
+  var rail = $('rail');
+  SHOTS.forEach(function (s) {
+    var f = document.createElement('figure');
+    f.className = 'shot';
+    f.innerHTML = '<div class="phone"><img loading="lazy" decoding="async" alt="" /></div><figcaption></figcaption>';
+    var img = f.querySelector('img');
+    img.alt = s[1] + ' screen';
+    img.addEventListener('load', function () { img.classList.add('in'); });
+    img.src = 'assets/screens/' + s[0] + '.webp';
+    f.querySelector('figcaption').textContent = s[1];
+    rail.appendChild(f);
+  });
+  var step = function () { return Math.min(rail.clientWidth * 0.8, 236 * 3); };
+  $('railPrev').addEventListener('click', function () { rail.scrollBy({ left: -step(), behavior: reduce ? 'auto' : 'smooth' }); });
+  $('railNext').addEventListener('click', function () { rail.scrollBy({ left: step(), behavior: reduce ? 'auto' : 'smooth' }); });
+
+  // Install: copy the commands, confirmed with the app's toast.
+  var toastEl = null, toastTimer = null;
+  function toast(msg) {
+    if (toastEl) toastEl.remove();
+    clearTimeout(toastTimer);
+    toastEl = document.createElement('div');
+    toastEl.className = 'toast toast--ok';
+    toastEl.setAttribute('role', 'status');
+    toastEl.innerHTML = '<span class="toast-ico">' + ICONS['circle-check'] + '</span><span class="toast-msg"></span>';
+    toastEl.querySelector('.toast-msg').textContent = msg;
+    document.body.appendChild(toastEl);
+    var el = toastEl;
+    toastTimer = setTimeout(function () {
+      el.classList.add('toast-out');
+      el.addEventListener('animationend', function () { el.remove(); }, { once: true });
+    }, 2200);
+  }
+  $('copy').addEventListener('click', function () {
+    var text = $('cmd').textContent.split('\n').filter(function (l) { return l.charAt(0) !== '#'; }).join('\n');
+    var done = function () { toast('Copied!'); };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+  });
+
+  paint();
+
+  // Demos that play once, when they come on screen.
+  var watch = function (el, fn, opts) {
+    new IntersectionObserver(function (es) { fn(es[0].isIntersecting); }, opts || { threshold: 0.4 }).observe(el);
+  };
+  if ('IntersectionObserver' in window) {
+    var printed = false;
+    watch(printer, function (v) { if (v && !printed) { printed = true; setTimeout(function () { printer.classList.add('printed'); }, 300); } }, { threshold: 0.6 });
+    var netOn = false;
+    watch(net.parentNode, function (v) { if (v && !netOn) { netOn = true; netCycle(); } });
+  } else {
+    printer.classList.add('printed');
+    netCycle();
+  }
+})();
+</script>
+</body>
+</html>
