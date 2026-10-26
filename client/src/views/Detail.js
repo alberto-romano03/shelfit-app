@@ -1133,8 +1133,38 @@ export function openCollectionTitle(p) {
 // "Lend to…" (a title suggestion, told as lending a DVD): one row per member who
 // can receive it; tapping a row sends it, and they are offered the loan as a
 // popup the next time they open the app.
+// A loan's note is one short line, the headline of the friend's popup. Same cap
+// as the server (routes/suggestions.js).
+const LEND_MESSAGE_MAX = 100;
+const LEND_PLACEHOLDERS = ['lend.placeholder1', 'lend.placeholder2', 'lend.placeholder3'];
+
 function openSuggestSheet(d) {
+  let stopTypewriter = () => {};
   openModal((modal, close) => {
+    const message = el('textarea', {
+      class: 'text-field lend-message-input',
+      rows: '2',
+      maxlength: String(LEND_MESSAGE_MAX),
+      'aria-label': t('lend.messageLabel'),
+    });
+    const counter = el('div', { class: 'lend-message-count', 'aria-live': 'polite' });
+    const count = () => {
+      const n = [...message.value].length;
+      counter.textContent = `${n}/${LEND_MESSAGE_MAX}`;
+      counter.classList.toggle('full', n >= LEND_MESSAGE_MAX);
+    };
+    // One line on the other side: Enter never adds a line break.
+    message.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') e.preventDefault();
+    });
+    message.addEventListener('input', count);
+    count();
+    // Typed out like the episode-note placeholder (stops on the first keypress).
+    stopTypewriter = typewriterPlaceholder(
+      message,
+      t(LEND_PLACEHOLDERS[Math.floor(Math.random() * LEND_PLACEHOLDERS.length)])
+    );
+
     const rows = (suggestRecipients || []).map((r) => {
       // Not an async handler on purpose: the row would clear its trailing slot
       // when the promise settles, wiping the "Sent" mark.
@@ -1144,11 +1174,11 @@ function openSuggestSheet(d) {
         onClick: ({ report }) => {
           row.setDisabled(true);
           api
-            .suggest(r.id, d.type, d.tmdb_id)
+            .suggest(r.id, d.type, d.tmdb_id, message.value.trim())
             // Held for as long as the sheet can reasonably stay open (a 0 hold
             // would clear it at once).
             .then(() => report(t('suggest.sent'), 10 * 60 * 1000))
-            .catch((err) => {
+            .catch(() => {
               row.setDisabled(false);
               toast(t('suggest.failed'), 'bad'); // the server's reasons are English-only
             });
@@ -1159,6 +1189,7 @@ function openSuggestSheet(d) {
     modal.append(
       el('h3', { text: t('detail.suggest') }),
       el('div', { class: 'muted', text: t('suggest.sheetSub', { title: d.title_it }) }),
+      el('div', { class: 'lend-message' }, [message, counter]),
       el('div', { class: 'suggest-recipients' }, rows),
       el('hr', { class: 'status-sep' }),
       el('div', { class: 'modal-actions' }, [
@@ -1168,7 +1199,7 @@ function openSuggestSheet(d) {
         ]),
       ])
     );
-  });
+  }, { onClose: () => stopTypewriter() });
 }
 
 function openAddToListSheet(d) {

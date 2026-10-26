@@ -8512,35 +8512,50 @@ textarea.notes:focus,
     radial-gradient(130% 60% at 50% 0%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 72%),
     var(--surface);
 }
-.lend-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-.lend-kicker-ico {
-  width: 14px;
-  height: 14px;
-  background-color: currentColor;
-  mask-size: contain;
-  -webkit-mask-size: contain;
-  mask-repeat: no-repeat;
-  -webkit-mask-repeat: no-repeat;
-}
 /* Scoped to the modal so it outranks the generic .modal h3 margin. */
 .lend-modal .lend-heading {
-  margin: 20px 0 0;
+  margin: 4px 0 0;
   font-size: 18px;
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: -0.3px;
+}
+/* The friend's note as the headline: their words in quotes, a long unbroken word
+   wraps instead of widening the popup. */
+.lend-modal .lend-heading--quote {
+  overflow-wrap: anywhere;
+}
+/* The Lend sheet's note field: one short line that wraps, with its character
+   count under the right edge (accent once the cap is reached). */
+.lend-message {
+  margin-top: 12px;
+}
+.lend-message-input {
+  display: block;
+  resize: none;
+  line-height: 1.4;
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+}
+.lend-message-input::placeholder {
+  font-style: italic;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+textarea.lend-message-input:focus {
+  border-color: color-mix(in srgb, var(--text-secondary) 45%, var(--border));
+  box-shadow: none;
+}
+.lend-message-count {
+  margin-top: 4px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.lend-message-count.full {
+  color: var(--accent);
 }
 .lend-stage {
   display: flex;

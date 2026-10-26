@@ -311,7 +311,8 @@ function buildApi(signal) {
     // Title suggestions between members: who can receive one, send one, and the
     // ones waiting for the signed-in member (accept adds to Plan to Watch).
     suggestRecipients: () => api.get('/api/suggestions/recipients'),
-    suggest: (to_user_id, type, tmdb_id) => api.post('/api/suggestions', { to_user_id, type, tmdb_id }),
+    suggest: (to_user_id, type, tmdb_id, message) =>
+      api.post('/api/suggestions', { to_user_id, type, tmdb_id, message: message || null }),
     suggestions: () => api.get('/api/suggestions'),
     acceptSuggestion: (id) => api.post(`/api/suggestions/${id}/accept`),
     dismissSuggestion: (id) => api.post(`/api/suggestions/${id}/dismiss`),

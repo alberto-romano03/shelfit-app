@@ -301,6 +301,15 @@ export const MIGRATIONS = [
       `);
     },
   },
+  {
+    // A loan can carry a short note from the sender ("I really think you should
+    // see this"), shown as the headline of the recipient's popup. NULL = none.
+    version: 7,
+    name: 'loan message',
+    up(db) {
+      db.exec('ALTER TABLE suggestions ADD COLUMN message TEXT');
+    },
+  },
 ];
 
 // Filesystem half of v1: the one custom profile photo moves from

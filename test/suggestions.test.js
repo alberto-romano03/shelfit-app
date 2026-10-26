@@ -100,4 +100,27 @@ describe('suggesting a title to another member', () => {
     const left = (await marco.get('/api/suggestions')).json.suggestions.map((s) => s.from_name);
     assert.deepEqual(left, ['Admin']);
   });
+
+  it("carries the sender's note: one line, capped, the latest one wins", async () => {
+    const send = (message) =>
+      master.post('/api/suggestions', { to_user_id: marcoId, type: 'movie', tmdb_id: 550, message });
+    const note = async () => (await marco.get('/api/suggestions')).json.suggestions[0].message;
+
+    assert.equal((await send('  I really think\n\tyou should see this  ')).status, 201);
+    assert.equal(await note(), 'I really think you should see this');
+
+    // 100 characters at most, an emoji counting once.
+    await send('\u{1F3AC}' + 'x'.repeat(150));
+    const capped = await note();
+    assert.equal([...capped].length, 100);
+    assert.ok(capped.startsWith('\u{1F3AC}x'));
+
+    // Blank or missing means no note (the popup then says who is lending it).
+    await send('   ');
+    assert.equal(await note(), null);
+    await send(undefined);
+    assert.equal(await note(), null);
+    await send(42);
+    assert.equal(await note(), null);
+  });
 });

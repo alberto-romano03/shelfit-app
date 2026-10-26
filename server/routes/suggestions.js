@@ -17,13 +17,15 @@ const recipientsStmt = db.prepare(
     WHERE id != ? AND disabled = 0 AND password_hash IS NOT NULL
     ORDER BY sort_order, id`
 );
+// Lending the same title again before it was answered replaces the note: the
+// latest words are the ones the recipient should read.
 const insertStmt = db.prepare(
-  `INSERT INTO suggestions (from_user_id, to_user_id, type, tmdb_id, title, year, created_at)
-   VALUES (?, ?, ?, ?, ?, ?, ?)
-   ON CONFLICT(from_user_id, to_user_id, type, tmdb_id) DO NOTHING`
+  `INSERT INTO suggestions (from_user_id, to_user_id, type, tmdb_id, title, year, created_at, message)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+   ON CONFLICT(from_user_id, to_user_id, type, tmdb_id) DO UPDATE SET message = excluded.message`
 );
 const pendingStmt = db.prepare(
-  `SELECT s.id, s.type, s.tmdb_id, s.title, s.year, s.created_at, u.display_name AS from_name
+  `SELECT s.id, s.type, s.tmdb_id, s.title, s.year, s.created_at, s.message, u.display_name AS from_name
      FROM suggestions s JOIN users u ON u.id = s.from_user_id
     WHERE s.to_user_id = ?
     ORDER BY s.created_at, s.id`
@@ -36,6 +38,15 @@ const insertItemStmt = db.prepare(
    VALUES (?, ?, ?, ?, ?, 'plan_to_watch')`
 );
 
+// The note travels on one line and is capped in characters (code points, so an
+// emoji counts once). The client's field enforces the same cap.
+const MESSAGE_MAX = 100;
+function cleanMessage(v) {
+  if (typeof v !== 'string') return null;
+  const text = v.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return text ? [...text].slice(0, MESSAGE_MAX).join('') : null;
+}
+
 function posterUrl(type, tmdbId) {
   return `/assets/${type === 'movie' ? 'movies' : 'shows'}/${tmdbId}/poster.webp`;
 }
@@ -47,9 +58,9 @@ export default async function suggestionRoutes(fastify) {
     recipients: recipientsStmt.all(request.user.id),
   }));
 
-  // POST /api/suggestions { to_user_id, type, tmdb_id }
+  // POST /api/suggestions { to_user_id, type, tmdb_id, message? }
   fastify.post('/api/suggestions', async (request, reply) => {
-    const { to_user_id: toId, type, tmdb_id: tmdbId } = request.body || {};
+    const { to_user_id: toId, type, tmdb_id: tmdbId, message } = request.body || {};
     if ((type !== 'movie' && type !== 'show') || !/^\d+$/.test(String(tmdbId || ''))) {
       reply.code(400);
       return { error: 'type and tmdb_id are required' };
@@ -71,7 +82,8 @@ export default async function suggestionRoutes(fastify) {
       String(tmdbId),
       meta.title_it || meta.title_orig || 'Untitled',
       meta.year || null,
-      Date.now()
+      Date.now(),
+      cleanMessage(message)
     );
     reply.code(201);
     return { ok: true };
@@ -94,6 +106,7 @@ export default async function suggestionRoutes(fastify) {
         title: s.title,
         year: s.year || null,
         from_name: s.from_name,
+        message: s.message || null,
         poster_url: posterUrl(s.type, s.tmdb_id),
         created_at: s.created_at,
       });

@@ -1,7 +1,8 @@
 // Incoming title suggestions, told as a friend lending you a DVD: when another
 // member has suggested a title, a popup asks about it the next time this member
-// opens the app ("Alberto wants to lend you this DVD"). The poster wears the
-// owned look (blue edge bars) with the disc sliding out from behind it and a
+// opens the app, headed by the note they wrote ("I really think you should see
+// this"), or "Alberto wants to lend you this DVD" without one. The poster wears
+// the owned look (blue edge bars) with the disc sliding out from behind it and a
 // sticky note from the friend; title and year below. Borrow it puts the title on
 // Plan to Watch; No thanks declines for good; tapping outside only puts it off
 // until the next open. Several loans are offered one after another.
@@ -85,12 +86,16 @@ function showSuggestion(s) {
         });
 
         const kind = s.type === 'movie' ? t('suggest.movie') : t('suggest.show');
+        // The friend's own words are the headline; a loan sent without a note
+        // (or from before notes existed) says who is lending it instead.
+        const heading = s.message
+          ? el('h3', { class: 'lend-heading lend-heading--quote', text: `“${s.message}”` })
+          : el('h3', {
+              class: 'lend-heading',
+              text: t(s.type === 'movie' ? 'lend.headingMovie' : 'lend.headingShow', { name: s.from_name }),
+            });
         modal.append(
-          el('div', { class: 'lend-kicker' }, [lucideIcon('disc', 'lend-kicker-ico'), el('span', { text: t('lend.kicker') })]),
-          el('h3', {
-            class: 'lend-heading',
-            text: t(s.type === 'movie' ? 'lend.headingMovie' : 'lend.headingShow', { name: s.from_name }),
-          }),
+          heading,
           lentDvd(s),
           el('div', { class: 'ksync-meta' }, [
             el('div', { class: 'ksync-name', text: s.title }),
