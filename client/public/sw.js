@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v141'; // bumped: loan message
+const CACHE = 'shelfit-shell-v142'; // bumped: loan notification tag
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by
@@ -364,8 +364,10 @@ self.addEventListener('fetch', (event) => {
 });
 
 // --- Push notifications ----------------------------------------------------
-// The backend sends an encrypted JSON payload { title, body, url }. Show it as a
-// notification using the app icon; the click opens shelfIt at `url`.
+// The backend sends an encrypted JSON payload { title, body, url, tag? }. Show it
+// as a notification using the app icon; the click opens shelfIt at `url`. A loan
+// (tag 'loan') is also announced to any open shelfit window, which raises its
+// popup right away.
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -378,10 +380,18 @@ self.addEventListener('push', (event) => {
     body: data.body || 'A new episode is available',
     icon: `${BASE}/icons/icon-192.png`,
     badge: `${BASE}/icons/icon-192.png`,
-    tag: data.url || 'shelfit', // collapse duplicates for the same target
+    tag: data.tag || data.url || 'shelfit', // collapse duplicates for the same target
     data: { url: typeof data.url === 'string' ? data.url : '/' },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  const tasks = [self.registration.showNotification(title, options)];
+  if (data.tag === 'loan') {
+    tasks.push(
+      self.clients
+        .matchAll({ type: 'window', includeUncontrolled: true })
+        .then((list) => list.forEach((c) => c.postMessage({ type: 'shelfit:loan' })))
+    );
+  }
+  event.waitUntil(Promise.all(tasks));
 });
 
 // Tapping a notification focuses an existing shelfit window (navigating it to the

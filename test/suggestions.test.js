@@ -2,7 +2,9 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { startApp, login, client, addUser, TEST_PASSWORD } from './helpers/harness.js';
+import crypto from 'node:crypto';
+import http from 'node:http';
+import { startApp, login, client, addUser, waitFor, TEST_PASSWORD } from './helpers/harness.js';
 import { writeMovieMeta } from './helpers/fixtures.js';
 
 describe('suggesting a title to another member', () => {
@@ -122,5 +124,48 @@ describe('suggesting a title to another member', () => {
     assert.equal(await note(), null);
     await send(42);
     assert.equal(await note(), null);
+  });
+
+  it("pings the recipient's devices once per new loan", async () => {
+    // A stand-in push service on this machine, receiving Marco's notifications.
+    const hits = [];
+    const server = http.createServer((req, res) => {
+      hits.push({ method: req.method, encoding: req.headers['content-encoding'] });
+      req.resume();
+      req.on('end', () => {
+        res.statusCode = 201;
+        res.end();
+      });
+    });
+    await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+    try {
+      const { saveSubscription } = await import('../server/push.js');
+      const ecdh = crypto.createECDH('prime256v1');
+      ecdh.generateKeys();
+      saveSubscription(marcoId, {
+        endpoint: `http://127.0.0.1:${server.address().port}/push/marco`,
+        keys: {
+          p256dh: ecdh.getPublicKey().toString('base64url'),
+          auth: crypto.randomBytes(16).toString('base64url'),
+        },
+      });
+      writeMovieMeta(h.dataDir, 680, { title: 'Pulp Fiction', year: 1994, runtime: 154 });
+      await master.post('/api/media', { tmdb_id: 680, type: 'movie', status: 'completed' });
+      const lend = (tmdbId, message) =>
+        master.post('/api/suggestions', { to_user_id: marcoId, type: 'movie', tmdb_id: tmdbId, message });
+
+      assert.equal((await lend(680)).status, 201);
+      await waitFor(() => hits.length === 1);
+      assert.deepEqual(hits[0], { method: 'POST', encoding: 'aes128gcm' });
+
+      // Only the note changes on a loan still pending: no second ping.
+      await lend(680, 'Trust me');
+      // Marco already has 603: no popup will ever ask, so no ping either.
+      await lend(603);
+      await new Promise((ok) => setTimeout(ok, 300));
+      assert.equal(hits.length, 1);
+    } finally {
+      server.close();
+    }
   });
 });

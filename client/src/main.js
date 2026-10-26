@@ -299,6 +299,13 @@ setTimeout(() => checkSuggestions({ force: true }), 1500);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') checkSuggestions();
 });
+// A loan's push notification while the app is already open: the service worker
+// says so, and the popup comes up now instead of on the next open.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'shelfit:loan') checkSuggestions({ force: true });
+  });
+}
 
 // --- Durable storage ------------------------------------------------------
 // Ask the browser to make our on-device storage persistent so iOS is far less

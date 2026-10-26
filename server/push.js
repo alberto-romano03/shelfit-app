@@ -218,6 +218,19 @@ export async function sendTest(userId, logger) {
   return { ok: delivered > 0, delivered };
 }
 
+// A member just lent `toUserId` a title. Deliberately generic (no title, no
+// note): a lock screen is not the place for it, and the popup tells the rest the
+// moment the app opens, which is what tapping the notification does. One tag for
+// every loan, so several unread ones collapse into a single notification.
+export async function notifyLoan(toUserId, fromName, logger) {
+  if (!isSubscribed(toUserId)) return 0;
+  return sendToUser(
+    toUserId,
+    { title: 'shelfit', body: `${fromName} wants to lend you something…`, url: '/', tag: 'loan' },
+    logger
+  );
+}
+
 // --- Daily new-episode check ----------------------------------------------
 // One pass for the whole household: the checkpoint is shared, each member with
 // a subscribed device hears about their own series.

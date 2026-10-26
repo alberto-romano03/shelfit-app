@@ -10,6 +10,7 @@ import db from '../db.js';
 import { ensureCached, readMetaSync } from '../cache.js';
 import { scheduleStatsRecompute } from '../stats.js';
 import { getUser, isPickable } from '../users.js';
+import { notifyLoan } from '../push.js';
 
 // Prepared once at module load (better-sqlite3 compiles on prepare).
 const recipientsStmt = db.prepare(
@@ -31,6 +32,9 @@ const pendingStmt = db.prepare(
     ORDER BY s.created_at, s.id`
 );
 const getOwnStmt = db.prepare('SELECT * FROM suggestions WHERE id = ? AND to_user_id = ?');
+const pendingPairStmt = db.prepare(
+  'SELECT 1 FROM suggestions WHERE from_user_id = ? AND to_user_id = ? AND type = ? AND tmdb_id = ?'
+);
 const deleteStmt = db.prepare('DELETE FROM suggestions WHERE id = ? AND to_user_id = ?');
 const ownedStmt = db.prepare('SELECT id FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?');
 const insertItemStmt = db.prepare(
@@ -75,6 +79,7 @@ export default async function suggestionRoutes(fastify) {
       reply.code(400);
       return { error: 'title not available' };
     }
+    const alreadyPending = !!pendingPairStmt.get(request.user.id, to.id, type, String(tmdbId));
     insertStmt.run(
       request.user.id,
       to.id,
@@ -85,6 +90,13 @@ export default async function suggestionRoutes(fastify) {
       Date.now(),
       cleanMessage(message)
     );
+    // A heads-up on the recipient's devices, once per loan: not again when only
+    // the note changes, and never for a title they already have (they'd never see
+    // its popup). Not awaited, so the answer looks the same either way.
+    if (!alreadyPending && !ownedStmt.get(to.id, type, String(tmdbId))) {
+      const from = getUser(request.user.id);
+      notifyLoan(to.id, from ? from.display_name : 'shelfit', fastify.log).catch(() => {});
+    }
     reply.code(201);
     return { ok: true };
   });
