@@ -114,6 +114,7 @@ export function publicInstance(row) {
     has_password: !!row.password,
     icon: row.icon || null,
     is_active: !!row.is_active,
+    sync_user_id: row.sync_user_id || null, // null = the master
   };
 }
 
@@ -142,9 +143,16 @@ export function listKodiIcons() {
 }
 
 const createStmt = db.prepare(
-  `INSERT INTO kodi_instances (name, host, port, username, password, icon, is_active)
-   VALUES (?, ?, ?, ?, ?, ?, ?)`
+  `INSERT INTO kodi_instances (name, host, port, username, password, icon, is_active, sync_user_id)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 );
+const userExistsStmt = db.prepare('SELECT 1 FROM users WHERE id = ?');
+
+// The member an instance syncs into: a real user id, or null for the master.
+function syncOwnerValue(v) {
+  const id = Number(v);
+  return Number.isInteger(id) && id > 0 && userExistsStmt.get(id) ? id : null;
+}
 const clearActiveStmt = db.prepare('UPDATE kodi_instances SET is_active = 0 WHERE is_active = 1');
 const setActiveStmt = db.prepare('UPDATE kodi_instances SET is_active = 1 WHERE id = ?');
 const activateTx = db.transaction((id) => {
@@ -153,7 +161,7 @@ const activateTx = db.transaction((id) => {
   setActiveStmt.run(id);
 });
 
-export function createInstance({ name, host, port, username, password, icon }) {
+export function createInstance({ name, host, port, username, password, icon, sync_user_id }) {
   const hadActive = !!getActiveInstance();
   const info = createStmt.run(
     name,
@@ -162,14 +170,15 @@ export function createInstance({ name, host, port, username, password, icon }) {
     username || null,
     encryptPassword(password),
     icon || null,
-    hadActive ? 0 : 1 // first instance ever becomes active automatically
+    hadActive ? 0 : 1, // first instance ever becomes active automatically
+    syncOwnerValue(sync_user_id)
   );
   return getInstance(info.lastInsertRowid);
 }
 
 // Update fields; password is only touched when a new non-empty one is supplied
 // (blank leaves the stored credential unchanged — write-only from the UI).
-export function updateInstance(id, { name, host, port, username, password, icon }) {
+export function updateInstance(id, { name, host, port, username, password, icon, sync_user_id }) {
   const row = getInstance(id);
   if (!row) return null;
   const fields = [];
@@ -179,6 +188,7 @@ export function updateInstance(id, { name, host, port, username, password, icon 
   if (port !== undefined) { fields.push('port = ?'); params.push(Number(port) || 8080); }
   if (username !== undefined) { fields.push('username = ?'); params.push(username || null); }
   if (icon !== undefined) { fields.push('icon = ?'); params.push(icon || null); }
+  if (sync_user_id !== undefined) { fields.push('sync_user_id = ?'); params.push(syncOwnerValue(sync_user_id)); }
   if (password !== undefined && password !== '') {
     fields.push('password = ?');
     params.push(encryptPassword(password));

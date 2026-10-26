@@ -26,9 +26,13 @@ const findByTitle = db.prepare(
 const masterIdStmt = db.prepare("SELECT id FROM users WHERE role = 'master'");
 
 // Kodi tracks "watched" per Kodi profile, not per person, so its library syncs
-// into a single member's shelfIt library: the master for now (a per-instance
-// owner is planned). The review card for scheduled discoveries is theirs alone.
+// into a single member's shelfIt library: the one the active instance names
+// (Settings > Kodi), else the master. The review card for scheduled discoveries
+// is theirs alone.
+const userExistsStmt = db.prepare('SELECT 1 FROM users WHERE id = ?');
 export function syncOwnerId() {
+  const inst = getActiveInstance();
+  if (inst && inst.sync_user_id && userExistsStmt.get(inst.sync_user_id)) return inst.sync_user_id;
   const row = masterIdStmt.get();
   return row ? row.id : null;
 }

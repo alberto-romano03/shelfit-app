@@ -70,6 +70,7 @@ export default async function kodiRoutes(fastify) {
       username: b.username,
       password: b.password,
       icon: b.icon,
+      sync_user_id: b.sync_user_id,
     });
     return configPayload();
   });
@@ -89,6 +90,7 @@ export default async function kodiRoutes(fastify) {
       username: b.username,
       password: b.password,
       icon: b.icon,
+      sync_user_id: b.sync_user_id,
     });
     return configPayload();
   });

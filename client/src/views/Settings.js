@@ -392,6 +392,11 @@ export default async function Settings(container) {
   // --- TV Time Import (ON-DEMAND — files are scanned only when requested) ---
   const importSection = el('div', { class: 'settings-section' });
   const importResults = el('div', { class: 'import-results muted' });
+  // Whose library the import fills: the master's own by default; with other
+  // members in the household a picker appears (filled in once the master is
+  // confirmed, below). null = the caller.
+  let importTarget = null;
+  const importTargetSlot = el('div');
   importResults.style.display = 'none'; // nothing to show until a check has run
 
   const checkFilesRow = settingsRow({
@@ -481,6 +486,7 @@ export default async function Settings(container) {
       class: 'muted usage-desc',
       text: t('settings.tvtime.desc'),
     }),
+    importTargetSlot,
     checkFilesRow.el,
     importResults,
     startRow.el,
@@ -1119,6 +1125,23 @@ export default async function Settings(container) {
       householdSection.replaceWith(buildHousehold(api));
       chipByKey.household.style.display = '';
     }
+    api
+      .householdMembers()
+      .then((d) => {
+        const list = ((d && d.members) || []).filter((m) => !m.disabled);
+        if (list.length < 2) return;
+        const self = s && s.user ? s.user.id : null;
+        const pill = selectPill({
+          label: t('settings.tvtime.target'),
+          options: list.map((m) => ({ value: String(m.id), text: m.display_name })),
+          value: self ? String(self) : String(list[0].id),
+          onChange: (v) => {
+            importTarget = v ? Number(v) : null;
+          },
+        });
+        importTargetSlot.replaceWith(el('div', { class: 'tvtime-target' }, [pill.el]));
+      })
+      .catch(() => { /* no picker: the import fills the caller's library */ });
     tabBar.refresh(); // the track just got wider: re-measure the chips
 
     api
@@ -1142,7 +1165,7 @@ export default async function Settings(container) {
     startRow.setDisabled(true);
     summaryText.textContent = '';
     try {
-      await api.startImport();
+      await api.startImport(importTarget);
     } catch (err) {
       if (err.status !== 409) {
         toast(err.message, 'bad');

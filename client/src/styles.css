@@ -8458,6 +8458,10 @@ textarea.notes:focus,
 .household-backup .btn {
   width: 100%;
 }
+/* TV Time import: whose library it fills (shown only with several members). */
+.tvtime-target {
+  margin: 4px 0 10px;
+}
 .magic-result-head {
   font-weight: 700;
   font-size: 15px;

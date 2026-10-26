@@ -329,7 +329,8 @@ function buildApi(signal) {
     revokeMagic: (id) => api.del(`/api/auth/magic/${id}`),
 
     importFiles: () => api.get('/api/import/files'),
-    startImport: () => api.post('/api/import/tvtime'),
+    // `userId`: whose library to fill (the master picks it); omitted = the caller.
+    startImport: (userId) => api.post('/api/import/tvtime', userId ? { user_id: userId } : undefined),
     importStatus: () => api.get('/api/import/status'),
     importLog: () => api.get('/api/import/log'),
 

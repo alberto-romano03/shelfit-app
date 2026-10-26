@@ -229,6 +229,9 @@ async function buildReceipt(month = parseMonthKey(monthKey()), userId) {
       hours_label: `${String(totalHours).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')} HRS`,
       top_genre: topGenre ? topGenre.toUpperCase() : null,
       membership,
+      // Whose receipt it is, printed on it: in a household several members share
+      // the store. Capped so a long name can't break the receipt's line.
+      member: ((nameRow && nameRow.display_name) || '').toUpperCase().slice(0, 18) || null,
       closing: CLOSINGS[monthIndex % CLOSINGS.length],
     },
   };

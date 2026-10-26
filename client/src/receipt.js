@@ -256,6 +256,7 @@ function buildRows(data) {
   const hrs = / HRS$/.test(totals.hours_label || '')
     ? t('receipt.hours', { time: totals.hours_label.replace(/ HRS$/, '') })
     : totals.hours_label;
+  if (totals.member) rows.push({ type: 'total', left: t('receipt.member'), right: totals.member });
   rows.push({ type: 'total', left: t('receipt.titlesWatched'), right: String(totals.total_titles) });
   rows.push({ type: 'total', left: t('receipt.totalHours'), right: hrs });
   if (totals.top_genre) rows.push({ type: 'total', left: t('receipt.topGenre'), right: totals.top_genre });
@@ -948,7 +949,9 @@ export function openReceipt(month) {
 
         const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.92));
         if (!blob) throw new Error(t('receipt.exportFailed'));
-        const fname = `${data.store_name.toLowerCase()}-${data.month_name.toLowerCase()}-${data.year}.jpg`;
+        // The member's name too: a household's receipts land in the same folder.
+        const who = (data.totals.member || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const fname = `${[data.store_name.toLowerCase(), who, data.month_name.toLowerCase(), data.year].filter(Boolean).join('-')}.jpg`;
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = fname;

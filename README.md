@@ -4,7 +4,7 @@
 
 # shelfIt
 
-**A self-hosted, single-user PWA for tracking the movies and TV shows you own and watch — styled like a physical video-rental shelf.**
+**A self-hosted PWA for tracking the movies and TV shows your household owns and watches, styled like a physical video-rental shelf.**
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Node.js](https://img.shields.io/badge/node-22-brightgreen)
@@ -26,9 +26,11 @@ Web App, and used comfortably offline. It optionally talks to a local Kodi insta
 so you can start playback from your phone, and it can pull in your history from a
 TV Time export or an existing Kodi library.
 
-It is deliberately **not** a multi-tenant service: there is one library, guarded by
-a single app password (or magic-link login), and all data lives in a single SQLite
-database and cache folder that you own.
+It is deliberately **not** a multi-tenant service: one instance serves one
+household. Every member picks their profile on a Netflix-style sign-in screen and
+has a private library behind their own password; one **master** account, created
+from `APP_PASSWORD` on first boot, runs the instance. All data lives in a single
+SQLite database and cache folder that you own.
 
 > **In a hurry?** Jump to [Running shelfIt](#running-shelfit). There are three
 > supported setups: [**A. localhost / LAN only**](#a-localhost--lan-only-no-reverse-proxy)
@@ -53,9 +55,11 @@ database and cache folder that you own.
 - [Configuration](#configuration)
 - [Data layout](#data-layout)
 - [Settings tour](#settings-tour)
+- [Household accounts](#household-accounts)
 - [Import guides](#import-guides)
 - [Kodi integration](#kodi-integration)
 - [Updating the app](#updating-the-app)
+  - [Upgrading from a single-user version](#upgrading-from-a-single-user-version)
 - [Backup and restore](#backup-and-restore)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
@@ -257,14 +261,25 @@ database and cache folder that you own.
   and the UI reports added / merged / unchanged counts plus any failures.
   Metadata is never exported — it is re-fetched from TMDB on import.
 
-### Authentication & security
+### Household & security
 
-- Single app password, hashed with scrypt into the database; the server refuses
-  to boot in production without one unless you explicitly opt out.
-- Passwordless **magic-link** login for signing in on another device (tokens are
-  redacted from the server logs).
-- **Sign out of all devices** invalidates every session everywhere, including the
-  current one.
+- **Profiles:** a "Who's watching?" picker, then each member's own password,
+  hashed with scrypt. The master account comes from `APP_PASSWORD`; the server
+  refuses to boot in production without one unless you explicitly opt out.
+- **Private libraries:** titles, progress, ratings, lists, The Wall, stats, Up
+  Next, receipts and backups are per member; the image cache and custom artwork
+  are shared by the household.
+- **Members join by invite:** the master adds a member and sends a one-time link;
+  the member chooses their own password, so the master never knows it. The master
+  can rename, turn sign-in off, reset (with a new invite) or remove a member, and
+  is the only one who sees the instance settings.
+- **Shared devices:** **Switch profile** signs out and forgets what the device kept
+  about that member; each member's on-device cache is kept apart.
+- Passwordless **magic-link** login per member for signing in on another device
+  (tokens are redacted from the server logs). **Devices** lists where you are
+  signed in, with per-device sign-out; sessions survive restarts.
+- **Sign out of all devices** invalidates every one of your sessions, including the
+  current one, and stops your notifications on all of them.
 - **Recent access** list built from a privacy-preserving log that stores only
   salted hashes of IP and user-agent, pruned after 90 days.
 - Per-IP **rate limiting** on `/api/*` (with tighter ceilings on search, Explore,
@@ -724,8 +739,8 @@ All variables are read from `.env` at container startup. Only `TMDB_API_KEY` and
 | Variable | Description | Required | Default |
 | --- | --- | --- | --- |
 | `TMDB_API_KEY` | TMDB v3 API key — powers all metadata and artwork. | **Yes** | — |
-| `APP_PASSWORD` | Login password; hashed (scrypt) into the DB on first boot, then removable from `.env`. | **Yes** (unless `ALLOW_NO_AUTH`) | — |
-| `APP_PASSWORD_RESET` | Set `true` together with a new `APP_PASSWORD` to change the stored password once, then remove both lines. | No | `false` |
+| `APP_PASSWORD` | Password of the **master** account; hashed (scrypt) into the DB on first boot, then removable from `.env`. Members set their own passwords through invites. | **Yes** (unless `ALLOW_NO_AUTH`) | — |
+| `APP_PASSWORD_RESET` | Set `true` together with a new `APP_PASSWORD` to change the master password once (it also signs the master out everywhere), then remove both lines. Members' passwords are reset from **Settings → Household**. | No | `false` |
 | `ALLOW_NO_AUTH` | Run with no login gate (trusted LAN only). Without it the server refuses to start in production with no password. | No | `false` |
 | `PORT` | Port the Node server listens on inside the container. | No | `3000` |
 | `PUBLIC_URL` | External origin the app is reached at — no trailing slash, **no sub-path**. Used for magic-link URLs and as the only non-localhost CORS origin. | No | request host |
@@ -751,10 +766,10 @@ Everything persistent lives under `data/`, mounted into the container as
 | `data/cache/` | Cached TMDB/Fanart metadata JSON and images. Regenerable; safe to wipe. |
 | `data/badges/` | Collection badge images shown on the shelf. |
 | `data/import/` | Drop-zone for import files (TV Time CSVs, Kodi `videodb.xml`). |
-| `data/profile/` | The single user profile photo. |
+| `data/profile/` | Profile photos, one folder per member (`data/profile/<id>/`). |
 | `data/cinemas.txt` | Optional, one cinema name per line — turns the ticket's cinema field into a dropdown. Re-read on every open, no restart needed; `#` comments and blank lines ignored. Copy `data/cinemas.example.txt` to start. |
 | `data/kodi.key` | Key used to encrypt stored Kodi credentials at rest. |
-| `data/backups/` | Manual database snapshots. |
+| `data/backups/` | Database snapshots: your manual ones, plus the verified copy taken automatically before every schema upgrade (`shelfit-pre-v<N>-<date>.db`). |
 | `data/caddy/` | Reverse-proxy state (certificates, ACME account) — only present when Caddy stores its data here. |
 
 > **Public repository note:** `data/` contains private data (the database, cached
@@ -766,15 +781,39 @@ Everything persistent lives under `data/`, mounted into the container as
 ## Settings tour
 
 Settings is a scrolling tab strip; the **Account** tab appears only when login is
-enabled.
+enabled. **Household**, **Kodi**, **Advanced**, the metadata language and the TV
+Time import belong to the master; other members see General, Library (lists and
+backup) and Account.
 
 | Tab | Sections |
 | --- | --- |
 | **General** | *Appearance* — language, theme, snow effect, vibration. *Install* — Add to Home Screen. *Notifications* — enable, plus a test notification. |
-| **Library** | *Metadata language* — the language TMDB metadata is fetched in (English / Italian). *Lists* — create / rename / delete custom lists. *Backup* — XML export and import. *Import from TV Time*. |
-| **Kodi** | Instances (add, name, icon, test, activate), the master enable toggle, and **Sync now**. |
+| **Library** | *Metadata language* (master): the language TMDB metadata is fetched in (English / Italian). *Lists*: create / rename / delete custom lists. *Backup*: XML export and import of your own library. *Import from TV Time* (master), with **Import into** to pick the member. |
+| **Household** | Members and their state; add a member (one-time invite link), rename, **Can sign in**, reset password, remove (with a download of their library first). |
+| **Kodi** | Instances (add, name, icon, **Sync into** member, test, activate), the master enable toggle, and **Sync now**. |
 | **Advanced** | *API Usage* — monthly budget and usage per API, with a session-only bypass. *Cache* — scan size per folder, refresh ongoing series, clear all media cache (confirm-gated). |
-| **Account** | Sign out, **Recent access**, **Sign out of all devices**, and **Magic Links**. |
+| **Account** | **Switch profile**, **Recent access** (master), **Sign out of all devices**, **Devices** and **Magic Links**. |
+
+## Household accounts
+
+The account created from `APP_PASSWORD` is the **master**: it manages the
+household and the instance. Everyone else is a **member** with a private library.
+
+1. **Add a member:** **Settings → Household → Add a member**, type their name and
+   copy the invite link (shown once, valid for 7 days). Send it to them.
+2. **They choose a password:** opening the link shows "Choose your password". Once
+   saved, they are signed in and appear on the sign-in picker. Their password is
+   theirs alone; the master never sees it.
+3. **Manage:** tap a member to rename them, turn **Can sign in** off (they are
+   signed out everywhere at once), **Reset password** (a new invite; their
+   sessions, magic links and notifications stop) or **Remove** them (their whole
+   library goes; download it first from the same dialog).
+
+Things the household shares: the TMDB image cache, custom artwork, the Kodi
+configuration and the instance settings. Everything else is per member. The
+master's own password is reset with `APP_PASSWORD_RESET` (see
+[Configuration](#configuration)); a forgotten member password is reset by the
+master with a new invite.
 
 ## Import guides
 
@@ -782,15 +821,16 @@ enabled.
 
 1. Request your data export from TV Time and unzip it.
 2. Copy the relevant CSV files into `data/import/`.
-3. In the app open **Settings → Library → Import from TV Time** and start the
-   import. Titles are matched against TMDB (rate-limited) and added with their
-   watch history.
+3. In the app open **Settings → Library → Import from TV Time** (master), pick
+   whose library it goes into with **Import into**, and start the import. Titles
+   are matched against TMDB (rate-limited) and added with their watch history.
 
 ### Kodi (XML)
 
 1. Export your Kodi video library to a `videodb.xml`.
 2. Place it in `data/import/`.
-3. Open **Settings → Library** and run the Kodi import.
+3. Run `docker compose exec shelfit node server/importKodi.js`. The titles go into
+   the master's library.
 
 ### Another shelfIt instance (XML)
 
@@ -810,9 +850,12 @@ file on the target. The merge is additive and never deletes; see
 3. On a title's detail page, use **Play on Kodi** to start playback.
 4. Leave the integration enabled and shelfIt will also **sync** once a day at
    22:00 (or on demand with **Sync now**): it advances watch status for titles it
-   already knows and queues anything new for your review. It never downgrades a
-   status and never deletes, and nothing is written until you confirm the review
-   sheet.
+   already knows and queues anything new for review. It never downgrades a status
+   and never deletes, and nothing is written until the review sheet is confirmed.
+   Kodi tracks "watched" per Kodi profile, not per person, so each instance syncs
+   into one member's library, chosen with **Sync into** (the master by default);
+   only that member gets the review sheet. Everyone can use **Play on Kodi** and
+   sees Now Playing, matched against their own library.
 
 > **Note:** playback works only for titles that have already been added to your
 > **Kodi library** beforehand. The source does not matter — a local file or a
@@ -836,13 +879,29 @@ docker compose up -d --build shelfit
 
 Then reload the app once. In an installed PWA, close and reopen it.
 
+### Upgrading from a single-user version
+
+The first start of a multi-user build upgrades the database by itself:
+
+- Before changing anything it writes a verified copy of the database to
+  `data/backups/shelfit-pre-v<N>-<date>.db` (it refuses to start if that copy
+  fails), then applies each schema step in its own transaction.
+- Your existing profile, password, library, lists, The Wall and notifications
+  become the **master** account; item ids are kept, so links and caches stay valid.
+- Sessions now live in the database: everyone signs in once after the upgrade,
+  and restarts no longer sign anyone out.
+
+To roll back, stop the container, put the `shelfit-pre-v<N>-<date>.db` copy back
+as `data/shelfit.db` (delete `shelfit.db-wal` / `-shm` first) and start the
+previous image. A build refuses to start on a database newer than it knows.
+
 ## Backup and restore
 
 - **Database:** the entire library lives in `data/shelfit.db`. To back up, stop
   the container and copy the file (together with any `-wal` / `-shm` files). To
   restore, put it back in `data/` and start the container again.
 - **Portable export:** **Settings → Library → Backup** writes an XML file with all
-  user-owned data (statuses, ratings, play counts, ownership, favourites, cinema
+  of your own data (each member exports and imports their own library) (statuses, ratings, play counts, ownership, favourites, cinema
   fields, notes, watch dates, dated rewatches, per-episode progress, list
   memberships) and a SHA-256 checksum. Import **merges additively and never
   deletes**, resolving conflicts in favour of the more advanced status; metadata
@@ -1015,7 +1074,7 @@ rest, rate limiting and path-traversal guards, non-destructive imports and
 merges, graceful offline and error paths, no unnecessary dependencies). Where the
 first attempt was wrong, it was corrected and re-checked.
 
-It remains, however, a personal single-user project rather than audited software.
+It remains, however, a personal project for one household rather than audited software.
 It is offered as-is, with no warranty of any kind. If you expose your instance to
 the internet, keep a password on it, keep backups of `data/`, and review the code
 yourself before trusting it with anything you cannot afford to lose.

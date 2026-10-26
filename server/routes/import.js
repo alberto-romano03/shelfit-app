@@ -15,6 +15,17 @@ import { runExtrasImport } from '../importExtras.js';
 
 const NOT_FOUND_PATH = path.join(IMPORT_DIR, 'not_found.log');
 
+// Which member an import fills: `user_id` from the request (the master picks it
+// in Settings), else the caller. A member who hasn't joined yet is a valid
+// target, so a library can be ready before its owner first signs in.
+const userExistsStmt = db.prepare('SELECT id FROM users WHERE id = ?');
+function importTarget(request) {
+  const raw = (request.body || {}).user_id;
+  if (raw === undefined || raw === null || raw === '') return request.user.id;
+  const row = userExistsStmt.get(Number(raw));
+  return row ? row.id : null;
+}
+
 // --- Prepared statements (compiled once at module load, reused thereafter) ---
 // An import fills the library of the member who started it (`userId`).
 const findLocalItemStmt = db.prepare('SELECT * FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?');
@@ -559,10 +570,15 @@ export default async function importRoutes(fastify) {
           'Actions file not found in data/import/ (expected tvtime_actions.csv or tracking-prod-records.csv)',
       };
     }
+    const target = importTarget(request);
+    if (!target) {
+      reply.code(404);
+      return { error: 'member not found' };
+    }
     const jobId = `import_${Date.now()}`;
     resetJob(jobId);
     // Run in the background; never let a failure crash the process.
-    runImport(request.user.id).catch((err) => {
+    runImport(target).catch((err) => {
       fastify.log.error(`import failed: ${err.message}`);
       setMinInterval(0);
       job.running = false;
@@ -584,11 +600,16 @@ export default async function importRoutes(fastify) {
       reply.code(409);
       return { error: 'extras import already running' };
     }
+    const target = importTarget(request);
+    if (!target) {
+      reply.code(404);
+      return { error: 'member not found' };
+    }
     extrasJob.running = true;
     extrasJob.finished = false;
     extrasJob.summary = null;
     extrasJob.started_at = Date.now();
-    runExtrasImport(request.user.id)
+    runExtrasImport(target)
       .then((s) => {
         extrasJob.summary = s;
       })

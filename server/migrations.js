@@ -267,6 +267,16 @@ export const MIGRATIONS = [
       db.exec("DELETE FROM settings WHERE key IN ('push_subscription', 'push_enabled', 'push_user')");
     },
   },
+  {
+    // Whose library a Kodi instance syncs into. Kodi tracks "watched" per Kodi
+    // profile, not per person, so each instance names one member; NULL (and a
+    // removed member) means the master, which is what every sync did until now.
+    version: 5,
+    name: 'kodi sync owner',
+    up(db) {
+      db.exec('ALTER TABLE kodi_instances ADD COLUMN sync_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+    },
+  },
 ];
 
 // Filesystem half of v1: the one custom profile photo moves from

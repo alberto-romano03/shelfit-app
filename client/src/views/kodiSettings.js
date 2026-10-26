@@ -22,6 +22,7 @@ import {
   iconAction,
   settingsRow,
   lucideIcon,
+  selectPill,
 } from '../ui.js';
 import { t } from '../i18n.js';
 
@@ -112,6 +113,24 @@ export function buildKodiSettings(api) {
     return withBase(file ? `/icons/kodi/${file}` : DEFAULT_ICON);
   }
 
+  // Household members an instance can sync into (the master plus every member
+  // who can sign in). Kodi's watched marks belong to a Kodi profile, not to a
+  // person, so each instance names whose shelfit library receives them.
+  let members = [];
+  const membersReady = api
+    .householdMembers()
+    .then((d) => {
+      members = ((d && d.members) || []).filter((m) => m.role === 'master' || (m.has_password && !m.disabled));
+    })
+    .catch(() => {
+      members = [];
+    });
+  const master = () => members.find((m) => m.role === 'master');
+  function syncOwnerName(inst) {
+    const m = members.find((x) => x.id === inst.sync_user_id) || master();
+    return m ? m.display_name : null;
+  }
+
   // --- Rendering ----------------------------------------------------------
   function renderConfig(cfg) {
     enableRow.setChecked(!!cfg.enabled);
@@ -179,7 +198,13 @@ export function buildKodiSettings(api) {
       icon,
       el('div', { class: 'kodi-inst-title' }, [
         el('span', { class: 'kodi-inst-name', text: inst.name }),
-        el('span', { class: 'kodi-inst-sub', text: `${inst.host}:${inst.port}` }),
+        el('span', {
+          class: 'kodi-inst-sub',
+          text:
+            members.length > 1
+              ? `${inst.host}:${inst.port} · ${t('kodiSettings.syncsInto', { name: syncOwnerName(inst) })}`
+              : `${inst.host}:${inst.port}`,
+        }),
       ]),
       status,
     ]);
@@ -275,6 +300,17 @@ export function buildKodiSettings(api) {
       }
       loadIcons().then(renderPicker);
 
+      // Whose library this instance syncs into; only worth asking when there is
+      // more than one member to choose from.
+      const ownerPill =
+        members.length > 1
+          ? selectPill({
+              label: t('kodiSettings.syncOwner'),
+              options: members.map((m) => ({ value: m.role === 'master' ? '' : String(m.id), text: m.display_name })),
+              value: editing && inst.sync_user_id ? String(inst.sync_user_id) : '',
+            })
+          : null;
+
       const testResult = el('div', { class: 'kodi-test-result' });
 
       function formBody() {
@@ -285,6 +321,7 @@ export function buildKodiSettings(api) {
           username: userIn.value.trim(),
           password: passIn.value,
           icon: selectedIcon,
+          sync_user_id: ownerPill ? (ownerPill.value ? Number(ownerPill.value) : null) : undefined,
         };
       }
 
@@ -351,6 +388,9 @@ export function buildKodiSettings(api) {
             el('label', { class: 'field-label', text: t('kodiSettings.username') }), userIn,
             el('label', { class: 'field-label', text: t('kodiSettings.password') }), passIn,
             el('label', { class: 'field-label', text: t('kodiSettings.icon') }), pickerGrid,
+            ownerPill ? el('label', { class: 'field-label', text: t('kodiSettings.syncOwner') }) : null,
+            ownerPill ? ownerPill.el : null,
+            ownerPill ? el('div', { class: 'muted usage-desc', text: t('kodiSettings.syncOwnerHint') }) : null,
           ]),
           el('div', { class: 'stack', style: { marginTop: '8px' } }, [testBtn, testResult]),
         ]),
@@ -393,9 +433,8 @@ export function buildKodiSettings(api) {
 
   // --- Load -----------------------------------------------------------------
   function reload() {
-    api
-      .kodiConfig()
-      .then(renderConfig)
+    Promise.all([api.kodiConfig(), membersReady])
+      .then(([cfg]) => renderConfig(cfg))
       .catch(() => {
         listWrap.innerHTML = '';
         listWrap.append(
