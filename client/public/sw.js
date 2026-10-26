@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v144'; // bumped: Noto animated mood emoji replace the JoyPixels GIFs
+const CACHE = 'shelfit-shell-v145'; // bumped: ticket banner clipped with clip-path on iOS
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by

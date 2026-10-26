@@ -9564,10 +9564,12 @@ textarea.lend-message-input:focus {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+/* Same clip-path and paper split as .cine-top, for the same iOS reason (here the
+   deal-in animation and the drop-shadow composite the banner). */
 .cine-mini-top {
-  background: var(--paper);
   border-radius: 10px 10px 0 0;
   overflow: hidden;
+  clip-path: inset(0 round 10px 10px 0 0);
 }
 /* The banner is a mountPoster container: the .skeleton shimmer shows until the
    backdrop decodes. Its corners come from .cine-mini-top, so the shimmer's own
@@ -9585,6 +9587,7 @@ textarea.lend-message-input:focus {
   display: block;
 }
 .cine-mini-body {
+  background: var(--paper);
   padding: 7px 8px 5px;
 }
 .cine-mini-title {
@@ -9722,10 +9725,16 @@ textarea.lend-message-input:focus {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   user-select: none;
 }
+/* The rounded top corners are a clip-path, not only overflow + border-radius: on
+   iOS the banner image gets its own compositing layer while the ticket animates
+   (the host's bob, the drop-shadow filter), and WebKit then stops clipping it to
+   the parent's radius, so its square top edge showed for a moment. The paper is
+   painted by .cine-body alone: under the banner it antialiased into a light
+   hairline along the curve. */
 .cine-top {
-  background: var(--paper);
   border-radius: 20px 20px 0 0;
   overflow: hidden;
+  clip-path: inset(0 round 20px 20px 0 0);
 }
 .cine-banner {
   width: 100%;
@@ -9743,7 +9752,10 @@ textarea.lend-message-input:focus {
   object-fit: cover;
   display: block;
 }
-.cine-body { padding: 14px 18px 10px; } /* 10, not 18: .cine-tear is 18px tall */
+.cine-body {
+  background: var(--paper);
+  padding: 14px 18px 10px; /* 10, not 18: .cine-tear is 18px tall */
+}
 .cine-title {
   font-size: 21px;
   font-weight: 800;
