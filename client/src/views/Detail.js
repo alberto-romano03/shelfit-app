@@ -600,7 +600,9 @@ export default async function Detail(container, params) {
   }
   const disc = el('div', { class: 'detail-disc' }, [discSpin]);
   // DVD badge temporarily disabled — uncomment to restore
-  // DVD logo badge — the logotype SVG from public/icons, tinted white via CSS.
+  // DVD logo badge: the logotype SVG, tinted white via CSS. The SVG is a
+  // trademark and was moved out of the repo (local _unused/), so it must be
+  // put back in public/icons before this is restored.
   // Shown above every layer when owned (same transition as the case border).
   // const dvdBadge = el('div', { class: 'dvd-badge' }, [
   //   el('img', { class: 'dvd-badge-img', src: withBase('/icons/DVD_logo.svg'), alt: 'DVD' }),
