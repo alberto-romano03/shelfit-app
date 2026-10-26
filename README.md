@@ -32,13 +32,12 @@ has a private library behind their own password; one **master** account, created
 from `APP_PASSWORD` on first boot, runs the instance. All data lives in a single
 SQLite database and cache folder that you own.
 
-> **In a hurry?** Jump to [Running shelfIt](#running-shelfit). There are three
-> supported setups: [**A. localhost / LAN only**](#a-localhost--lan-only-no-reverse-proxy)
-> (five small edits, no proxy), [**B. Tailscale + HTTPS behind a reverse proxy**](#b-tailscale--https-behind-a-reverse-proxy-recommended)
-> (keep the defaults, add Caddy, reach it over your tailnet) and
-> [**C. Dynamic DNS + port forwarding**](#c-dynamic-dns--port-forwarding) (the
-> same proxy, exposed to the internet). Read [The `/shelfit/` base path](#the-shelfit-base-path-read-this-first)
-> first: it is the one thing that trips up every new deployment.
+> **In a hurry?** Jump to [Running shelfIt](#running-shelfit). There are two
+> supported setups: [**A. localhost / LAN only**](#a-localhost--lan-only)
+> (five small edits, no proxy) and [**B. Tailscale + Caddy**](#b-tailscale--caddy-recommended)
+> (keep the defaults, reach it over your tailnet). Read
+> [The `/shelfit/` base path](#the-shelfit-base-path-read-this-first) first: it is
+> the one thing that trips up every new deployment.
 
 ## Contents
 
@@ -48,9 +47,8 @@ SQLite database and cache folder that you own.
 - [Prerequisites](#prerequisites)
 - [The `/shelfit/` base path](#the-shelfit-base-path-read-this-first)
 - [Running shelfIt](#running-shelfit)
-  - [A. localhost / LAN only](#a-localhost--lan-only-no-reverse-proxy)
-  - [B. Tailscale + HTTPS behind a reverse proxy](#b-tailscale--https-behind-a-reverse-proxy-recommended)
-  - [C. Dynamic DNS + port forwarding](#c-dynamic-dns--port-forwarding)
+  - [A. localhost / LAN only](#a-localhost--lan-only)
+  - [B. Tailscale + Caddy](#b-tailscale--caddy-recommended)
   - [Serving it under a different sub-path](#serving-it-under-a-different-sub-path)
 - [Configuration](#configuration)
 - [Data layout](#data-layout)
@@ -328,40 +326,26 @@ built on Node and browser primitives.
   [fanart.tv/get-an-api-key](https://fanart.tv/get-an-api-key/).
 - _Optional_ **Kodi** instance on your LAN for remote playback and sync.
 - _Optional_ **Tailscale** on the host and on every device that should reach the
-  app, for setup B; or a **DDNS hostname** and a router that can forward ports
-  80/443, for setup C.
+  app, for setup B.
 - For local (non-Docker) development only: **Node.js 22** — the `better-sqlite3`
   native addon does not build cleanly on newer Node without the right toolchain.
 
 ## The `/shelfit/` base path (read this first)
 
-Out of the box the client bundle is built with a **sub-path base of `/shelfit/`**
-(`client/vite.config.js` → `base: '/shelfit/'`), while the Node server always
-serves everything at its **own root** (`/`, `/api/*`, `/assets/*`). That split is
-deliberate: it lets several self-hosted apps share one hostname, each under its
-own `/prefix`, with a reverse proxy stripping the prefix before forwarding.
+The client is built for the sub-path **`/shelfit/`** (`base` in
+`client/vite.config.js`), while the server always serves at its own root. A
+reverse proxy strips the prefix in between, so several apps can share one
+hostname, each under its own `/prefix`.
 
-The practical consequence, and the single most common setup mistake:
+> **That is why the container's port on its own shows a blank page:** the shell
+> asks for `/shelfit/static/…`, gets `index.html` back, and the browser reports
+> `Unexpected token '<'`. Either go through the proxy (setup B) or rebuild the
+> app for the root (setup A).
 
-> **As shipped, hitting the container's port directly does not work.** The HTML
-> shell loads, but it asks for `/shelfit/static/index-<hash>.js`, the server has
-> no such file, the SPA fallback answers with `index.html`, and the browser
-> reports something like `Unexpected token '<'` — a blank page. This is not a
-> bug; it means the app is being served at a path its bundle was not built for.
-
-So you must pick one of these consistent arrangements:
-
-| | Base path | Reached at | Reverse proxy | Edits needed |
-| --- | --- | --- | --- | --- |
-| **A** | `/` (root) | `http://<host>:3000/` | none | 5 files, once |
-| **B** | `/shelfit/` (default) | `https://<machine>.<tailnet>.ts.net/shelfit/` and `http://localhost/shelfit/` | required | none |
-| **C** | `/shelfit/` (default) | `https://<ddns>/shelfit/` and `http://localhost/shelfit/` | required | none |
-
-Setup **A** is the shortest path to a working app on one machine or a home LAN.
-Setup **B** is what this repository ships configured for: automatic HTTPS on
-every device in your tailnet, nothing exposed to the internet, no router
-configuration, and other apps beside shelfIt on the same hostname. Setup **C**
-uses the same proxy but publishes it on a public DDNS address instead.
+| Setup | Base path | Reached at | Proxy |
+| --- | --- | --- | --- |
+| **A.** localhost / LAN | `/` | `http://<host>:3000/` | none |
+| **B.** Tailscale (as shipped) | `/shelfit/` | `https://<machine>.<tailnet>.ts.net/shelfit/` and `http://localhost/shelfit/` | Caddy |
 
 ## Running shelfIt
 
@@ -373,175 +357,73 @@ cd shelfit
 cp .env.example .env
 ```
 
-Then edit `.env` and set at least:
-
-```ini
-TMDB_API_KEY=your_tmdb_v3_key
-APP_PASSWORD=choose_a_strong_password
-```
-
-Everything else is optional — see [Configuration](#configuration).
+Then set at least `TMDB_API_KEY` and `APP_PASSWORD` in `.env`. Everything else is
+optional, see [Configuration](#configuration).
 
 ---
 
-### A. localhost / LAN only (no reverse proxy)
+### A. localhost / LAN only
 
-Serve the app at the root of a published port: `http://localhost:3000/`, and
-`http://<lan-ip>:3000/` from any other device in the house.
+The app at the root of a published port: `http://localhost:3000/` on the host,
+`http://<lan-ip>:3000/` from other devices at home.
 
-#### A1. Set the base path to the root
+**1. Move the base path to the root.** It lives in five places; change all of
+them, since a mismatch is exactly what causes the blank page:
 
-The mount path lives in exactly **five** places. Change all five, or none — a
-mismatch is what produces the blank page described above.
+| File | Change |
+| --- | --- |
+| `client/vite.config.js` | `base: '/shelfit/'` → `base: '/'` |
+| `client/public/manifest.json` | drop `/shelfit` from `start_url`, `scope`, the three icon `src` values and the share-target `action` |
+| `client/public/sw.js` | `const BASE = '/shelfit';` → `const BASE = '';` |
+| `server/auth.js` | `const BASE = '/shelfit';` → `const BASE = '';` |
+| `server/routes/share.js` | `const BASE = '/shelfit';` → `const BASE = '';` |
 
-**1. `client/vite.config.js`** — the source of truth for the client:
+The rest of the client derives the prefix from Vite's `base`
+(`client/src/basePath.js`).
 
-```diff
--  base: '/shelfit/',
-+  base: '/',
-```
+**2. Publish the port.** In `docker-compose.yml`, uncomment the `ports:` block
+(`"3000:3000"`) and delete both `networks:` sections: without a proxy there is
+no shared network to join.
 
-**2. `client/public/manifest.json`** — drop the prefix from `start_url`, `scope`,
-the three icon `src` values and the share-target `action`:
-
-```diff
--  "start_url": "/shelfit/",
--  "scope": "/shelfit/",
-+  "start_url": "/",
-+  "scope": "/",
-   "icons": [
--    { "src": "/shelfit/icons/icon-192.png", ... },
--    { "src": "/shelfit/icons/icon-512.png", ... },
--    { "src": "/shelfit/icons/icon-512.png", ..., "purpose": "maskable" }
-+    { "src": "/icons/icon-192.png", ... },
-+    { "src": "/icons/icon-512.png", ... },
-+    { "src": "/icons/icon-512.png", ..., "purpose": "maskable" }
-   ],
-   "share_target": {
--    "action": "/shelfit/share",
-+    "action": "/share",
-```
-
-**3. `client/public/sw.js`** (near the top) — the service worker sees real,
-browser-side paths, so it needs the prefix explicitly:
-
-```diff
--const BASE = '/shelfit';
-+const BASE = '';
-```
-
-**4. `server/auth.js`** — used only for URLs handed back to the browser (the
-login redirect, the login page's own asset references, the session-cookie scope):
-
-```diff
--const BASE = '/shelfit';
-+const BASE = '';
-```
-
-**5. `server/routes/share.js`** — the share-target redirects:
-
-```diff
--const BASE = '/shelfit';
-+const BASE = '';
-```
-
-Nothing else needs touching: the client derives its prefix from Vite's `base`
-(`client/src/basePath.js`), including the service-worker registration and scope.
-
-#### A2. Publish the port
-
-Replace `docker-compose.yml` with the standalone version — it publishes port 3000
-and needs no shared Docker network:
-
-```yaml
-services:
-  shelfit:
-    build: .
-    container_name: shelfit
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./data:/app/data
-    env_file:
-      - .env
-```
-
-(If you prefer to keep the shipped file, just uncomment its `ports:` block, and
-either delete the `networks:` sections or run `docker network create webproxy`
-once so the external network exists.)
-
-#### A3. Build and start
+**3. Build and start.**
 
 ```bash
 docker compose up -d --build
 ```
 
-Open **`http://localhost:3000/`**. From another device on the LAN, use the host's
-address, e.g. `http://192.168.1.50:3000/`.
+Open **`http://localhost:3000/`**, or `http://192.168.1.50:3000/` (the host's LAN
+address) from another device. Set `PUBLIC_URL=http://192.168.1.50:3000` in `.env`
+so magic links point at an address those devices can reach.
 
-#### A4. Optional, for LAN devices
-
-Set `PUBLIC_URL` in `.env` to the address other devices actually type, so
-magic-link logins point at a host they can reach:
-
-```ini
-PUBLIC_URL=http://192.168.1.50:3000
-```
-
-No trailing slash, no sub-path. Restart with `docker compose up -d` afterwards.
-
-> **Note:** browsers only allow home-screen installation, push notifications and
-> some PWA behaviour over HTTPS or on `localhost`. Over plain HTTP to a LAN IP the
-> app works, but "Add to Home Screen" and notifications may be unavailable — that
-> is a browser rule, not a shelfIt limitation. If you want those on your phone,
-> use setup B.
+> **Note:** browsers allow home-screen installation, push notifications and the
+> offline service worker only over HTTPS or on `localhost`. Over plain HTTP to a
+> LAN address the app works, but those features may be missing. For them on
+> your phone, use setup B.
 
 ---
 
-### B. Tailscale + HTTPS behind a reverse proxy (recommended)
+### B. Tailscale + Caddy (recommended)
 
-Keep every default (base path `/shelfit/`, no published port), put Caddy in
-front, and let [Tailscale](https://tailscale.com/) carry the traffic. You get,
-with one configuration:
+Caddy sits in front of shelfIt and listens on the host only; Tailscale brings
+HTTPS to every device signed in to your tailnet. Nothing is reachable from the
+internet or the LAN, and the router needs no configuration. The examples use
+`myserver.tail1234.ts.net`; replace it with your host's Tailscale name (shown on
+the Machines page of the admin console).
 
-- `https://<machine>.<tailnet>.ts.net/shelfit/` on every device signed in to
-  your tailnet, with a certificate Tailscale issues and renews;
-- `http://localhost/shelfit/` on the host machine;
-- nothing reachable from the internet or the LAN: no DDNS hostname and no router
-  port forwarding;
-- room for other apps beside shelfIt under their own prefixes.
+**1. Prepare Tailscale.** Install it on the host and on every phone, tablet or
+laptop that should reach the app, all in the same tailnet. In the admin console,
+under **DNS**, enable **MagicDNS** and **HTTPS Certificates**.
 
-The examples below use `myserver.tail1234.ts.net`; replace it with your host's
-own Tailscale name (shown on the Machines page of the admin console).
-
-#### B1. Prepare Tailscale
-
-1. Install Tailscale on the host and on each phone, tablet or laptop that should
-   reach the app, all signed in to the same tailnet.
-2. In the Tailscale admin console, under **DNS**, enable **MagicDNS** and
-   **HTTPS Certificates**. HTTPS is not optional here: home-screen installation,
-   the service worker and push notifications all need a secure context.
-
-#### B2. Create the shared Docker network (once)
+**2. Start shelfIt.** The shipped `docker-compose.yml` publishes no port and
+joins the shared `webproxy` network, where Caddy finds it by container name:
 
 ```bash
-docker network create webproxy
-```
-
-The shipped `docker-compose.yml` joins this external network and publishes **no**
-host port, so shelfIt is reachable only through the proxy, by container name.
-
-#### B3. Start shelfIt
-
-```bash
+docker network create webproxy   # once
 docker compose up -d --build
 ```
 
-#### B4. Add the reverse proxy
-
-Create a **separate** compose project (e.g. `~/caddy/`) so the proxy can be
-managed independently of any app it fronts.
+**3. Add Caddy**, in its own compose project (e.g. `~/caddy/`) so it can front
+other apps too.
 
 `~/caddy/docker-compose.yml`:
 
@@ -551,9 +433,8 @@ services:
     image: caddy:2-alpine
     container_name: caddy
     restart: unless-stopped
-    # Loopback only: Tailscale (B5) is the one way in from other devices.
     ports:
-      - "127.0.0.1:80:80"
+      - "127.0.0.1:80:80"   # loopback only: Tailscale is the way in
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data:/data
@@ -566,50 +447,45 @@ networks:
     external: true
 ```
 
-`~/caddy/Caddyfile`, the minimum that works:
+`~/caddy/Caddyfile`:
 
 ```caddyfile
 {
 	servers {
-		# Requests from `tailscale serve` arrive through Docker's port forward,
-		# i.e. from a private address, carrying the real scheme (https) and the
-		# device's Tailscale IP in X-Forwarded-* headers. Trust them. This is safe
-		# only because Caddy listens on 127.0.0.1 alone, so nobody else can
-		# forge those headers.
+		# Requests from `tailscale serve` arrive from a private Docker address and
+		# carry the real scheme (https) and the device's Tailscale IP in
+		# X-Forwarded-* headers. Trust them; safe because Caddy listens on
+		# 127.0.0.1 only, so nobody else can forge them.
 		trusted_proxies static private_ranges
 		trusted_proxies_strict
 	}
 }
 
-# Every entry carries http://: TLS is done by Tailscale, not by Caddy.
+# http:// everywhere: TLS is done by Tailscale, not by Caddy.
 http://myserver.tail1234.ts.net, http://localhost, http://127.0.0.1 {
-
-	# handle_path STRIPS /shelfit before forwarding, so the app still serves
-	# everything at its own root, which is exactly what it expects.
+	# handle_path strips /shelfit, so the app serves at its own root.
 	handle_path /shelfit/* {
 		reverse_proxy shelfit:3000 {
-			# Give shelfIt the device's Tailscale IP (rate limiting, access log)
-			# instead of the Docker gateway Caddy would otherwise append last.
+			# The device's Tailscale IP (rate limiting, access log), not the
+			# Docker gateway Caddy would otherwise append last.
 			header_up X-Forwarded-For {client_ip}
 		}
 	}
-
-	# Bare path → trailing slash, so the PWA scope and the SPA router agree.
+	# Bare path → trailing slash, so the PWA scope and the router agree.
 	redir /shelfit /shelfit/
 }
 ```
 
-Recommended additions — security headers and cache policy:
-
 <details>
-<summary>Fuller <code>handle_path</code> block (click to expand)</summary>
+<summary>Recommended: security headers and cache policy (click to expand)</summary>
+
+Replace the `handle_path` block above with:
 
 ```caddyfile
 	handle_path /shelfit/* {
 		header {
-			# Start in report-only: the shell and the login page each contain one
-			# inline <script>, which a strict script-src would block. Externalise
-			# or hash them before switching to the enforcing header name.
+			# Report-only: the shell and the login page each contain one inline
+			# <script>. Externalise or hash them before enforcing.
 			Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 			X-Frame-Options "DENY"
 			X-Content-Type-Options "nosniff"
@@ -619,36 +495,44 @@ Recommended additions — security headers and cache policy:
 			-Server
 			-X-Powered-By
 		}
+		encode zstd gzip
 
-		# Vite output is content-hashed → cache forever.
+		# `defer` makes Caddy's value replace the app's default instead of
+		# sitting beside it. Leave /assets/* and /api/* alone: the app sets those.
 		@static path /static/*
-		header @static Cache-Control "public, max-age=31536000, immutable"
-		# Stable but unhashed names → a week.
+		header @static {
+			Cache-Control "public, max-age=31536000, immutable"
+			defer
+		}
 		@icons path /icons/*
-		header @icons Cache-Control "public, max-age=604800"
-		# Manifest may change on deploy → short TTL.
+		header @icons {
+			Cache-Control "public, max-age=604800"
+			defer
+		}
 		@manifest path /manifest.json
-		header @manifest Cache-Control "public, max-age=3600"
-		# The service worker must always revalidate, so a new version ships at once.
+		header @manifest {
+			Cache-Control "public, max-age=3600"
+			defer
+		}
 		@sw path /sw.js
-		header @sw Cache-Control "no-cache"
+		header @sw {
+			Cache-Control "no-cache"
+			defer
+		}
 
-		# Do NOT set Cache-Control for /assets/* or /api/* here — the app already
-		# sends the right headers per endpoint and `header` would clobber them.
 		reverse_proxy shelfit:3000 {
 			header_up X-Forwarded-For {client_ip}
 		}
 	}
 ```
 
-Rate limiting is deliberately **not** done at the proxy: the `rate_limit`
-directive ships in a third-party module the stock `caddy:2-alpine` image does not
-include, so adding it would break `caddy validate` for every app behind the proxy.
-shelfIt enforces its own per-IP limits instead.
+Rate limiting is done by shelfIt itself: Caddy's `rate_limit` directive needs a
+plugin the stock `caddy:2-alpine` image lacks.
 
 </details>
 
-Then start it and check the config:
+Start Caddy and check the file (a broken Caddyfile takes down every app behind
+it):
 
 ```bash
 docker compose up -d
@@ -656,88 +540,47 @@ docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile
 docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
-#### B5. Publish it on your tailnet
-
-On the host:
+**4. Publish it on your tailnet.** On the host:
 
 ```bash
 tailscale serve --bg http://127.0.0.1:80
 ```
 
-Tailscale now answers on `https://myserver.tail1234.ts.net/` (port 443, tailnet
-devices only), terminates TLS with its own certificate and forwards plain HTTP to
-Caddy. The setting survives reboots. Check it with `tailscale serve status`;
-remove it with `tailscale serve reset`. It touches only this machine's own node.
+Tailscale answers on `https://myserver.tail1234.ts.net/` for tailnet devices
+only, with a certificate it issues and renews, and forwards to Caddy. It survives
+reboots; check it with `tailscale serve status`, undo it with
+`tailscale serve reset`. With several Tailscale accounts on the host, it answers
+only while the account you ran it from is the active one.
 
-> **Several Tailscale accounts on one host?** `serve` belongs to the account that
-> was active when you ran it, and answers only while that account is the active
-> one. Switch the host to another tailnet and the app is unreachable until you
-> switch back.
-
-#### B6. Tell the app its public origin
+**5. Set the public origin** in `.env` (no trailing slash, no `/shelfit`), then
+`docker compose up -d`:
 
 ```ini
 PUBLIC_URL=https://myserver.tail1234.ts.net
 ```
 
-**No trailing slash and no `/shelfit` suffix**: shelfIt appends the sub-path
-itself. This value is used to build magic-link URLs that must work on your other
-devices, and it is the one non-localhost origin allowed by CORS. Restart with
-`docker compose up -d` after changing it.
-
+It builds magic-link URLs and is the one non-localhost origin allowed by CORS.
 Open **`https://myserver.tail1234.ts.net/shelfit/`** from any device with
-Tailscale connected, or `http://localhost/shelfit/` on the host itself. Both
-serve the same container.
+Tailscale connected, or `http://localhost/shelfit/` on the host.
 
-#### Adding more apps later
+To add another app, copy the `handle_path` block (with its `header_up` line),
+change the prefix, container name and port, and reload Caddy. Tailscale needs no
+change.
 
-Copy the `handle_path` block (with its `header_up` line), change the prefix,
-container name and port, then reload Caddy, provided that app is also built for
-its own sub-path. Tailscale needs no change: it forwards everything to Caddy.
-
----
-
-### C. Dynamic DNS + port forwarding
-
-The same reverse proxy as setup B, but facing the internet with its own Let's
-Encrypt certificate instead of sitting behind Tailscale. Anyone can reach the
-login page, so keep `APP_PASSWORD` strong.
-
-1. Create a DDNS hostname (No-IP, DuckDNS, your router's built-in provider …) and
-   let it track your home IP address, e.g. `yourname.ddns.net`.
-2. On your router, **forward TCP 80 and 443** (and UDP 443 if you want HTTP/3) to
-   the machine that will run Caddy. Port 80 must be reachable: Let's Encrypt uses
-   it for the HTTP challenge. Give that machine a static or reserved LAN address,
-   so the forward keeps pointing at it.
-3. Follow B2 to B4 with three differences:
-   - publish Caddy on every interface:
-     ```yaml
-         ports:
-           - "80:80"        # ACME HTTP challenge + HTTP→HTTPS redirect
-           - "443:443"      # HTTPS
-           - "443:443/udp"  # HTTP/3 (QUIC)
-     ```
-   - drop the global `servers { trusted_proxies … }` block and the `header_up`
-     lines: Caddy talks to browsers directly, so its own view of the client IP is
-     already the right one, and trusting forwarded headers from the LAN would let
-     anyone there fake their address;
-   - name the DDNS host on the site line (no `http://`, so Caddy fetches a
-     certificate for it), plus this machine's LAN address if other devices in the
-     house should use plain HTTP:
-     ```caddyfile
-     yourname.ddns.net, http://localhost, http://127.0.0.1, http://192.168.1.50 {
-     ```
-4. Skip B5, and set `PUBLIC_URL=https://yourname.ddns.net` as in B6.
+> **Without Tailscale:** the same Caddy can instead be exposed to the internet
+> through router port forwarding (ports 80 and 443 to the host) and a public or
+> DDNS hostname, letting Caddy fetch its own Let's Encrypt certificate. Anyone
+> can then reach the login page.
 
 ---
 
 ### Serving it under a different sub-path
 
-Want `/library/` instead of `/shelfit/`? Change the same five places listed in
-[A1](#a1-set-the-base-path-to-the-root), using `/library/` (and `'/library'` for
-the two `const BASE` lines and the service worker), then change
-`handle_path /shelfit/*` and `redir /shelfit /shelfit/` in the `Caddyfile` to
-match. Rebuild afterwards — the prefix is baked into the client bundle.
+Want `/library/` instead of `/shelfit/`? Change the same five places as in
+[setup A](#a-localhost--lan-only), using `/library/` (and `'/library'` for the
+three `const BASE` lines), then change `handle_path` and `redir` in the
+`Caddyfile` to match. Rebuild afterwards: the prefix is baked into the client
+bundle.
 
 ## Configuration
 
@@ -759,7 +602,7 @@ All variables are read from `.env` at container startup. Only `TMDB_API_KEY` and
 | `VAPID_SUBJECT` | Contact address for web-push VAPID headers (the keypair itself is generated once and stored in the DB). | No | `mailto:shelfit@example.com` |
 
 Not environment variables, but worth knowing they exist: the **mount path** (five
-files, see [A1](#a1-set-the-base-path-to-the-root)), the **API budget caps** and
+files, see [setup A](#a-localhost--lan-only)), the **API budget caps** and
 **Kodi instances** (both configured in Settings, stored in the database), and the
 **cinema list** (`data/cinemas.txt`).
 
@@ -987,7 +830,7 @@ One convention worth knowing before you write UI:
 `/shelfit/static/…`.**
 The base path and the URL disagree. Either you are hitting the container port
 directly with the default `/shelfit/` build (use the proxy, or switch to
-[setup A](#a-localhost--lan-only-no-reverse-proxy)), or only some of the five
+[setup A](#a-localhost--lan-only)), or only some of the five
 files were changed. See [The `/shelfit/` base path](#the-shelfit-base-path-read-this-first).
 
 **`502 Bad Gateway` from Caddy.**
@@ -1005,14 +848,8 @@ response, the `ts.net` name is missing from the `Caddyfile` site line.
 **Every device shows up as the same address, or one bad login locks out all of
 them (setup B).**
 Caddy is passing the Docker gateway instead of the device IP: add the global
-`trusted_proxies` block and the `header_up X-Forwarded-For {client_ip}` line from
-B4.
-
-**The site loads over HTTP but the certificate never appears (setup C).**
-Ports 80 *and* 443 must be forwarded to the Caddy host and the DDNS name must
-resolve to your current public IP. Check `docker compose logs caddy` for the ACME
-error. Names that cannot be validated (`localhost`, bare IPs) must be listed with
-an explicit `http://` scheme.
+`trusted_proxies` block and the `header_up X-Forwarded-For {client_ip}` line
+shown in setup B.
 
 **Old UI after a rebuild.**
 Bump `CACHE` in `client/public/sw.js` and rebuild; the service worker is
@@ -1030,7 +867,7 @@ with no trailing slash and no `/shelfit` suffix.
 `TMDB_API_KEY` is missing or wrong — the boot log warns about this explicitly.
 
 **"Add to Home Screen" or notifications are missing.**
-Browsers gate both on a secure context. Use HTTPS (setup B or C) or `localhost`; plain
+Browsers gate both on a secure context. Use HTTPS (setup B) or `localhost`; plain
 HTTP to a LAN IP will not do.
 
 **Play on Kodi says the title cannot be found.**
