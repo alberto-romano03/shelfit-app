@@ -232,6 +232,10 @@ function deviceLabel(ua) {
 }
 
 function createSession(userId, request) {
+  // Signing in on a device that still carries someone's session (picking another
+  // profile at /login, redeeming an invite or a magic link) ends that session:
+  // otherwise it would linger in their Devices list for a year.
+  destroySession(request);
   const token = crypto.randomBytes(32).toString('hex');
   const now = Date.now();
   insertSessionStmt.run(hashToken(token), now, now, deviceLabel(request.headers['user-agent']), userId);
@@ -621,7 +625,9 @@ function loginPageHtml(profiles, invite = null) {
       <h2 data-it="Chi sta guardando?" data-en="Who's watching?">Who's watching?</h2>
       <p class="notice" id="notice" role="alert" hidden
         data-it="Questo invito non è più valido. Chiedine uno nuovo."
-        data-en="This invite is no longer valid. Ask for a new one.">This invite is no longer valid. Ask for a new one.</p>
+        data-en="This invite is no longer valid. Ask for a new one."
+        data-it-magic="Questo link di accesso non è più valido. Scegli il tuo profilo."
+        data-en-magic="That sign-in link is no longer valid. Pick your profile.">This invite is no longer valid. Ask for a new one.</p>
       <ul class="profiles" id="profiles"></ul>
     </section>
 
@@ -687,6 +693,25 @@ function loginPageHtml(profiles, invite = null) {
     for(var i=0;i<nodes.length;i++)nodes[i].textContent=nodes[i].getAttribute('data-'+lang);
     var phs=document.querySelectorAll('[data-'+lang+'-placeholder]');
     for(var k=0;k<phs.length;k++)phs[k].setAttribute('placeholder',phs[k].getAttribute('data-'+lang+'-placeholder'));
+
+    // Nobody is signed in on this browser now (a session that expired, was ended
+    // from another device, or was replaced by another member's sign-in), so it
+    // keeps nobody's personal data: every member's device cache and the offline
+    // API copies go, as on an explicit sign-out (client/src/userScope.js).
+    // Device preferences (language, theme) are not member-scoped and stay.
+    try{
+      var MEMBER_KEY=/^shelfit:u[0-9]+:/;
+      [localStorage,sessionStorage].forEach(function(st){
+        // Collect first: key order may change as keys are removed.
+        var doomed=[];
+        for(var j=0;j<st.length;j++){var key=st.key(j);if(key&&MEMBER_KEY.test(key))doomed.push(key);}
+        doomed.forEach(function(key){st.removeItem(key);});
+      });
+      localStorage.removeItem('shelfit:last-uid');
+      if(window.caches)caches.keys().then(function(names){
+        names.forEach(function(n){if(n.indexOf('shelfit-data-')===0)caches.delete(n);});
+      });
+    }catch(e){}
 
     var picker=document.getElementById('picker'),signin=document.getElementById('signin'),
         list=document.getElementById('profiles'),who=document.getElementById('who'),
@@ -805,8 +830,13 @@ function loginPageHtml(profiles, invite = null) {
     // says why (expired vs unknown vs revoked vs rate-limited).
     try{
       if(/[?&]error=/.test(window.location.search)){
-        if(signin.hidden&&PROFILES.length)choose(PROFILES[0]);
-        err.textContent=msg('magic');
+        // A single profile is already on its password step; with several, the
+        // link could have been anyone's, so the picker says it instead.
+        if(signin.hidden){
+          var nt=document.getElementById('notice');
+          nt.textContent=nt.getAttribute('data-'+lang+'-magic')||'';
+          nt.hidden=false;
+        }else err.textContent=msg('magic');
         history.replaceState(null,'',BASE+'/login');
       }
     }catch(e){}
@@ -853,7 +883,8 @@ const AVATAR_MIME = {
 const MASTER_ONLY = [
   [null, /^\/api\/household(\/|$)/],
   // Per-title refresh / clear (Detail options) stay open: the cache is shared
-  // and lazily rebuilt, so neither can hurt anyone's data.
+  // and lazily rebuilt, and a member's clear keeps the household's custom
+  // artwork (routes/admin.js), so neither can hurt anyone's data.
   [null, /^\/api\/admin\//, (p) => /^\/api\/admin\/cache\/[a-z]+\/\d+(\/refresh)?$/.test(p)],
   [null, /^\/api\/usage(\/|$)/],
   [null, /^\/api\/import(\/|$)/],
@@ -924,6 +955,11 @@ export function registerAuth(fastify, { configured }) {
       // request acts as the master account.
       const master = getMaster();
       request.user = master ? { id: master.id, role: master.role } : null;
+      // The device cache is keyed by the uid hint (client/src/userScope.js), so
+      // state it here too or nothing would be cached on the device.
+      if (master && parseCookies(request.headers.cookie)[UID_COOKIE] !== String(master.id)) {
+        reply.header('Set-Cookie', buildUidCookie(String(master.id), { maxAge: YEAR_SECONDS, secure: isHttps(request) }));
+      }
       return;
     }
     if (isPublic(request)) return;
@@ -943,6 +979,12 @@ export function registerAuth(fastify, { configured }) {
       return;
     }
 
+    // The session is gone (expired, signed out elsewhere, revoked, member
+    // disabled): drop the uid hint so the next start doesn't open that member's
+    // device cache.
+    if (parseCookies(request.headers.cookie)[UID_COOKIE]) {
+      reply.header('Set-Cookie', buildUidCookie('', { maxAge: 0, secure: isHttps(request) }));
+    }
     if (p.startsWith('/api/') || p.startsWith('/assets/') || p.startsWith('/badges/')) {
       reply.code(401).send({ error: 'unauthorized' });
     } else {

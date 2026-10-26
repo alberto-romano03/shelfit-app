@@ -32,8 +32,17 @@ const setDisabledStmt = db.prepare('UPDATE users SET disabled = ? WHERE id = ?')
 const clearPasswordStmt = db.prepare('UPDATE users SET password_hash = NULL WHERE id = ?');
 const deleteMagicLinksStmt = db.prepare('DELETE FROM magic_links WHERE user_id = ?');
 const deleteUserStmt = db.prepare("DELETE FROM users WHERE id = ? AND role != 'master'");
+const deleteStatsStmt = db.prepare('DELETE FROM stats_cache WHERE key = ?');
 const memberTitlesStmt = db.prepare('SELECT DISTINCT type, tmdb_id FROM items WHERE user_id = ?');
-const titleHeldStmt = db.prepare('SELECT 1 FROM items WHERE type = ? AND tmdb_id = ? LIMIT 1');
+// Same rule as deleting a title (routes/media.js): the shared cache stays while a
+// library, a list or a pending loan still uses it.
+const titleHeldStmt = db.prepare(
+  `SELECT EXISTS (SELECT 1 FROM items WHERE type = ? AND tmdb_id = ? LIMIT 1)
+       OR EXISTS (SELECT 1 FROM list_items li JOIN lists l ON l.id = li.list_id
+                   WHERE l.type = ? AND li.tmdb_id = CAST(? AS INTEGER))
+       OR EXISTS (SELECT 1 FROM suggestions WHERE type = ? AND tmdb_id = CAST(? AS TEXT)) AS held`
+);
+const titleHeld = (type, tmdbId) => !!titleHeldStmt.get(type, tmdbId, type, tmdbId, type, tmdbId).held;
 
 function cleanName(v) {
   const name = typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : '';
@@ -169,6 +178,7 @@ export default async function householdRoutes(fastify) {
     db.transaction(() => {
       clearInvites(user.id);
       deleteUserStmt.run(user.id); // push subscriptions cascade with the rest
+      deleteStatsStmt.run(`summary:${user.id}`); // their cached stats summary
     })();
     scheduleStatsRecompute(db);
     try {
@@ -177,7 +187,7 @@ export default async function householdRoutes(fastify) {
       fastify.log.warn(`could not remove avatar folder of user ${user.id}: ${err.message}`);
     }
     for (const t of titles) {
-      if (titleHeldStmt.get(t.type, t.tmdb_id)) continue;
+      if (titleHeld(t.type, t.tmdb_id)) continue;
       try {
         clearItemCache(t.type, t.tmdb_id);
       } catch (err) {

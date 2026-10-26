@@ -13,6 +13,7 @@ import { buildKodiSettings } from './kodiSettings.js';
 import { buildMagicLinks } from './magicLinks.js';
 import { buildHousehold } from './household.js';
 import { buildDevices } from './devices.js';
+import { PK, pget, pset } from '../persist.js';
 import { canInstall, isIOS, openAddToHome } from '../addToHome.js';
 import {
   el,
@@ -52,8 +53,16 @@ export default async function Settings(container) {
   // the master's; everyone gets their own preferences, lists, backup and account.
   // The server enforces the same split, so this only keeps members from seeing
   // controls that would answer "forbidden". No login configured = the owner.
-  const authP = api.authStatus().catch(() => null);
-  const isMaster = (s) => !s || !s.enabled || !s.user || s.user.role === 'master';
+  // Offline it falls back to the last answer seen on this device for this member,
+  // and with none at all it shows the member's view (fails closed).
+  const authP = api
+    .authStatus()
+    .then((s) => {
+      if (s) pset(PK.authStatus, { enabled: !!s.enabled, user: s.user || null });
+      return s;
+    })
+    .catch(() => pget(PK.authStatus) || null);
+  const isMaster = (s) => !!s && (!s.enabled || !s.user || s.user.role === 'master');
 
   const header = el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' } }, [
     el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
@@ -1020,7 +1029,9 @@ export default async function Settings(container) {
       .catch(() => { /* offline / error — keep the default */ });
   }
 
-  const kodiSection = buildKodiSettings(api);
+  // Built once the master is confirmed (below): a member gets no Kodi tab, so
+  // nothing of it is fetched for them.
+  const kodiSection = el('div');
 
   // Filled with the Household section once the master is confirmed.
   const householdSection = el('div');
@@ -1118,6 +1129,7 @@ export default async function Settings(container) {
   // them is fetched at all.
   authP.then((s) => {
     if (!isMaster(s)) return;
+    kodiSection.replaceWith(buildKodiSettings(api));
     metadataSection.style.display = '';
     importSection.style.display = '';
     for (const key of ['kodi', 'advanced']) chipByKey[key].style.display = '';

@@ -81,6 +81,8 @@ export function buildKodiSettings(api) {
       } else if (res && res.discoveries && res.discoveries.length) {
         report('');
         openKodiReview(res.discoveries);
+      } else if (res && res.handedTo) {
+        toast(t('kodiSettings.syncHanded', { name: res.handedTo, n: Number(res.handedCount) }), 'ok');
       } else {
         const upd = res && res.updated_existing;
         toast(upd ? t('kodiSettings.syncUpdated', { n: Number(upd) }) : t('kodiSettings.syncNone'), 'ok');
@@ -117,15 +119,20 @@ export function buildKodiSettings(api) {
   // who can sign in). Kodi's watched marks belong to a Kodi profile, not to a
   // person, so each instance names whose shelfit library receives them.
   let members = [];
+  let everyone = []; // also disabled / not yet joined: to name a saved owner
   const membersReady = api
     .householdMembers()
     .then((d) => {
-      members = ((d && d.members) || []).filter((m) => m.role === 'master' || (m.has_password && !m.disabled));
+      everyone = (d && d.members) || [];
+      members = everyone.filter((m) => m.role === 'master' || (m.has_password && !m.disabled));
     })
     .catch(() => {
       members = [];
+      everyone = [];
     });
   const master = () => members.find((m) => m.role === 'master');
+  // Where the titles really go: a saved owner who can't sign in right now falls
+  // back to the master, as the server does (kodiSync.syncOwnerId).
   function syncOwnerName(inst) {
     const m = members.find((x) => x.id === inst.sync_user_id) || master();
     return m ? m.display_name : null;
@@ -201,7 +208,7 @@ export function buildKodiSettings(api) {
         el('span', {
           class: 'kodi-inst-sub',
           text:
-            members.length > 1
+            members.length > 1 || inst.sync_user_id
               ? `${inst.host}:${inst.port} · ${t('kodiSettings.syncsInto', { name: syncOwnerName(inst) })}`
               : `${inst.host}:${inst.port}`,
         }),
@@ -302,12 +309,24 @@ export function buildKodiSettings(api) {
 
       // Whose library this instance syncs into; only worth asking when there is
       // more than one member to choose from.
+      // Every option carries the member's real id (an empty value would read as
+      // "nothing chosen" and leave the pill blank); the master's id is saved as
+      // null, which is how the server spells "the master". A saved owner who can't
+      // sign in right now stays listed, so saving the form never moves the sync
+      // somewhere else behind the master's back.
+      const masterId = master() ? String(master().id) : '';
+      const ownerOptions = members.map((m) => ({ value: String(m.id), text: m.display_name }));
+      const savedOwner = editing && inst.sync_user_id ? String(inst.sync_user_id) : masterId;
+      if (savedOwner !== masterId && !ownerOptions.some((o) => o.value === savedOwner)) {
+        const gone = everyone.find((m) => String(m.id) === savedOwner);
+        if (gone) ownerOptions.push({ value: savedOwner, text: t('kodiSettings.ownerInactive', { name: gone.display_name }) });
+      }
       const ownerPill =
-        members.length > 1
+        ownerOptions.length > 1
           ? selectPill({
               label: t('kodiSettings.syncOwner'),
-              options: members.map((m) => ({ value: m.role === 'master' ? '' : String(m.id), text: m.display_name })),
-              value: editing && inst.sync_user_id ? String(inst.sync_user_id) : '',
+              options: ownerOptions,
+              value: savedOwner,
             })
           : null;
 
@@ -321,7 +340,9 @@ export function buildKodiSettings(api) {
           username: userIn.value.trim(),
           password: passIn.value,
           icon: selectedIcon,
-          sync_user_id: ownerPill ? (ownerPill.value ? Number(ownerPill.value) : null) : undefined,
+          sync_user_id: ownerPill
+            ? (ownerPill.value && ownerPill.value !== masterId ? Number(ownerPill.value) : null)
+            : undefined,
         };
       }
 

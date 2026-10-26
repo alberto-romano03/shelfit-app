@@ -1150,7 +1150,7 @@ function openSuggestSheet(d) {
             .then(() => report(t('suggest.sent'), 10 * 60 * 1000))
             .catch((err) => {
               row.setDisabled(false);
-              toast(err.message || t('suggest.failed'), 'bad');
+              toast(t('suggest.failed'), 'bad'); // the server's reasons are English-only
             });
         },
       });

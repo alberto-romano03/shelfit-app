@@ -71,7 +71,7 @@ function showSuggestion(s) {
           } catch (err) {
             borrow.disabled = false;
             decline.disabled = false;
-            toast((err && err.message) || t('suggest.failed'), 'bad');
+            toast(t('suggest.failed'), 'bad'); // the server's reasons are English-only
           }
         });
         decline.addEventListener('click', async () => {

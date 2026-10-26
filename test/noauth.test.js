@@ -28,4 +28,13 @@ describe('no password configured', () => {
     assert.equal((await api.get('/api/profile')).json.display_name, 'Home');
     assert.equal((await api.get('/api/media')).status, 200);
   });
+
+  it("states the master's id in the uid hint, so the device cache works", async () => {
+    const masterId = h.db.prepare("SELECT id FROM users WHERE role = 'master'").get().id;
+    const res = await client(h.app, null).get('/api/profile');
+    assert.match([].concat(res.headers['set-cookie'] || []).join('\n'), new RegExp(`shelfit_uid=${masterId};`));
+    // Already stated: not repeated on every request.
+    const again = await client(h.app, `shelfit_uid=${masterId}`).get('/api/profile');
+    assert.equal(again.headers['set-cookie'], undefined);
+  });
 });

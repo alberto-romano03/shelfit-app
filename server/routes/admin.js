@@ -56,7 +56,9 @@ export default async function adminRoutes(fastify) {
       reply.code(400);
       return { error: 'invalid type or id' };
     }
-    clearItemCache(type, request.params.tmdb_id);
+    // Members may clear a title too (auth.js), but only the master's clear also
+    // drops the household's custom artwork for it.
+    clearItemCache(type, request.params.tmdb_id, { keepCustom: request.user.role !== 'master' });
     return { ok: true };
   });
 

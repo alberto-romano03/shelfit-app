@@ -138,8 +138,16 @@ const deleteItemListRefsStmt = db.prepare(
   `DELETE FROM list_items
     WHERE tmdb_id = ? AND list_id IN (SELECT id FROM lists WHERE user_id = ? AND type = ?)`
 );
-// Whether any member still has this title (its cache folder is shared).
-const titleHeldStmt = db.prepare('SELECT 1 FROM items WHERE type = ? AND tmdb_id = ? LIMIT 1');
+// Whether anyone still uses this title's shared cache folder: a member's library,
+// a member's list (lists can hold titles outside the library and read only the
+// cache) or a pending loan (its popup shows the cached poster).
+const titleHeldStmt = db.prepare(
+  `SELECT EXISTS (SELECT 1 FROM items WHERE type = ? AND tmdb_id = ? LIMIT 1)
+       OR EXISTS (SELECT 1 FROM list_items li JOIN lists l ON l.id = li.list_id
+                   WHERE l.type = ? AND li.tmdb_id = CAST(? AS INTEGER))
+       OR EXISTS (SELECT 1 FROM suggestions WHERE type = ? AND tmdb_id = CAST(? AS TEXT)) AS held`
+);
+const titleHeld = (type, tmdbId) => !!titleHeldStmt.get(type, tmdbId, type, tmdbId, type, tmdbId).held;
 // Movie rewatch events + the paired rewatch_count counter (always updated together
 // in a single transaction so they can never diverge — see the endpoints below).
 const insertRewatchStmt = db.prepare(
@@ -858,7 +866,7 @@ export default async function mediaRoutes(fastify) {
       deleteItemStmt.run(row.id, row.user_id); // progress cascades
       deleteItemListRefsStmt.run(Number(row.tmdb_id), row.user_id, row.type);
       scheduleStatsRecompute(db);
-      return !!titleHeldStmt.get(row.type, row.tmdb_id);
+      return titleHeld(row.type, row.tmdb_id);
     })();
     if (stillHeld) return { ok: true };
     // Filesystem cleanup outside the transaction (fs is not transactional).

@@ -26,8 +26,10 @@ import {
   commitKodiSync,
   getPendingCount,
   claimPending,
+  setPending,
   syncOwnerId,
 } from '../kodiSync.js';
+import { getUser } from '../users.js';
 
 function configPayload() {
   const active = getActiveInstance();
@@ -171,8 +173,22 @@ export default async function kodiRoutes(fastify) {
   // --- Library sync -------------------------------------------------------
   // Manual sync — runs immediately and returns discoveries for review. If a sync
   // is already running (e.g. the scheduled one), it's reported and ignored.
-  fastify.post('/api/kodi/sync', async () => {
+  // When the instance syncs into another member, the master (the only one who
+  // can press "Sync now") never sees that member's titles: the discoveries wait
+  // for the owner's review card, exactly like a scheduled sync.
+  fastify.post('/api/kodi/sync', async (request) => {
     const res = await runKodiSync();
+    const owner = syncOwnerId();
+    if (res && res.discoveries && res.discoveries.length && owner !== request.user.id) {
+      setPending(res);
+      const user = getUser(owner);
+      return {
+        updated_existing: res.updated_existing,
+        discoveries: [],
+        handedTo: user ? user.display_name : null,
+        handedCount: res.discoveries.length,
+      };
+    }
     return res;
   });
 

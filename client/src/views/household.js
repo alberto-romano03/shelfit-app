@@ -118,18 +118,22 @@ export function buildHousehold(api) {
           },
         });
         rows.push(signIn.el);
-        rows.push(
-          settingsRow({
-            icon: 'send',
-            label: m.has_password ? t('household.resetPassword') : t('household.newInvite'),
-            sub: m.has_password ? t('household.resetPasswordSub') : t('household.newInviteSub'),
-            onClick: () => {
-              close();
-              if (m.has_password) confirmReset(m);
-              else reinvite(m);
-            },
-          }).el
-        );
+        // An invite can't be redeemed while sign-in is off (the server refuses
+        // it), so the link is offered only once the member is enabled again.
+        if (!m.disabled) {
+          rows.push(
+            settingsRow({
+              icon: 'send',
+              label: m.has_password ? t('household.resetPassword') : t('household.newInvite'),
+              sub: m.has_password ? t('household.resetPasswordSub') : t('household.newInviteSub'),
+              onClick: () => {
+                close();
+                if (m.has_password) confirmReset(m);
+                else reinvite(m);
+              },
+            }).el
+          );
+        }
         rows.push(settingsRule());
         rows.push(
           settingsRow({

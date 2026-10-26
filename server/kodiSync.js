@@ -29,7 +29,9 @@ const masterIdStmt = db.prepare("SELECT id FROM users WHERE role = 'master'");
 // into a single member's shelfIt library: the one the active instance names
 // (Settings > Kodi), else the master. The review card for scheduled discoveries
 // is theirs alone.
-const userExistsStmt = db.prepare('SELECT 1 FROM users WHERE id = ?');
+// A disabled member keeps the setting but not the sync: their review card could
+// never be claimed, so titles fall back to the master until they are re-enabled.
+const userExistsStmt = db.prepare('SELECT 1 FROM users WHERE id = ? AND disabled = 0');
 export function syncOwnerId() {
   const inst = getActiveInstance();
   if (inst && inst.sync_user_id && userExistsStmt.get(inst.sync_user_id)) return inst.sync_user_id;

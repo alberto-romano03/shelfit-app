@@ -950,7 +950,13 @@ export function openReceipt(month) {
         const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.92));
         if (!blob) throw new Error(t('receipt.exportFailed'));
         // The member's name too: a household's receipts land in the same folder.
-        const who = (data.totals.member || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        // Accents folded first, so "Nicolò" becomes "nicolo" rather than "nicol".
+        const who = (data.totals.member || '')
+          .normalize('NFD')
+          .replace(/\p{M}/gu, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
         const fname = `${[data.store_name.toLowerCase(), who, data.month_name.toLowerCase(), data.year].filter(Boolean).join('-')}.jpg`;
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);

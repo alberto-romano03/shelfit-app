@@ -65,6 +65,18 @@ async function dropOfflineApiCache() {
 // keys, and when this browser now belongs to a different member than last time
 // (a session expired and someone else signed in), the offline API cache too.
 export function initUserScope() {
+  // The one legacy flag worth keeping: "the feature tour was already shown". It
+  // carries no personal data, and dropping it would replay the tour for the
+  // owner on their first start after the upgrade.
+  try {
+    const seen = localStorage.getItem('shelfit:showcase:seen');
+    const uid0 = readUidCookie();
+    if (seen !== null && uid0 && localStorage.getItem(`shelfit:u${uid0}:showcase:seen`) === null) {
+      localStorage.setItem(`shelfit:u${uid0}:showcase:seen`, seen);
+    }
+  } catch {
+    /* storage disabled */
+  }
   removeKeys(localStorage, (k) => LEGACY_EXACT.has(k) || LEGACY_RE.test(k));
   const uid = readUidCookie();
   if (!uid) return;
@@ -84,10 +96,22 @@ export function initUserScope() {
   }
 }
 
-// Called on an explicit sign-out (or profile switch): forget everything this
-// device holds about the member who is leaving. Device preferences stay. Pass the
-// prefix read BEFORE signing out: the logout response clears the uid cookie.
-export async function forgetCurrentUser(prefix = userPrefix()) {
+// The prefix of the member this browser last belonged to (initUserScope records
+// it): a 401 answer clears the uid cookie before the client can read it.
+function lastPrefix() {
+  try {
+    const uid = localStorage.getItem(LAST_UID_KEY);
+    return uid && /^\d+$/.test(uid) ? `shelfit:u${uid}:` : null;
+  } catch {
+    return null;
+  }
+}
+
+// Called on an explicit sign-out (or profile switch), and when the server says the
+// session is gone: forget everything this device holds about the member who is
+// leaving. Device preferences stay. Pass the prefix read BEFORE signing out: the
+// logout response clears the uid cookie.
+export async function forgetCurrentUser(prefix = userPrefix() || lastPrefix()) {
   if (prefix) {
     removeKeys(localStorage, (k) => k.startsWith(prefix));
     removeKeys(sessionStorage, (k) => k.startsWith(prefix));

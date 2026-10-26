@@ -46,6 +46,9 @@ export const PK = {
   // The last few search queries, newest first, shown as chips while the search
   // field is empty.
   recentSearches: 'search:recent',
+  // The last /api/auth/status answer (login on/off, who, role), so Settings can
+  // decide what to offer when the server can't be reached (fails closed).
+  authStatus: 'auth:status',
 };
 
 // Plan-to-Watch titles are stored per library type: `plan:movie`, `plan:show`.

@@ -6,6 +6,7 @@
 
 import { reportServerUp, reportServerSuspect } from './network.js';
 import { withBase } from './basePath.js';
+import { forgetCurrentUser } from './userScope.js';
 import { t } from './i18n.js';
 
 // True for fetch aborts (navigation teardown) — callers ignore these silently.
@@ -103,8 +104,14 @@ function buildApi(signal) {
       data = await res.json();
     }
     if (!res.ok) {
-      // Session expired / not authenticated → bounce to the login page.
-      if (res.status === 401) window.location.href = withBase('/login');
+      // Session expired / not authenticated → bounce to the login page. The
+      // session ended somewhere else (expired, signed out of every device,
+      // revoked, member disabled), so this device forgets that member's data
+      // first, exactly as an explicit sign-out would.
+      if (res.status === 401) {
+        forgetCurrentUser();
+        window.location.href = withBase('/login');
+      }
       const err = new Error((data && data.error) || `HTTP ${res.status}`);
       err.status = res.status;
       err.data = data;

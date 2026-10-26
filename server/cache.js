@@ -667,14 +667,32 @@ export function migrateCacheToWebp(db) {
 }
 
 // --- Cache deletion -------------------------------------------------------
-export function clearItemCache(type, tmdbId) {
+// `keepCustom` leaves the household's chosen artwork in place (files and flags):
+// a member clearing a title must not wipe a poster someone else picked.
+export function clearItemCache(type, tmdbId, { keepCustom = false } = {}) {
   const dir = itemDir(type, tmdbId);
+  const keep = [];
+  if (keepCustom) {
+    const custom = customSlots(type, tmdbId);
+    for (const slot of ['poster', 'backdrop']) {
+      if (!custom[slot]) continue;
+      const file = path.join(dir, `${slot}.webp`);
+      if (fs.existsSync(file)) keep.push([file, fs.readFileSync(file)]);
+    }
+  }
   if (fs.existsSync(dir)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
-  // The user's own artwork lived in that directory, so the override flags would
-  // now claim images that no longer exist.
-  clearAllCustom(type, tmdbId);
+  if (keepCustom) {
+    if (keep.length) {
+      fs.mkdirSync(dir, { recursive: true });
+      for (const [file, bytes] of keep) fs.writeFileSync(file, bytes);
+    }
+  } else {
+    // The artwork lived in that directory, so the override flags would now
+    // claim images that no longer exist.
+    clearAllCustom(type, tmdbId);
+  }
   imageRamCache.invalidatePrefix(dir); // drop any RAM copies for this title
   invalidateMetaPrefix(dir); // …and its parsed meta
   invalidateStats();

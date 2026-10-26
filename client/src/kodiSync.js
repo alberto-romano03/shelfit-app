@@ -50,7 +50,11 @@ export async function openKodiReviewFromPending() {
     return;
   }
   const discoveries = (data && data.discoveries) || [];
-  if (discoveries.length) openKodiReview(discoveries);
+  if (!discoveries.length) return;
+  // Another popup (a loan from a member) may have opened while the claim was in
+  // flight: the claimed titles then wait for it to close.
+  if (isPopupOpen()) waitForPopupClose(() => openKodiReview(discoveries));
+  else openKodiReview(discoveries);
 }
 
 function summaryText(nMovies, nShows) {
