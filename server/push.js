@@ -6,9 +6,9 @@
 //   • A once-per-day check that notifies for episodes whose air_date fell between
 //     the last check and now, reusing the locally-cached TMDB air dates.
 //
-// Exactly one push subscription is kept (in the settings table), owned by the
-// member who enabled it: the daily check covers that member's series only. A
-// failed delivery with 404/410 (subscription gone) auto-disables notifications.
+// Subscriptions are per device (push_subscriptions): each belongs to the member
+// who enabled notifications in that browser, and gets that member's news only.
+// A delivery answered 404/410 (subscription gone) drops that device's row.
 
 import crypto from 'node:crypto';
 import db from './db.js';
@@ -21,7 +21,6 @@ const setSettingStmt = db.prepare(
   `INSERT INTO settings (key, value) VALUES (?, ?)
    ON CONFLICT(key) DO UPDATE SET value = excluded.value`
 );
-const delSettingStmt = db.prepare('DELETE FROM settings WHERE key = ?');
 function getSetting(key) {
   const row = getSettingStmt.get(key);
   return row ? row.value : null;
@@ -29,54 +28,54 @@ function getSetting(key) {
 function setSetting(key, value) {
   setSettingStmt.run(key, value);
 }
-function delSetting(key) {
-  delSettingStmt.run(key);
-}
 
 // Started/finished shows whose new episodes we notify about (prepared once).
 const activeShowsStmt = db.prepare(
   "SELECT id, tmdb_id, title_it, title_orig FROM items WHERE user_id = ? AND type = 'show' AND status IN ('watching','completed','paused')"
 );
-const masterIdStmt = db.prepare("SELECT id FROM users WHERE role = 'master'");
+const userSubsStmt = db.prepare('SELECT id, endpoint, keys FROM push_subscriptions WHERE user_id = ?');
+const usersWithSubsStmt = db.prepare('SELECT DISTINCT user_id FROM push_subscriptions');
+const hasSubStmt = db.prepare('SELECT 1 FROM push_subscriptions WHERE user_id = ? AND endpoint = ?');
+// One browser, one owner: whoever enables notifications on it last.
+const upsertSubStmt = db.prepare(
+  `INSERT INTO push_subscriptions (user_id, endpoint, keys, created_at) VALUES (?, ?, ?, ?)
+   ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, keys = excluded.keys`
+);
+const deleteSubStmt = db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?');
+const deleteUserSubsStmt = db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?');
+const deleteSubByIdStmt = db.prepare('DELETE FROM push_subscriptions WHERE id = ?');
 
 const K_VAPID = 'push_vapid';
-const K_SUB = 'push_subscription';
-const K_ENABLED = 'push_enabled';
 const K_LAST = 'push_last_check';
-const K_OWNER = 'push_user';
 
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:shelfit@example.com';
 
-// --- state accessors -------------------------------------------------------
-export function isPushEnabled() {
-  return getSetting(K_ENABLED) === '1';
+// --- subscriptions ---------------------------------------------------------
+// A browser PushSubscription.toJSON(): { endpoint, keys: { p256dh, auth } }.
+export function saveSubscription(userId, sub) {
+  upsertSubStmt.run(userId, sub.endpoint, JSON.stringify(sub.keys), Date.now());
 }
-export function setPushEnabled(on) {
-  setSetting(K_ENABLED, on ? '1' : '0');
+// Whether `userId` gets notifications on the device behind `endpoint` (or, with
+// no endpoint, on any device).
+export function isSubscribed(userId, endpoint) {
+  if (endpoint) return !!hasSubStmt.get(userId, endpoint);
+  return userSubsStmt.all(userId).length > 0;
 }
-export function getSubscription() {
-  const raw = getSetting(K_SUB);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+// Stop notifications for `userId` on one device, or on all of them.
+export function removeSubscription(userId, endpoint) {
+  if (endpoint) deleteSubStmt.run(userId, endpoint);
+  else deleteUserSubsStmt.run(userId);
 }
-export function setSubscription(sub, userId) {
-  setSetting(K_SUB, JSON.stringify(sub));
-  setSetting(K_OWNER, String(userId));
-}
-// Who the subscription belongs to. A subscription stored before accounts
-// existed belongs to the master.
-export function getPushOwner() {
-  const id = parseInt(getSetting(K_OWNER), 10);
-  if (Number.isInteger(id)) return id;
-  const master = masterIdStmt.get();
-  return master ? master.id : null;
-}
-export function clearSubscription() {
-  delSetting(K_SUB);
+function subscriptionsOf(userId) {
+  return userSubsStmt.all(userId).map((r) => {
+    let keys = {};
+    try {
+      keys = JSON.parse(r.keys);
+    } catch {
+      /* unusable row: delivery fails and it gets pruned */
+    }
+    return { id: r.id, endpoint: r.endpoint, keys };
+  });
 }
 
 // --- VAPID keys (generated once, then persisted) ---------------------------
@@ -192,36 +191,37 @@ export async function sendPush(subscription, payloadObj, logger) {
   }
 }
 
-// A dead subscription (404/410 Gone) → drop it and disable notifications.
-function handleDelivery(status, logger) {
-  if (status === 404 || status === 410) {
-    clearSubscription();
-    setPushEnabled(false);
-    if (logger) logger.warn('push subscription gone — notifications disabled');
-    return false;
+// Deliver one payload to every device of a member, dropping devices whose
+// subscription is gone (404/410). Returns how many deliveries succeeded.
+async function sendToUser(userId, payloadObj, logger) {
+  let delivered = 0;
+  for (const sub of subscriptionsOf(userId)) {
+    const status = await sendPush(sub, payloadObj, logger);
+    if (status === 404 || status === 410) {
+      deleteSubByIdStmt.run(sub.id);
+      if (logger) logger.warn(`push subscription gone for user ${userId}: device removed`);
+    } else if (status >= 200 && status < 300) {
+      delivered += 1;
+    }
   }
-  return true;
+  return delivered;
 }
 
-// Send a one-off test notification (used by the Settings "test" action).
-export async function sendTest(logger) {
-  const sub = getSubscription();
-  if (!sub || !isPushEnabled()) return { ok: false, error: 'not subscribed' };
-  const status = await sendPush(
-    sub,
+// Send a one-off test notification to the member's devices (Settings "test").
+export async function sendTest(userId, logger) {
+  if (!isSubscribed(userId)) return { ok: false, error: 'not subscribed' };
+  const delivered = await sendToUser(
+    userId,
     { title: 'shelf.it', body: 'Push notifications are working 🎬', url: '/' },
     logger
   );
-  const alive = handleDelivery(status, logger);
-  return { ok: status >= 200 && status < 300, status, alive };
+  return { ok: delivered > 0, delivered };
 }
 
 // --- Daily new-episode check ----------------------------------------------
+// One pass for the whole household: the checkpoint is shared, each member with
+// a subscribed device hears about their own series.
 export async function checkNewEpisodes(logger) {
-  if (!isPushEnabled()) return;
-  const sub = getSubscription();
-  if (!sub) return;
-
   const nowIso = new Date().toISOString();
   const lastCheck = getSetting(K_LAST);
   // First run: set the baseline so we never notify for the whole back-catalog.
@@ -233,7 +233,17 @@ export async function checkNewEpisodes(logger) {
   const lastDate = lastCheck.slice(0, 10); // YYYY-MM-DD, lexical comparison
   const todayDate = nowIso.slice(0, 10);
 
-  const shows = activeShowsStmt.all(getPushOwner());
+  // Advance the checkpoint regardless, so a transient send failure doesn't cause
+  // the same episode to re-notify every day.
+  setSetting(K_LAST, nowIso);
+
+  for (const { user_id: userId } of usersWithSubsStmt.all()) {
+    await notifyUser(userId, lastDate, todayDate, logger);
+  }
+}
+
+async function notifyUser(userId, lastDate, todayDate, logger) {
+  const shows = activeShowsStmt.all(userId);
 
   const newlyAired = [];
   for (const show of shows) {
@@ -255,16 +265,12 @@ export async function checkNewEpisodes(logger) {
     if (found) newlyAired.push(show);
   }
 
-  // Advance the checkpoint regardless, so a transient send failure doesn't cause
-  // the same episode to re-notify every day.
-  setSetting(K_LAST, nowIso);
-
   if (newlyAired.length === 1) {
     // Single series → point straight at it.
     const show = newlyAired[0];
     const title = show.title_it || show.title_orig;
-    const status = await sendPush(
-      sub,
+    await sendToUser(
+      userId,
       {
         title: 'Fresh episode alert 🍿',
         body: `${title} just dropped a new episode. Snacks ready?`,
@@ -272,7 +278,6 @@ export async function checkNewEpisodes(logger) {
       },
       logger
     );
-    handleDelivery(status, logger);
   } else if (newlyAired.length > 1) {
     // Several at once → one digest notification listing the titles.
     const names = newlyAired.map((s) => s.title_it || s.title_orig);
@@ -284,8 +289,8 @@ export async function checkNewEpisodes(logger) {
     } else {
       list = `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
     }
-    const status = await sendPush(
-      sub,
+    await sendToUser(
+      userId,
       {
         title: `${newlyAired.length} shows just leveled up 📺`,
         body: `New episodes from ${list}. Your couch misses you. 🛋️`,
@@ -293,10 +298,9 @@ export async function checkNewEpisodes(logger) {
       },
       logger
     );
-    handleDelivery(status, logger);
   }
   if (newlyAired.length && logger) {
-    logger.info(`push: notified ${newlyAired.length} series with new episodes`);
+    logger.info(`push: notified user ${userId} about ${newlyAired.length} series with new episodes`);
   }
 }
 

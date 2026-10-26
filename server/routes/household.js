@@ -15,7 +15,7 @@ import { getUser, isPickable, avatarFile, avatarDir, fileVersion } from '../user
 import { createInvite, pendingInvite, clearInvites } from '../invites.js';
 import { revokeAllSessions, publicAppUrl } from '../auth.js';
 import { buildExportXml } from './library.js';
-import { getPushOwner, clearSubscription, setPushEnabled } from '../push.js';
+import { removeSubscription } from '../push.js';
 import { scheduleStatsRecompute } from '../stats.js';
 
 const NAME_MAX = 40;
@@ -105,13 +105,16 @@ export default async function householdRoutes(fastify) {
         return { error: 'the master account cannot be disabled' };
       }
       setDisabledStmt.run(body.disabled ? 1 : 0, user.id);
-      if (body.disabled) revokeAllSessions(user.id); // signed out everywhere, now
+      if (body.disabled) {
+        revokeAllSessions(user.id); // signed out everywhere, now
+        removeSubscription(user.id); // and no more notifications on their devices
+      }
     }
     return { member: memberView(getUser(user.id)) };
   });
 
   // POST /api/household/members/:id/invite → reset: the member's password,
-  // sessions and magic links stop working, and a new invite lets them choose a
+  // sessions, magic links and push devices stop working, and a new invite lets them choose a
   // new password. The master's own password is reset from .env instead.
   fastify.post('/api/household/members/:id/invite', async (request, reply) => {
     const user = getUser(request.params.id);
@@ -127,6 +130,7 @@ export default async function householdRoutes(fastify) {
       clearPasswordStmt.run(user.id);
       deleteMagicLinksStmt.run(user.id);
       revokeAllSessions(user.id);
+      removeSubscription(user.id);
     })();
     return inviteResponse(request, user);
   });
@@ -164,11 +168,7 @@ export default async function householdRoutes(fastify) {
     const titles = memberTitlesStmt.all(user.id);
     db.transaction(() => {
       clearInvites(user.id);
-      deleteUserStmt.run(user.id);
-      if (getPushOwner() === user.id) {
-        clearSubscription();
-        setPushEnabled(false);
-      }
+      deleteUserStmt.run(user.id); // push subscriptions cascade with the rest
     })();
     scheduleStatsRecompute(db);
     try {

@@ -21,8 +21,15 @@
 
 import { pset, planKey } from './persist.js';
 import { locale } from './i18n.js';
+import { userPrefix } from './userScope.js';
 
-const PREFIX = 'shelfit:oc:';
+// Datasets live under the signed-in member's prefix (`shelfit:u<id>:oc:`), so a
+// shared device keeps each member's offline copies apart; null when no member is
+// known, which turns every read into a miss and every write into a no-op.
+function ocPrefix() {
+  const prefix = userPrefix();
+  return prefix ? `${prefix}oc:` : null;
+}
 
 // Serialize→store raw below this many characters; compress at/above it. Measured
 // on real datasets, a typical Plan-to-Watch/Up-Next payload is a few KB and fits
@@ -434,6 +441,8 @@ function decompressFromUTF16(compressed) {
 // Stores `data` under `key` with the current time, compressing only when the
 // serialized payload is large. Returns true on a successful write.
 export function ocSet(key, data, { compress = true } = {}) {
+  const prefix = ocPrefix();
+  if (!prefix) return false;
   try {
     const json = JSON.stringify(data);
     let payload = json;
@@ -446,8 +455,8 @@ export function ocSet(key, data, { compress = true } = {}) {
         compressed = 1;
       }
     }
-    localStorage.setItem(PREFIX + key, payload);
-    localStorage.setItem(PREFIX + key + ':m', JSON.stringify({ t: Date.now(), c: compressed }));
+    localStorage.setItem(prefix + key, payload);
+    localStorage.setItem(prefix + key + ':m', JSON.stringify({ t: Date.now(), c: compressed }));
     return true;
   } catch {
     return false; // quota / disabled — best-effort
@@ -456,11 +465,13 @@ export function ocSet(key, data, { compress = true } = {}) {
 
 // Returns { data, savedAt } or null when absent/unreadable.
 export function ocGet(key) {
+  const prefix = ocPrefix();
+  if (!prefix) return null;
   try {
-    const metaRaw = localStorage.getItem(PREFIX + key + ':m');
+    const metaRaw = localStorage.getItem(prefix + key + ':m');
     if (metaRaw === null) return null;
     const meta = JSON.parse(metaRaw);
-    const payload = localStorage.getItem(PREFIX + key);
+    const payload = localStorage.getItem(prefix + key);
     if (payload === null) return null;
     const json = meta && meta.c ? decompressFromUTF16(payload) : payload;
     if (json == null) return null;
@@ -471,9 +482,11 @@ export function ocGet(key) {
 }
 
 export function ocRemove(key) {
+  const prefix = ocPrefix();
+  if (!prefix) return;
   try {
-    localStorage.removeItem(PREFIX + key);
-    localStorage.removeItem(PREFIX + key + ':m');
+    localStorage.removeItem(prefix + key);
+    localStorage.removeItem(prefix + key + ':m');
   } catch {
     /* ignore */
   }

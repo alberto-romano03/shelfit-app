@@ -19,6 +19,7 @@ import {
 import { isServerReachable, markDegraded } from '../network.js';
 import { saveUpNext, getUpNext, saveUpcoming, getUpcoming, formatSyncTime } from '../offlineCache.js';
 import { t, locale, getLang } from '../i18n.js';
+import { userPrefix } from '../userScope.js';
 
 // Retain the built What's Next timeline (images decoded) so returning to it —
 // e.g. back from a title's detail — re-attaches it instantly with the scroll
@@ -34,26 +35,36 @@ let upcomingFresh = false; // next mount should rebuild (manual refresh)
 // The horizon episodes/series/air-dates rarely change during a day, so the cached
 // copy is almost always current and is revalidated by a background fetch. Cleared
 // on any library mutation (which can change what's up next) and wiped when the tab
-// closes (sessionStorage semantics), so it never goes stale across days.
-const SESSION_KEY = 'shelfit:upcoming';
+// closes (sessionStorage semantics), so it never goes stale across days. Kept
+// under the signed-in member's prefix, like every on-device copy of their data.
+function sessionKey() {
+  const prefix = userPrefix();
+  return prefix ? `${prefix}upcoming` : null;
+}
 function readSessionUpcoming() {
+  const key = sessionKey();
+  if (!key) return null;
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = sessionStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null; // disabled/private storage or malformed
   }
 }
 function writeSessionUpcoming(data) {
+  const key = sessionKey();
+  if (!key) return;
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+    sessionStorage.setItem(key, JSON.stringify(data));
   } catch {
     /* quota / disabled — best-effort */
   }
 }
 function clearSessionUpcoming() {
+  const key = sessionKey();
+  if (!key) return;
   try {
-    sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(key);
   } catch {
     /* ignore */
   }

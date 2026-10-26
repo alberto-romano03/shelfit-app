@@ -35,6 +35,10 @@ function plantLegacyDatabase(dataDir) {
   setting.run('auth:session_generation', '3');
   setting.run('tmdb_language', 'en-US');
   setting.run('push_enabled', '1');
+  setting.run(
+    'push_subscription',
+    JSON.stringify({ endpoint: 'https://push.example.com/old', keys: { p256dh: 'p', auth: 'a' } })
+  );
   const movie = db
     .prepare("INSERT INTO items (tmdb_id, type, title_it, title_orig, status, rating) VALUES ('603', 'movie', 'The Matrix', 'The Matrix', 'completed', 5)")
     .run().lastInsertRowid;
@@ -120,7 +124,12 @@ describe('v1 migration of a single-user database', () => {
     assert.ok(tables.includes('sessions'));
     const keys = h.db.prepare('SELECT key FROM settings').all().map((r) => r.key);
     assert.ok(!keys.some((k) => k.startsWith('auth:')));
-    assert.ok(keys.includes('push_enabled'));
+    assert.ok(!keys.some((k) => k.startsWith('push_') && k !== 'push_last_check' && k !== 'push_vapid'));
+    // v4: the one subscription became the master's first device.
+    assert.deepEqual(
+      h.db.prepare('SELECT user_id, endpoint, keys FROM push_subscriptions').all(),
+      [{ user_id: 1, endpoint: 'https://push.example.com/old', keys: JSON.stringify({ p256dh: 'p', auth: 'a' }) }]
+    );
     assert.equal(h.db.prepare('SELECT COUNT(*) AS c FROM items').get().c, 2);
     assert.equal(h.db.prepare('SELECT COUNT(*) AS c FROM progress').get().c, 2);
     assert.equal(h.db.prepare('SELECT movie_item_id FROM favorites').get().movie_item_id, 1);

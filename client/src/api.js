@@ -389,9 +389,12 @@ function buildApi(signal) {
       api.patch('/api/settings/metadata-language', { language }),
 
     // Push notifications (subscription lives server-side).
-    pushConfig: () => api.get('/api/push/config'),
+    // `endpoint` names this device: config answers whether it notifies the
+    // signed-in member, unsubscribe removes just this device.
+    pushConfig: (endpoint) =>
+      api.get(`/api/push/config${endpoint ? `?endpoint=${encodeURIComponent(endpoint)}` : ''}`),
     pushSubscribe: (subscription) => api.post('/api/push/subscribe', { subscription }),
-    pushUnsubscribe: () => api.post('/api/push/unsubscribe'),
+    pushUnsubscribe: (endpoint) => api.post('/api/push/unsubscribe', { endpoint }),
     pushTest: () => api.post('/api/push/test'),
   };
   return api;

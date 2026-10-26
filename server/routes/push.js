@@ -1,16 +1,14 @@
 // Push-notification API. All endpoints are behind shelfIt's auth gate. The
-// browser subscribes via the SW, then posts the subscription here; a single
-// subscription is kept (single-user). VAPID keys never leave the server except
-// the public key, which the client needs to subscribe.
+// browser subscribes via the SW, then posts the subscription here; it is stored
+// per device and belongs to the signed-in member (a browser has one owner: the
+// last member who enabled notifications on it). VAPID keys never leave the
+// server except the public key, which the client needs to subscribe.
 
 import {
   getVapidPublicKey,
-  isPushEnabled,
-  setPushEnabled,
-  getSubscription,
-  setSubscription,
-  clearSubscription,
-  getPushOwner,
+  saveSubscription,
+  isSubscribed,
+  removeSubscription,
   sendTest,
 } from '../push.js';
 
@@ -26,45 +24,44 @@ function validSubscription(s) {
   );
 }
 
+function endpointOf(v) {
+  return typeof v === 'string' && /^https:\/\//.test(v) ? v : null;
+}
+
 export default async function pushRoutes(fastify) {
-  // Config the client needs to render the toggle and subscribe.
-  // The one subscription belongs to whoever turned notifications on: everyone
-  // else sees the toggle off, as on a device that never subscribed.
+  // GET /api/push/config?endpoint=<this browser's endpoint>
+  // `subscribed`: whether this device notifies the signed-in member (without an
+  // endpoint: whether any of their devices does).
   fastify.get('/api/push/config', async (request) => {
-    const mine = getPushOwner() === request.user.id;
-    return {
-      enabled: mine && isPushEnabled(),
-      subscribed: mine && !!getSubscription(),
-      publicKey: getVapidPublicKey(),
-    };
+    const subscribed = isSubscribed(request.user.id, endpointOf(request.query.endpoint));
+    return { enabled: subscribed, subscribed, publicKey: getVapidPublicKey() };
   });
 
-  // Store a browser subscription and enable notifications.
+  // POST /api/push/subscribe { subscription }: this device now notifies the caller.
   fastify.post('/api/push/subscribe', async (request, reply) => {
     const sub = request.body && request.body.subscription;
     if (!validSubscription(sub)) {
       reply.code(400);
       return { error: 'invalid subscription' };
     }
-    setSubscription(sub, request.user.id);
-    setPushEnabled(true);
+    saveSubscription(request.user.id, sub);
     return { ok: true };
   });
 
-  // Remove the subscription and disable notifications entirely.
+  // POST /api/push/unsubscribe { endpoint? }: stop notifying the caller on this
+  // device (or, without an endpoint, on all their devices). Another member's
+  // device is never touched.
   fastify.post('/api/push/unsubscribe', async (request) => {
-    if (getPushOwner() !== request.user.id) return { ok: true }; // not theirs to remove
-    clearSubscription();
-    setPushEnabled(false);
+    removeSubscription(request.user.id, endpointOf((request.body || {}).endpoint));
     return { ok: true };
   });
 
-  // Send a test notification so the user can confirm delivery works.
+  // POST /api/push/test: a test notification to the caller's devices.
   fastify.post('/api/push/test', async (request, reply) => {
-    if (getPushOwner() !== request.user.id) {
+    if (!isSubscribed(request.user.id)) {
       reply.code(409);
       return { error: 'notifications are not enabled for this account' };
     }
-    return sendTest(request.log);
+    return sendTest(request.user.id, request.log);
   });
 }

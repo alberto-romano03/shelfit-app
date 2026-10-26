@@ -656,10 +656,12 @@ export default async function Home(container) {
       const badgeUrl = profile.active_badge_url || null;
       const coverUrl = profile.cover_image_url || null;
 
-      // Name + badge share nameRow, so repaint together if either changed. Reuse
-      // any already-persisted badge bytes until persistImage() refreshes them.
+      // Name + badge share nameRow, so repaint together if either changed. The
+      // persisted badge bytes are reused only while they are still the same badge:
+      // a badge that was removed or replaced must not repaint from the old bytes.
       if (name !== cached.name || badgeUrl !== cached.badgeUrl) {
-        paintName(name, cached.badgeData || null, badgeUrl);
+        const sameBadge = !!badgeUrl && badgeUrl === cached.badgeUrl;
+        paintName(name, sameBadge ? cached.badgeData || null : null, badgeUrl);
         cached.name = name;
         cached.badgeUrl = badgeUrl;
         pset(PK.name, name);

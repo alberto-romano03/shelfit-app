@@ -28,6 +28,7 @@ import { clientIp } from './security.js';
 import { logAccess, getRecentAccess, EVENTS } from './accessLog.js';
 import { getUser, getMaster, pickerUsers, isPickable, avatarFile, fileVersion } from './users.js';
 import { findInvite, clearInvites, pruneInvites } from './invites.js';
+import { removeSubscription } from './push.js';
 
 // The app is served under this sub-path by the reverse proxy (see Caddyfile),
 // which STRIPS the prefix before forwarding, so incoming request paths are at
@@ -52,6 +53,11 @@ export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
 
 const COOKIE = 'shelfit_session';
+// Readable companion cookie holding only the signed-in user's id. It grants
+// nothing (the session cookie above is what authenticates); it tells the client,
+// synchronously at startup, whose on-device cache to read, so one member's cached
+// home screen is never painted for another on a shared device.
+const UID_COOKIE = 'shelfit_uid';
 const YEAR_SECONDS = 365 * 24 * 60 * 60;
 const YEAR_MS = YEAR_SECONDS * 1000;
 const TOKEN_RE = /^[a-f0-9]{64}$/;
@@ -317,11 +323,25 @@ function buildSessionCookie(value, { maxAge, secure }) {
   if (secure) parts.push('Secure');
   return parts.join('; ');
 }
-function setSessionCookie(reply, request, token) {
-  reply.header('Set-Cookie', buildSessionCookie(token, { maxAge: YEAR_SECONDS, secure: isHttps(request) }));
+function buildUidCookie(value, { maxAge, secure }) {
+  const parts = [`${UID_COOKIE}=${value}`, `Path=${BASE}/`, 'SameSite=Lax'];
+  if (maxAge != null) parts.push(`Max-Age=${maxAge}`);
+  if (secure) parts.push('Secure');
+  return parts.join('; ');
+}
+function setSessionCookie(reply, request, token, userId) {
+  const secure = isHttps(request);
+  reply.header('Set-Cookie', [
+    buildSessionCookie(token, { maxAge: YEAR_SECONDS, secure }),
+    buildUidCookie(String(userId), { maxAge: YEAR_SECONDS, secure }),
+  ]);
 }
 function clearSessionCookie(reply, request) {
-  reply.header('Set-Cookie', buildSessionCookie('', { maxAge: 0, secure: isHttps(request) }));
+  const secure = isHttps(request);
+  reply.header('Set-Cookie', [
+    buildSessionCookie('', { maxAge: 0, secure }),
+    buildUidCookie('', { maxAge: 0, secure }),
+  ]);
 }
 
 // --- rate limiting (per IP, 5 failures / 15 min, in-memory) ----------------
@@ -882,6 +902,11 @@ export function registerAuth(fastify, { configured }) {
     const user = sessionUser(request);
     if (user) {
       request.user = user;
+      // Sessions from before the hint cookie existed, or a hint left behind by
+      // another member: (re)state whose session this is.
+      if (parseCookies(request.headers.cookie)[UID_COOKIE] !== String(user.id)) {
+        reply.header('Set-Cookie', buildUidCookie(String(user.id), { maxAge: YEAR_SECONDS, secure: isHttps(request) }));
+      }
       if (user.role !== 'master' && isMasterOnly(request.method, p)) {
         reply.code(403).send({ error: 'forbidden' });
         return reply;
@@ -945,7 +970,7 @@ export function registerAuth(fastify, { configured }) {
       setLastLoginStmt.run(Date.now(), invite.user_id);
     })();
     logAccess(EVENTS.INVITE, request, true, invite.user_id);
-    setSessionCookie(reply, request, createSession(invite.user_id, request));
+    setSessionCookie(reply, request, createSession(invite.user_id, request), invite.user_id);
     return { ok: true };
   });
 
@@ -1039,14 +1064,16 @@ export function registerAuth(fastify, { configured }) {
     setLastLoginStmt.run(Date.now(), user.id);
     const token = createSession(user.id, request);
     logAccess(EVENTS.LOGIN, request, true, user.id);
-    setSessionCookie(reply, request, token);
+    setSessionCookie(reply, request, token, user.id);
     return { ok: true };
   });
 
   // POST /api/auth/logout-all → sign the caller out on every device (including
-  // this one). Other members' sessions are untouched.
+  // this one), and stop their notifications on all of them. Other members'
+  // sessions are untouched.
   fastify.post('/api/auth/logout-all', async (request, reply) => {
     revokeAllSessions(request.user.id);
+    removeSubscription(request.user.id);
     logAccess(EVENTS.LOGOUT_ALL, request, true, request.user.id);
     clearSessionCookie(reply, request);
     return { ok: true };
@@ -1092,7 +1119,7 @@ export function registerAuth(fastify, { configured }) {
     // A session IDENTICAL to a password login for the link's account (same
     // lifetime, same cookie): no reduced permissions.
     setLastLoginStmt.run(Date.now(), user.id);
-    setSessionCookie(reply, request, createSession(user.id, request));
+    setSessionCookie(reply, request, createSession(user.id, request), user.id);
     return reply.redirect(`${BASE}/`);
   });
 

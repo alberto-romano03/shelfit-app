@@ -10,6 +10,7 @@ import { openKodiReviewFromPending } from './kodiSync.js';
 import { withBase } from './basePath.js';
 import { initInstallPrompt } from './addToHome.js';
 import { initNavAnimations } from './navAnim.js';
+import { initUserScope } from './userScope.js';
 
 import Home from './views/Home.js';
 import Series from './views/Series.js';
@@ -29,6 +30,9 @@ import { preloader } from './preloader.js';
 
 initTheme();
 initI18n();
+// Before anything reads the on-device stores: pick the signed-in member's cache
+// and drop what belongs to nobody (see userScope.js).
+initUserScope();
 
 const app = document.getElementById('app');
 

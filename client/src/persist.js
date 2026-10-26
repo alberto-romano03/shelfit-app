@@ -13,12 +13,20 @@
 // Values are JSON. Images are stored as data: URLs so they render with zero
 // network and zero dependency on the SW cache. Everything is best-effort: a
 // disabled store or a quota hit simply means we fall back to the network path.
+//
+// Every key lives under the signed-in member's prefix (see userScope.js), so on a
+// shared device one member's cached home screen is never shown to another. With
+// no known member, reads find nothing and writes are skipped.
 
 import { imageCache } from './imageCache.js';
+import { userPrefix } from './userScope.js';
 
-const PREFIX = 'shelfit:';
+function storageKey(key) {
+  const prefix = userPrefix();
+  return prefix ? prefix + key : null;
+}
 
-// Key names for the persisted pieces (kept short; values live under PREFIX).
+// Key names for the persisted pieces (kept short; values live under the member's prefix).
 export const PK = {
   name: 'profile:name',
   avatarUrl: 'profile:avatarUrl',
@@ -95,8 +103,10 @@ export async function persistWatching(items) {
 // Returns the stored value, or `undefined` when absent / unreadable. `null` is a
 // valid stored value (distinct from `undefined`).
 export function pget(key) {
+  const k = storageKey(key);
+  if (!k) return undefined;
   try {
-    const raw = localStorage.getItem(PREFIX + key);
+    const raw = localStorage.getItem(k);
     return raw === null ? undefined : JSON.parse(raw);
   } catch {
     return undefined; // storage disabled (private mode) or malformed
@@ -105,10 +115,12 @@ export function pget(key) {
 
 // Writes only when the value actually changed; returns true if it wrote.
 export function pset(key, value) {
+  const k = storageKey(key);
+  if (!k) return false;
   try {
     const next = JSON.stringify(value);
-    if (localStorage.getItem(PREFIX + key) === next) return false;
-    localStorage.setItem(PREFIX + key, next);
+    if (localStorage.getItem(k) === next) return false;
+    localStorage.setItem(k, next);
     return true;
   } catch {
     return false; // quota (e.g. an oversized image) / disabled — best-effort
@@ -116,8 +128,10 @@ export function pset(key, value) {
 }
 
 export function premove(key) {
+  const k = storageKey(key);
+  if (!k) return;
   try {
-    localStorage.removeItem(PREFIX + key);
+    localStorage.removeItem(k);
   } catch {
     /* ignore */
   }

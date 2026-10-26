@@ -2,6 +2,10 @@
 // existing service worker, and posting the subscription to the backend. All
 // Web Push cryptography and delivery happen server-side; this only manages the
 // browser subscription and the permission prompt.
+//
+// The server keeps one subscription per device, owned by the member who enabled
+// notifications on it; the browser's endpoint URL is how this device names itself
+// in those calls.
 
 import { api } from './api.js';
 import { t } from './i18n.js';
@@ -30,6 +34,20 @@ function registration() {
   return navigator.serviceWorker.ready; // resolves once the SW is active
 }
 
+// This browser's push endpoint, or null when it has no subscription. Uses
+// getRegistration() rather than `ready`, so it answers at once (null) on a
+// device where the service worker never registered.
+export async function currentPushEndpoint() {
+  if (!pushSupported()) return null;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    return sub ? sub.endpoint : null;
+  } catch {
+    return null;
+  }
+}
+
 // Request permission, subscribe through the SW, and register the subscription
 // with the backend. Returns true on success; throws with a message otherwise.
 export async function enablePush() {
@@ -52,14 +70,22 @@ export async function enablePush() {
   return true;
 }
 
-// Unsubscribe in the browser and remove the subscription from the backend.
+// Stop notifications on this device: remove it on the server, then unsubscribe
+// the browser.
 export async function disablePush() {
+  let sub = null;
   try {
     const reg = await registration();
-    const sub = await reg.pushManager.getSubscription();
-    if (sub) await sub.unsubscribe();
+    sub = await reg.pushManager.getSubscription();
   } catch {
-    /* remove server-side regardless */
+    /* no browser subscription to name: nothing to remove server-side either */
   }
-  await api.pushUnsubscribe();
+  if (sub) {
+    await api.pushUnsubscribe(sub.endpoint);
+    try {
+      await sub.unsubscribe();
+    } catch {
+      /* the server no longer sends to it, which is what matters */
+    }
+  }
 }

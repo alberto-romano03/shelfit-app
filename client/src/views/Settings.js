@@ -5,10 +5,10 @@
 
 import { api, createApi, isAbortError } from '../api.js';
 import { onCleanup } from '../router.js';
-import { withBase } from '../basePath.js';
 import { currentTheme, setTheme } from '../theme.js';
 import { getPref, setPref } from '../prefs.js';
-import { pushSupported, enablePush, disablePush } from '../push.js';
+import { pushSupported, enablePush, disablePush, currentPushEndpoint } from '../push.js';
+import { signOut } from '../signOut.js';
 import { buildKodiSettings } from './kodiSettings.js';
 import { buildMagicLinks } from './magicLinks.js';
 import { buildHousehold } from './household.js';
@@ -662,11 +662,12 @@ export default async function Settings(container) {
     });
     section.append(notifRow.el, testRow.el);
 
-    // Reflect the current server subscription state.
-    api
-      .pushConfig()
+    // Reflect whether THIS device notifies the signed-in member (another
+    // member may have enabled notifications on it before).
+    currentPushEndpoint()
+      .then((endpoint) => (endpoint ? api.pushConfig(endpoint) : { subscribed: false }))
       .then((cfg) => {
-        const on = !!(cfg && cfg.enabled && cfg.subscribed);
+        const on = !!(cfg && cfg.subscribed);
         notifRow.setChecked(on);
         setPref('push', on);
         testRow.el.style.display = on ? '' : 'none';
@@ -688,22 +689,18 @@ export default async function Settings(container) {
       accountSection.style.display = '';
       magicSection.style.display = '';
       devicesSection.replaceWith(buildDevices(api));
+      // Switch profile = sign out of this device and land on the picker. What
+      // this device kept about the member goes with them (see signOut.js).
       const logoutRow = settingsRow({
         icon: 'log-out',
-        label: t('settings.account.logout'),
-        sub: t('settings.account.logoutSub'),
-        onClick: async () => {
-          try {
-            await api.logout();
-          } catch {
-            /* clear locally regardless */
-          }
-          window.location.href = withBase('/login');
-        },
+        label: t('settings.account.switch'),
+        sub: t('settings.account.switchSub'),
+        onClick: () => signOut(),
       });
 
       // Sign out ALL devices: invalidates every session everywhere (including
-      // this one) by advancing the server's session generation. Irreversible
+      // this one) by advancing the server's session generation, and stops this
+      // member's notifications on every device. Irreversible
       // without logging back in, so it takes the single destructive treatment
       // and the app's own confirm rather than the browser's.
       const logoutAllRow = settingsRow({
@@ -716,14 +713,7 @@ export default async function Settings(container) {
             title: t('settings.account.logoutAllTitle'),
             body: t('settings.account.logoutAllBody'),
             confirmLabel: t('settings.account.logoutAllConfirm'),
-            onConfirm: async () => {
-              try {
-                await api.logoutAll();
-              } catch {
-                /* the current session is invalidated regardless */
-              }
-              window.location.href = withBase('/login');
-            },
+            onConfirm: () => signOut({ everywhere: true }),
           }),
       });
 

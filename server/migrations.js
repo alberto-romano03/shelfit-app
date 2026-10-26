@@ -228,6 +228,45 @@ export const MIGRATIONS = [
       `);
     },
   },
+  {
+    // Web Push per device: each browser subscription belongs to the member who
+    // enabled notifications on it, replacing the single subscription kept in
+    // `settings`. The existing one (if notifications were on) moves over to its
+    // owner, the master for anything stored before accounts existed.
+    version: 4,
+    name: 'push subscriptions per device',
+    up(db) {
+      db.exec(`
+        CREATE TABLE push_subscriptions (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          endpoint   TEXT NOT NULL UNIQUE,
+          keys       TEXT NOT NULL,            -- JSON { p256dh, auth }
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_push_user ON push_subscriptions(user_id);
+      `);
+      const setting = (key) => {
+        const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+        return row ? row.value : null;
+      };
+      let sub = null;
+      try {
+        sub = JSON.parse(setting('push_subscription') || 'null');
+      } catch {
+        sub = null;
+      }
+      const owner =
+        parseInt(setting('push_user'), 10) || db.prepare("SELECT id FROM users WHERE role = 'master'").get().id;
+      const ownerExists = !!db.prepare('SELECT 1 FROM users WHERE id = ?').get(owner);
+      if (setting('push_enabled') === '1' && sub && sub.endpoint && sub.keys && ownerExists) {
+        db.prepare(
+          'INSERT INTO push_subscriptions (user_id, endpoint, keys, created_at) VALUES (?, ?, ?, ?)'
+        ).run(owner, sub.endpoint, JSON.stringify(sub.keys), Date.now());
+      }
+      db.exec("DELETE FROM settings WHERE key IN ('push_subscription', 'push_enabled', 'push_user')");
+    },
+  },
 ];
 
 // Filesystem half of v1: the one custom profile photo moves from

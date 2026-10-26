@@ -21,8 +21,12 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v135'; // bumped: household settings, devices, role-aware tabs
-const DATA = 'shelfit-data-v2'; // bumped: purge stale .jpg-keyed image blobs; re-warm as .webp
+const CACHE = 'shelfit-shell-v136'; // bumped: per-member device storage, switch profile, push per device
+// Offline copies of API responses. Bumped to v3 to drop the copies made before
+// accounts existed; the client also deletes every shelfit-data-* cache whenever
+// the member on this device changes (userScope.js), since entries are keyed by
+// URL alone.
+const DATA = 'shelfit-data-v3';
 const KEEP = [CACHE, DATA];
 
 // Static, stable public paths (the logo is required by the splash, the in-app
