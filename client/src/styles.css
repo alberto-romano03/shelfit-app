@@ -5465,7 +5465,7 @@ button.srow:active {
   font-size: 24px;
   line-height: 1;
 }
-/* Animated GIF moods sit where the emoji glyph did, matching its ~24px box. */
+/* Animated mood images sit where the emoji glyph did, matching its ~24px box. */
 img.mood-emoji {
   width: 28px;
   height: 28px;

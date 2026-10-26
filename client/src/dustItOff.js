@@ -29,16 +29,18 @@ const TYPES = [
   ['movie', 'media.movies'],
   ['show', 'media.tvShows'],
 ];
-// The animated mood emojis (JoyPixels Animations) are sourced from:
-// https://emojipedia.org/joypixels-animations
-// [value, animated gif file (icons/animated-genre/), label key, soft accent color]
+// The animated mood emojis are Google's Animated Noto Emoji (CC BY 4.0,
+// https://googlefonts.github.io/noto-emoji-animation/), the 512px WebP files
+// resized to 128px: 1f601 grin, 1f622 cry, 1f631 scream, 1f92f mind blown,
+// 1f3ac clapper, 1f634 sleep.
+// [value, animated image file (icons/animated-genre/), label key, soft accent color]
 const MOODS = [
-  ['light', 'light-fun.gif', 'dust.mood.light', '#f2c94c'],
-  ['emotional', 'emotional.gif', 'dust.mood.emotional', '#5b8def'],
-  ['tense', 'tense.gif', 'dust.mood.tense', '#eb5757'],
-  ['mindbending', 'mind-bending.gif', 'dust.mood.mindbending', '#9b6dff'],
-  ['epic', 'epic.gif', 'dust.mood.epic', '#f2994a'],
-  ['easy', 'easy-watch.gif', 'dust.mood.easy', '#3bb58f'],
+  ['light', 'light-fun.webp', 'dust.mood.light', '#f2c94c'],
+  ['emotional', 'emotional.webp', 'dust.mood.emotional', '#5b8def'],
+  ['tense', 'tense.webp', 'dust.mood.tense', '#eb5757'],
+  ['mindbending', 'mind-bending.webp', 'dust.mood.mindbending', '#9b6dff'],
+  ['epic', 'epic.webp', 'dust.mood.epic', '#f2994a'],
+  ['easy', 'easy-watch.webp', 'dust.mood.easy', '#3bb58f'],
 ];
 // Duration snap points (movies only). null = "Any" (no filter).
 // [value, tick label key, floating-label key showing the actual runtime range]
