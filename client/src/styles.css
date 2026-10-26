@@ -562,8 +562,19 @@ body.grid-virtual-active .gc-scroller {
   height: 1px;
   background: color-mix(in srgb, var(--text-primary) 20%, transparent);
 }
+/* Fills the scroller (the spacer is 0px tall while it shows) so the state sits
+   in the middle of the grid area, not at its top. Auto margins rather than
+   justify-content: on a short landscape screen the block overflows downward
+   and stays scrollable instead of being clipped at the top. */
 .gc-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
   padding: 20px 0;
+}
+.gc-empty > .empty {
+  margin: auto 0;
 }
 .poster-placeholder {
   width: 100%;
