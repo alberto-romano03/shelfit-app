@@ -622,7 +622,7 @@ function loginPageHtml(profiles, invite = null) {
     <h1>shelf<span>it</span></h1>
 
     <section class="view" id="picker" hidden>
-      <h2 data-it="Chi sta guardando?" data-en="Who's watching?">Who's watching?</h2>
+      <h2 data-it="Chi c'è al banco?" data-en="Who's at the counter?">Who's at the counter?</h2>
       <p class="notice" id="notice" role="alert" hidden
         data-it="Questo invito non è più valido. Chiedine uno nuovo."
         data-en="This invite is no longer valid. Ask for a new one."
@@ -633,7 +633,7 @@ function loginPageHtml(profiles, invite = null) {
 
     <section class="view" id="signin" hidden>
       <div class="who" id="who"></div>
-      <p class="sub" data-it="Inserisci la password per continuare" data-en="Enter your password to continue">Enter your password to continue</p>
+      <p class="sub" data-it="Mostra la tessera per entrare" data-en="Show your card to get in">Show your card to get in</p>
       <form id="f" autocomplete="on">
         <input id="uname" class="sr-only" type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
         <input id="pw" type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
@@ -643,11 +643,11 @@ function loginPageHtml(profiles, invite = null) {
           data-en-magic="That sign-in link is no longer valid. Enter your password."
           data-it-limit="Troppi tentativi. Riprova più tardi."
           data-en-limit="Too many attempts. Try again later."
-          data-it-wrong="Password errata"
-          data-en-wrong="Wrong password"
+          data-it-wrong="Tessera sbagliata? Riprova"
+          data-en-wrong="Wrong card? Try again"
           data-it-network="Errore di rete. Riprova."
           data-en-network="Network error. Try again."></div>
-        <button id="back" class="link" type="button" data-it="Non sei tu?" data-en="Not you?" hidden>Not you?</button>
+        <button id="back" class="link" type="button" data-it="Non è la tua tessera?" data-en="Not your card?" hidden>Not your card?</button>
       </form>
     </section>
 
