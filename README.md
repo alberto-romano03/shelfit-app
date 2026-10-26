@@ -2,7 +2,7 @@
 
 <img src="client/public/icons/icon-512.png" alt="shelfIt" width="140" />
 
-# shelfIt
+# shelfit-app
 
 **A self-hosted PWA for tracking the movies and TV shows your household owns and watches, styled like a physical video-rental shelf.**
 
