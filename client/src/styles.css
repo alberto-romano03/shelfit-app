@@ -8458,6 +8458,192 @@ textarea.notes:focus,
 .household-backup .btn {
   width: 100%;
 }
+/* Title suggestions: the recipient list in "Lend to…". */
+.suggest-recipients {
+  margin-top: 12px;
+}
+
+/* --- Centered popup dialog (openModal({ center: true })) -------------------
+   Same panel, backdrop and close contract as every popup, but centered and
+   rounded all round, popping in with a slight scale instead of rising. */
+.modal-backdrop.modal-backdrop--center {
+  align-items: center;
+  padding: 16px;
+}
+.modal.modal--popup {
+  max-width: 380px;
+  border-radius: 22px;
+  padding: 22px 18px 18px;
+  box-shadow: 0 18px 50px var(--shadow);
+  animation: popIn var(--dur-medium) var(--ease-out);
+}
+.modal.modal--popup.sheet-closing {
+  animation: popOut var(--dur-medium) var(--ease-in) forwards;
+}
+@keyframes popIn {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+}
+@keyframes popOut {
+  to {
+    transform: scale(0.94);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal.modal--popup {
+    animation: backdropIn var(--dur-short) linear;
+  }
+  .modal.modal--popup.sheet-closing {
+    animation: backdropFade var(--dur-short) linear forwards;
+  }
+}
+
+/* --- "Alberto wants to lend you this DVD" (incoming suggestion) ------------
+   A friend's DVD handed over: a warm accent glow behind the panel, the poster in
+   the owned look (blue edge bars), the disc sliding out from behind it and
+   spinning, a sticky note from the friend, everything floating with the cinema
+   ticket's bob. Title and year use the Kodi review card's styles. */
+.modal.lend-modal {
+  text-align: center;
+  background:
+    radial-gradient(130% 60% at 50% 0%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 72%),
+    var(--surface);
+}
+.lend-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.lend-kicker-ico {
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  mask-size: contain;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+/* Scoped to the modal so it outranks the generic .modal h3 margin. */
+.lend-modal .lend-heading {
+  margin: 20px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.3px;
+}
+.lend-stage {
+  display: flex;
+  justify-content: center;
+  padding: 38px 0 22px; /* clears the top edge bar and the sticky note */
+}
+.lend-float {
+  position: relative;
+  /* Off-centre to the left by half the disc's peek, so case + disc read centered. */
+  margin-right: 46px;
+  animation: cine-float 4.2s ease-in-out infinite;
+}
+/* The lent copy wears the owned look from Detail: sharp poster corners framed by
+   the two blue plastic edge bars, one flush above and one flush below (same
+   colour, height and outer rounding as .detail-poster-wrap), and the owned
+   poster's depth shadow. */
+.lend-case {
+  --bluray-bar: rgba(100, 160, 255, 0.88);
+  --bluray-bar-height: 8px;
+  --bluray-bar-radius: 5px;
+  position: relative;
+  z-index: 1;
+  width: 150px;
+  transform: rotate(-3deg);
+}
+.lend-case .poster-card {
+  border-radius: 0;
+  box-shadow:
+    0 4px 16px var(--shadow),
+    3px 3px 0 -1px rgba(0, 0, 0, 0.28),
+    6px 6px 0 -2px rgba(0, 0, 0, 0.2),
+    9px 10px 22px rgba(0, 0, 0, 0.38);
+}
+.lend-case::before,
+.lend-case::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--bluray-bar-height);
+  background: var(--bluray-bar);
+  z-index: 3;
+  pointer-events: none;
+}
+.lend-case::before {
+  bottom: 100%;
+  border-radius: var(--bluray-bar-radius) var(--bluray-bar-radius) 0 0;
+}
+.lend-case::after {
+  top: 100%;
+  border-radius: 0 0 var(--bluray-bar-radius) var(--bluray-bar-radius);
+}
+/* The disc, printed with the poster art, half out of the case's right side. */
+.lend-disc {
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  right: -46px;
+  width: 132px;
+  aspect-ratio: 1 / 1;
+  transform: translateY(-50%);
+}
+.lend-disc-spin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--surface-elevated);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), 0 4px 14px rgba(0, 0, 0, 0.45);
+  animation: detail-disc-spin 18s linear infinite;
+}
+/* The friend's sticky note, slapped on the case's top-right corner (over the
+   top edge bar). */
+.lend-note {
+  position: absolute;
+  z-index: 4;
+  top: -18px;
+  right: -26px;
+  max-width: 120px;
+  padding: 7px 10px 8px;
+  border-radius: 3px;
+  background: #ffd84a;
+  color: #3b2f00;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  transform: rotate(7deg);
+  overflow-wrap: anywhere;
+}
+.lend-quip {
+  margin: 10px 0 2px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lend-float,
+  .lend-disc-spin {
+    animation: none;
+  }
+}
 /* TV Time import: whose library it fills (shown only with several members). */
 .tvtime-target {
   margin: 4px 0 10px;

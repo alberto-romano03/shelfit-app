@@ -301,6 +301,14 @@ function buildApi(signal) {
     // Recent authentication events (hashed identifiers only) for the Security panel.
     accessLog: () => api.get('/api/auth/access-log'),
 
+    // Title suggestions between members: who can receive one, send one, and the
+    // ones waiting for the signed-in member (accept adds to Plan to Watch).
+    suggestRecipients: () => api.get('/api/suggestions/recipients'),
+    suggest: (to_user_id, type, tmdb_id) => api.post('/api/suggestions', { to_user_id, type, tmdb_id }),
+    suggestions: () => api.get('/api/suggestions'),
+    acceptSuggestion: (id) => api.post(`/api/suggestions/${id}/accept`),
+    dismissSuggestion: (id) => api.post(`/api/suggestions/${id}/dismiss`),
+
     // This member's signed-in devices; any other one can be signed out.
     sessions: () => api.get('/api/auth/sessions'),
     revokeSession: (id) => api.del(`/api/auth/sessions/${id}`),

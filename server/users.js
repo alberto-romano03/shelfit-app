@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import db from './db.js';
-import { CACHE_DIR, PROFILE_DIR } from './config.js';
+import { BADGES_DIR, CACHE_DIR, PROFILE_DIR } from './config.js';
 
 // Sentinel stored in users.profile_image when the user uploaded their own photo.
 export const CUSTOM_AVATAR = 'custom';
@@ -100,7 +100,15 @@ export function avatarFile(user) {
   return fs.existsSync(f) ? f : null;
 }
 
-// Cache-busting version for an avatar file (its mtime), 0 when unknown.
+// The user's chosen badge image (a file in data/badges/), or null when none is
+// set or the file has since been removed.
+export function badgeFile(user) {
+  if (!user || !user.active_badge) return null;
+  const f = path.join(BADGES_DIR, path.basename(String(user.active_badge)));
+  return fs.existsSync(f) ? f : null;
+}
+
+// Cache-busting version for an avatar or badge file (its mtime), 0 when unknown.
 export function fileVersion(file) {
   try {
     return Math.floor(fs.statSync(file).mtimeMs);

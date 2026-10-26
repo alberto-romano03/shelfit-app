@@ -36,7 +36,23 @@ import {
   clear,
   stateBlock,
   typewriterPlaceholder,
+  settingsRow,
 } from '../ui.js';
+
+// Who this member can suggest a title to (see openSuggestSheet). Fetched when a
+// detail page mounts, so the options menu knows whether to offer the action;
+// null until the first answer, and empty when nobody else can sign in.
+let suggestRecipients = null;
+function loadSuggestRecipients() {
+  api
+    .suggestRecipients()
+    .then((d) => {
+      suggestRecipients = (d && d.recipients) || [];
+    })
+    .catch(() => {
+      /* keep the last known list; the menu simply omits the action without one */
+    });
+}
 
 // Diary-style openers used as a random placeholder each time the notes field is
 // built (mirrors the episode-note placeholders on the season page).
@@ -534,8 +550,10 @@ export default async function Detail(container, params) {
   }
 
   // The options modal's heading uses the title's clear logo; warm it now so the
-  // modal never has to wait for it (see preloadLogo).
+  // modal never has to wait for it (see preloadLogo). Same for who the title can
+  // be suggested to.
   preloadLogo(d);
+  loadSuggestRecipients();
 
   // --- Hero + back ---
   const hero = el('div', { class: 'detail-hero' });
@@ -1112,6 +1130,47 @@ export function openCollectionTitle(p) {
 }
 
 // --- "Add to list" sheet ---------------------------------------------------
+// "Lend to…" (a title suggestion, told as lending a DVD): one row per member who
+// can receive it; tapping a row sends it, and they are offered the loan as a
+// popup the next time they open the app.
+function openSuggestSheet(d) {
+  openModal((modal, close) => {
+    const rows = (suggestRecipients || []).map((r) => {
+      // Not an async handler on purpose: the row would clear its trailing slot
+      // when the promise settles, wiping the "Sent" mark.
+      const row = settingsRow({
+        icon: 'user-round',
+        label: r.display_name,
+        onClick: ({ report }) => {
+          row.setDisabled(true);
+          api
+            .suggest(r.id, d.type, d.tmdb_id)
+            // Held for as long as the sheet can reasonably stay open (a 0 hold
+            // would clear it at once).
+            .then(() => report(t('suggest.sent'), 10 * 60 * 1000))
+            .catch((err) => {
+              row.setDisabled(false);
+              toast(err.message || t('suggest.failed'), 'bad');
+            });
+        },
+      });
+      return row.el;
+    });
+    modal.append(
+      el('h3', { text: t('detail.suggest') }),
+      el('div', { class: 'muted', text: t('suggest.sheetSub', { title: d.title_it }) }),
+      el('div', { class: 'suggest-recipients' }, rows),
+      el('hr', { class: 'status-sep' }),
+      el('div', { class: 'modal-actions' }, [
+        el('button', { class: 'btn btn-secondary', onClick: close }, [
+          lucideIcon('x', 'btn-lucide'),
+          el('span', { text: t('common.close') }),
+        ]),
+      ])
+    );
+  });
+}
+
 function openAddToListSheet(d) {
   openModal((modal, close) => {
     modal.append(el('h3', { text: t('detail.addToList') }));
@@ -1255,8 +1314,9 @@ function openMenu(d, reload) {
     // Same bento language as the status selector: each action is a cell with a
     // Lucide icon top-left and label bottom-left. Destructive actions carry a
     // muted-red tint (icon + label only, no filled background).
-    // Three even rows: the two metadata actions, the two destructive ones, then
-    // the two library ones (the favourite cell is appended after this list).
+    // Even rows: the two metadata actions, the two destructive ones, then the
+    // library ones (the favourite cell is appended after this list and spans the
+    // row when the count is odd).
     const actions = [
       {
         icon: 'images',
@@ -1321,6 +1381,18 @@ function openMenu(d, reload) {
         },
       },
     ];
+    // Suggest this title to another member, offered only when someone else in
+    // the household can sign in.
+    if (suggestRecipients && suggestRecipients.length) {
+      actions.push({
+        icon: 'send',
+        label: t('detail.suggest'),
+        onClick: (_c, cl) => {
+          cl();
+          openSuggestSheet(d);
+        },
+      });
+    }
 
     const grid = el('div', { class: 'status-bento menu-bento' });
     actions.forEach((a) => {

@@ -40,6 +40,7 @@ import personRoutes from './routes/persons.js';
 import settingsRoutes from './routes/settings.js';
 import imageRoutes from './routes/images.js';
 import householdRoutes from './routes/household.js';
+import suggestionRoutes from './routes/suggestions.js';
 
 // `quiet` disables request logging (tests).
 export async function buildApp({ quiet = false } = {}) {
@@ -233,6 +234,7 @@ export async function buildApp({ quiet = false } = {}) {
   await fastify.register(settingsRoutes);
   await fastify.register(imageRoutes);
   await fastify.register(householdRoutes);
+  await fastify.register(suggestionRoutes);
   // Share Target (GET /share) — an explicit route so it is matched ahead of the
   // SPA static handler / not-found fallback and reaches this handler, not the shell.
   await fastify.register(shareRoutes);

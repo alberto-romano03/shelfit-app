@@ -11,6 +11,7 @@ import { withBase } from './basePath.js';
 import { initInstallPrompt } from './addToHome.js';
 import { initNavAnimations } from './navAnim.js';
 import { initUserScope } from './userScope.js';
+import { checkSuggestions } from './suggestions.js';
 
 import Home from './views/Home.js';
 import Series from './views/Series.js';
@@ -290,6 +291,14 @@ initNowPlaying(headerActions);
 // A scheduled library sync signals pending discoveries via this event; raise the
 // review card (it defers itself until any open popup closes).
 window.addEventListener('shelfit:kodi-pending', () => openKodiReviewFromPending());
+
+// Title suggestions from other members: asked about shortly after start (once the
+// first screen has settled) and again whenever the app comes back to the
+// foreground, at most once a minute (see suggestions.js).
+setTimeout(() => checkSuggestions({ force: true }), 1500);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkSuggestions();
+});
 
 // --- Durable storage ------------------------------------------------------
 // Ask the browser to make our on-device storage persistent so iOS is far less

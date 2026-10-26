@@ -277,6 +277,30 @@ export const MIGRATIONS = [
       db.exec('ALTER TABLE kodi_instances ADD COLUMN sync_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
     },
   },
+  {
+    // "Suggest this title to…": one member recommends a title to another, who is
+    // asked about it the next time they open the app. A row lives only until the
+    // recipient adds the title or dismisses it. Title and year are a snapshot
+    // taken when suggesting, so the popup reads well even if the cache is gone.
+    version: 6,
+    name: 'title suggestions',
+    up(db) {
+      db.exec(`
+        CREATE TABLE suggestions (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          to_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          type         TEXT NOT NULL CHECK(type IN ('movie','show')),
+          tmdb_id      TEXT NOT NULL,
+          title        TEXT NOT NULL,
+          year         TEXT,
+          created_at   INTEGER NOT NULL,
+          UNIQUE(from_user_id, to_user_id, type, tmdb_id)
+        );
+        CREATE INDEX idx_suggestions_to ON suggestions(to_user_id);
+      `);
+    },
+  },
 ];
 
 // Filesystem half of v1: the one custom profile photo moves from

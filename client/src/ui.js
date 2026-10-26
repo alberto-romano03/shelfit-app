@@ -1051,9 +1051,17 @@ export function segmentedBar({
 // `closed` guards re-entry, so closing DURING the open animation is safe: the
 // exit class simply takes over from the entrance one and the removal happens
 // once — no double-remove, no stuck backdrop.
+// `opts.center` makes it a centered popup dialog (pops in, rounded all round)
+// instead of a bottom sheet; `opts.className` adds a class to the panel.
 export function openModal(buildContent, opts = {}) {
-  const backdrop = el('div', { class: 'modal-backdrop' });
-  const modal = el('div', { class: 'modal' + (opts.handle ? ' modal--handle' : '') });
+  const backdrop = el('div', { class: 'modal-backdrop' + (opts.center ? ' modal-backdrop--center' : '') });
+  const modal = el('div', {
+    class:
+      'modal' +
+      (opts.handle ? ' modal--handle' : '') +
+      (opts.center ? ' modal--popup' : '') +
+      (opts.className ? ` ${opts.className}` : ''),
+  });
   backdrop.append(modal);
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) close();
@@ -1070,6 +1078,8 @@ export function openModal(buildContent, opts = {}) {
       removed = true;
       backdrop.remove();
       unlockScroll();
+      // `opts.onClose`: told once the popup is gone, however it was closed.
+      if (opts.onClose) opts.onClose();
     };
     modal.addEventListener('animationend', done, { once: true });
     setTimeout(done, 400); // fallback if animationend never fires

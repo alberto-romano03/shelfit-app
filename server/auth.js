@@ -26,7 +26,7 @@ import {
 } from './magicLinks.js';
 import { clientIp } from './security.js';
 import { logAccess, getRecentAccess, EVENTS } from './accessLog.js';
-import { getUser, getMaster, pickerUsers, isPickable, avatarFile, fileVersion } from './users.js';
+import { getUser, getMaster, pickerUsers, isPickable, avatarFile, badgeFile, fileVersion } from './users.js';
 import { findInvite, clearInvites, pruneInvites } from './invites.js';
 import { removeSubscription } from './push.js';
 
@@ -451,15 +451,17 @@ if (magicSweep.unref) magicSweep.unref();
 
 // --- login page (standalone, self-contained) -------------------------------
 // The profiles a visitor can choose from, rendered into the page so the picker
-// paints at once with no extra request. Names only, plus an avatar URL served by
-// the public avatar route below; never anything from a library.
+// paints at once with no extra request. Names only, plus the avatar and badge
+// URLs served by the public routes below; never anything from a library.
 function pickerProfiles() {
   return pickerUsers().map((u) => {
     const f = avatarFile(u);
+    const b = badgeFile(u);
     return {
       id: u.id,
       name: u.display_name,
       avatar: f ? `/api/auth/profiles/${u.id}/avatar?v=${fileVersion(f)}` : null,
+      badge: b ? `/api/auth/profiles/${u.id}/badge?v=${fileVersion(b)}` : null,
     };
   });
 }
@@ -548,18 +550,30 @@ function loginPageHtml(profiles, invite = null) {
   }
   .profile .name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .profile:hover,.profile:focus-visible{color:var(--text-primary);outline:none}
+  /* Avatar + badge travel together (press scale), so they share one wrapper. */
+  .tile-media{position:relative;display:inline-flex;flex-shrink:0;transition:transform var(--dur-short) var(--ease-state)}
   .avatar{
     width:84px;height:84px;border-radius:50%;overflow:hidden;flex-shrink:0;
     display:flex;align-items:center;justify-content:center;
     background:var(--surface-elevated);color:var(--accent);font-size:34px;font-weight:700;
     box-shadow:0 0 0 0 transparent;
-    transition:box-shadow var(--dur-short) var(--ease-state),transform var(--dur-short) var(--ease-state);
+    transition:box-shadow var(--dur-short) var(--ease-state);
   }
   .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+  /* The member's badge: a grey circle (surface-elevated) on the avatar's lower
+     right, ringed in the page background like the app's avatar border so it
+     reads as a separate token. Only present when a badge is set. */
+  .badge{
+    position:absolute;right:-4px;bottom:-4px;width:34px;height:34px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+    background:var(--surface-elevated);box-shadow:0 0 0 3px var(--bg);
+  }
+  .badge img{width:72%;height:72%;object-fit:contain;display:block}
   .profile:hover .avatar,.profile:focus-visible .avatar{box-shadow:0 0 0 3px var(--accent)}
-  .profile:active .avatar{transform:scale(.96)}
+  .profile:active .tile-media{transform:scale(.96)}
   .who{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:6px}
   .who .avatar{width:96px;height:96px;font-size:38px}
+  .who .badge{width:38px;height:38px}
   .who .name{font-size:20px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sub{color:var(--text-secondary);font-size:14px;margin:0 0 20px}
   form{display:flex;flex-direction:column;gap:12px;max-width:320px;margin:0 auto}
@@ -681,12 +695,15 @@ function loginPageHtml(profiles, invite = null) {
     var selected=null;
     function msg(key){return err.getAttribute('data-'+lang+'-'+key)||'';}
 
-    // An avatar circle: the chosen image, else the name's first letter. Names are
-    // only ever set as text, never as HTML.
+    // An avatar circle: the chosen image, else the name's first letter, with the
+    // member's badge on its corner when they have one. Names are only ever set
+    // as text, never as HTML.
     function avatar(p){
+      var wrap=document.createElement('span');
+      wrap.className='tile-media';
+      wrap.setAttribute('aria-hidden','true');
       var el=document.createElement('span');
       el.className='avatar';
-      el.setAttribute('aria-hidden','true');
       function initial(){el.textContent=(Array.from(p.name||'?')[0]||'?').toUpperCase();}
       if(p.avatar){
         var img=document.createElement('img');
@@ -695,7 +712,18 @@ function loginPageHtml(profiles, invite = null) {
         img.src=BASE+p.avatar;
         el.appendChild(img);
       }else initial();
-      return el;
+      wrap.appendChild(el);
+      if(p.badge){
+        var badge=document.createElement('span');
+        badge.className='badge';
+        var bimg=document.createElement('img');
+        bimg.alt='';bimg.decoding='async';
+        bimg.onerror=function(){badge.remove();};
+        bimg.src=BASE+p.badge;
+        badge.appendChild(bimg);
+        wrap.appendChild(badge);
+      }
+      return wrap;
     }
     function nameEl(p){
       var n=document.createElement('span');
@@ -811,6 +839,7 @@ const AVATAR_MIME = {
   '.png': 'image/png',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
 };
 
 // --- roles -----------------------------------------------------------------
@@ -873,7 +902,7 @@ export function registerAuth(fastify, { configured }) {
       return true;
     }
     // The picker's avatars, shown before anyone has signed in.
-    if (request.method === 'GET' && /^\/api\/auth\/profiles\/\d+\/avatar$/.test(p)) return true;
+    if (request.method === 'GET' && /^\/api\/auth\/profiles\/\d+\/(avatar|badge)$/.test(p)) return true;
     if (request.method === 'POST' && p === '/api/auth/login') return true;
     if (request.method === 'POST' && p === '/api/auth/invite') return true; // set a password from an invite
     if (request.method === 'POST' && p === '/api/auth/logout') return true; // just clears a cookie
@@ -1016,6 +1045,23 @@ export function registerAuth(fastify, { configured }) {
     reply
       .header('Content-Type', AVATAR_MIME[path.extname(file).toLowerCase()] || 'application/octet-stream')
       .header('Cache-Control', 'private, max-age=86400');
+    return reply.send(fs.createReadStream(file));
+  });
+
+  // GET /api/auth/profiles/:id/badge: a picker tile's badge, under the same
+  // rules as the avatar (picker accounts only, only their chosen badge file).
+  fastify.get('/api/auth/profiles/:id/badge', async (request, reply) => {
+    const user = getUser(request.params.id);
+    const file = isPickable(user) ? badgeFile(user) : null;
+    if (!file) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    reply
+      .header('Content-Type', AVATAR_MIME[path.extname(file).toLowerCase()] || 'application/octet-stream')
+      .header('Cache-Control', 'private, max-age=86400')
+      // Badges may be SVG; opened directly, one must not be able to run script.
+      .header('Content-Security-Policy', "default-src 'none'; img-src data:; style-src 'unsafe-inline'");
     return reply.send(fs.createReadStream(file));
   });
 
