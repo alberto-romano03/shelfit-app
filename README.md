@@ -56,6 +56,7 @@ SQLite database and cache folder that you own.
 - [Data layout](#data-layout)
 - [Settings tour](#settings-tour)
 - [Household accounts](#household-accounts)
+  - [Lending a title](#lending-a-title)
 - [Import guides](#import-guides)
 - [Kodi integration](#kodi-integration)
 - [Updating the app](#updating-the-app)
@@ -248,8 +249,8 @@ SQLite database and cache folder that you own.
   and it opens that title; any other shared text pre-fills search.
 - Web push notifications (VAPID, implemented with Node's built-in crypto — no
   extra dependency) for **newly aired episodes** of shows you are watching,
-  either one per show or a digest when several air at once, plus a test
-  notification from Settings.
+  either one per show or a digest when several air at once, for **loans** from
+  another member, plus a test notification from Settings.
 
 ### Import & backup
 
@@ -263,7 +264,8 @@ SQLite database and cache folder that you own.
 
 ### Household & security
 
-- **Profiles:** a "Who's watching?" picker, then each member's own password,
+- **Profiles:** a profile picker ("Who's at the counter?") showing each member's
+  avatar and chosen badge, then each member's own password,
   hashed with scrypt. The master account comes from `APP_PASSWORD`; the server
   refuses to boot in production without one unless you explicitly opt out.
 - **Private libraries:** titles, progress, ratings, lists, The Wall, stats, Up
@@ -273,8 +275,14 @@ SQLite database and cache folder that you own.
   the member chooses their own password, so the master never knows it. The master
   can rename, turn sign-in off, reset (with a new invite) or remove a member, and
   is the only one who sees the instance settings.
+- **Lend a title:** from a title's **⋯** menu, **Lend to…** another member with an
+  optional note (up to 100 characters). They get a notification and, the next
+  time they open the app, a popup with your note and the poster. See
+  [Lending a title](#lending-a-title).
 - **Shared devices:** **Switch profile** signs out and forgets what the device kept
-  about that member; each member's on-device cache is kept apart.
+  about that member; each member's on-device cache is kept apart. A session that
+  ends elsewhere (expired, signed out of every device, sign-in turned off) is
+  forgotten by the device too, and the sign-in screen keeps nobody's data.
 - Passwordless **magic-link** login per member for signing in on another device
   (tokens are redacted from the server logs). **Devices** lists where you are
   signed in, with per-device sign-out; sessions survive restarts.
@@ -810,10 +818,30 @@ household and the instance. Everyone else is a **member** with a private library
    library goes; download it first from the same dialog).
 
 Things the household shares: the TMDB image cache, custom artwork, the Kodi
-configuration and the instance settings. Everything else is per member. The
-master's own password is reset with `APP_PASSWORD_RESET` (see
-[Configuration](#configuration)); a forgotten member password is reset by the
-master with a new invite.
+configuration and the instance settings. Everything else is per member. A title's
+cached files stay while any member's library, list or pending loan still uses them,
+and a member clearing a title's cache keeps the household's custom artwork (only the
+master's clear resets it). The master's own password is reset with
+`APP_PASSWORD_RESET` (see [Configuration](#configuration)); a forgotten member
+password is reset by the master with a new invite.
+
+### Lending a title
+
+Like handing a friend a DVD from your shelf:
+
+1. Open a title in your library, then **⋯ → Lend to…**. Optionally write a
+   short note (up to 100 characters, one line), such as "I really think you should
+   see this", and tap the member.
+2. Their devices with notifications on get a generic "*name* wants to lend you
+   something…" (no title or note on the lock screen).
+3. When they open shelfIt, a popup shows your note as its headline (or "*name*
+   wants to lend you this DVD" without one), the poster with a "From *name* ♥"
+   sticky note, the title and year. **Borrow it** adds the title to their Plan to
+   Watch; **No, thanks** declines for good; tapping outside asks again next time.
+
+Lending the same title again before they answer replaces the note. You never learn
+what the other member already owns: a loan for a title they have is simply never
+shown, and no notification is sent for it.
 
 ## Import guides
 
@@ -854,8 +882,11 @@ file on the target. The merge is additive and never deletes; see
    and never deletes, and nothing is written until the review sheet is confirmed.
    Kodi tracks "watched" per Kodi profile, not per person, so each instance syncs
    into one member's library, chosen with **Sync into** (the master by default);
-   only that member gets the review sheet. Everyone can use **Play on Kodi** and
-   sees Now Playing, matched against their own library.
+   only that member gets the review sheet. **Sync now** on an instance that syncs
+   into another member hands its new titles to that member's review (the master
+   only sees how many). While that member's sign-in is turned off, the instance
+   syncs into the master. Everyone can use **Play on Kodi** and sees Now Playing,
+   matched against their own library.
 
 > **Note:** playback works only for titles that have already been added to your
 > **Kodi library** beforehand. The source does not matter — a local file or a
@@ -901,9 +932,10 @@ previous image. A build refuses to start on a database newer than it knows.
   the container and copy the file (together with any `-wal` / `-shm` files). To
   restore, put it back in `data/` and start the container again.
 - **Portable export:** **Settings → Library → Backup** writes an XML file with all
-  of your own data (each member exports and imports their own library) (statuses, ratings, play counts, ownership, favourites, cinema
+  of your own data (statuses, ratings, play counts, ownership, favourites, cinema
   fields, notes, watch dates, dated rewatches, per-episode progress, list
-  memberships) and a SHA-256 checksum. Import **merges additively and never
+  memberships) and a SHA-256 checksum. Each member exports and imports their own
+  library. Import **merges additively and never
   deletes**, resolving conflicts in favour of the more advanced status; metadata
   is re-fetched from TMDB, so the file stays small and portable across versions.
 - **Artwork** in `data/cache/` is regenerable and does not need backing up.
@@ -927,12 +959,21 @@ Vite serves the client on **`http://localhost:5173/shelfit/`** and proxies `/api
 | `npm run dev` | Run server + Vite dev server concurrently. |
 | `npm run build` | Build the client bundle into `client/dist`. |
 | `npm start` | Run the server only (`node server/index.js`). |
+| `npm test` | Run the test suite with Node's built-in runner (needs a local `better-sqlite3` build). |
+| `npm run docker:test` | Build the Docker `test` stage and run the suite in it (no local toolchain needed). |
 | `npm run docker:build` | `docker compose build`. |
 | `npm run docker:up` | `docker compose up -d`. |
 | `npm run docker:logs` | Follow container logs. |
 
 A one-time helper, `node scripts/download-icons.js`, refreshes the bundled Lucide
 SVG icons; it is not part of the build.
+
+**Tests** (`test/`, Node's built-in `node:test`) start the real app on a
+throwaway data folder with no API keys, so nothing reaches TMDB. They cover the
+schema migrations from a single-user database, sign-in and sessions, member
+isolation, household management, Kodi and import ownership, loans and their
+notifications. A guard test fails if new SQL on `items`, `lists` or `favorites`
+forgets the member (`user_id`) filter. Run them with `npm run docker:test`.
 
 One convention worth knowing before you write UI:
 
