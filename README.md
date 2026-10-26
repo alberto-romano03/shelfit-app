@@ -100,201 +100,79 @@ SQLite database and cache folder that you own.
 
 ## Features
 
-### Library management
+### Your library
 
-- One personal library of movies and TV shows, each with ownership ("owned on
-  disc"), watch status (plan to watch / watching / paused / completed /
-  abandoned), rating, personal notes, watch dates, and rewatch counts.
-- Per-episode and per-season progress for series, with **Mark all watched**,
-  per-episode notes, rewatch tracking, and a **catch-up prompt** when earlier
-  episodes were skipped (finishing a series fires confetti).
-- An editable **"watched on" date**, and **dated movie rewatch events** you can
-  add, list and delete individually — each one shows up on the monthly receipt.
-- Movie collections / box sets grouped and shown with owned-vs-total progress.
-- Custom user lists (e.g. "Must Watch") with rename and delete.
-- Per-title **favourite hearts**; the posters and backdrops of favourited titles
-  become the selectable profile photo and cover art in the Edit-profile modal.
+- Movies and series with watch status, rating, notes, watch dates and dated
+  rewatches, plus **Owned on disc** for what is physically on your shelf.
+- Per-episode progress for series: mark a season at once, get a catch-up prompt
+  when you skipped episodes, track rewatches.
+- Box-set collections with owned-vs-total progress, and your own lists.
+- Fast poster grids for Movies and Series, filtered by status, ownership and genre
+  and sorted by date added, title (with an A–Z jump strip) or rating.
 
-### Browsing & discovery
+### Finding what to watch
 
-- Live TMDB search with debounced input, and a read-only **preview** of a title
-  before you add it to the library.
-- Browsable **Explore** discovery rows, and a **What's Next** view combining
-  *On the Horizon* (soon-airing) with *Up Next* (your next unwatched episodes),
-  including rewatches in progress.
-- **Virtualised, paginated poster grids** for Movies and Series: pages of 48
-  titles, only the rows near the viewport in the DOM, and fetched pages plus
-  scroll position cached per filter combination — so switching chips or coming
-  back from a detail page never re-fetches or loses your place.
-- Grid filters: All / Shelved / Watching / Plan to Watch / Paused / Dropped,
-  plus **Owned** (owned on disc, any status) and, for movies, **Collections**;
-  with **Genre** and **Sort** (Recently Added / Title A–Z / Rating) pickers.
-  The Title and Rating sorts add section dividers, and Title A–Z adds an
-  **A–Z letter strip** that jumps straight to a letter.
-- **Person pages** (`/person/:id`): hero photo, birth date and place, a
-  collapsible biography, and filmography rows split into *In your library*,
-  *Also known for* and *Behind the camera*. You can upload your own photo for a
-  person, swap the person, or remove them.
-- The season screen is virtualised and paginated too, with shimmer placeholders
-  for ranges not yet fetched and per-season scroll memory.
+- TMDB search with a preview before you add anything, and **Explore** rows:
+  trending, in theaters, popular and mood-based.
+- **What's Next**: *On the Horizon* (episodes about to air) above *Up Next* (the
+  next unwatched episode of everything you are watching).
+- **Back to the Shelf** spins up something you have already watched, **Dust It
+  Off** suggests something new by mood, length, rating and era, and
+  **Rate-O-Matic** rates everything still unrated in one go.
+- Person pages with a filmography split by what is already in your library.
 
-### Presentation & interaction
+### The video store feel
 
-- **Shelf-style home screen** with animated DVD spines, disc art, watch-time
-  stats, currently-watching cards and a potted-plant scene.
-- **Back to the Shelf** — shuffle your *own* watched collection, rendered as a
-  spinning disc, when you feel like rewatching something.
-- **Dust It Off** — a mood / duration / rating / era picker that surfaces *new*
-  titles to add.
-- **Rate-O-Matic** — a quick-rating flow for everything still unrated.
-- **The Wall** — one favourite film and one favourite series taped up either side
-  of a framed portrait of your favourite person. Empty slots are "+" placeholders
-  that open a picker; the tape and the ornate frame are inline SVG.
-- **The Desk** — a wooden drawer that pulls open into your **cinema ticket**
-  collection, above a thermal-printer widget that prints the **Monthly Rental
-  Receipt**.
-- **First-launch feature showcase** — a nine-page illustrated tour (CSS + inline
-  SVG only) that opens once on the very first launch, with swipe, arrow keys,
-  dots and Skip. The round **?** button at the top-left of the home cover reopens
-  it any time.
-- Haptics, confetti, and a **December-only snow effect** inside the home cover —
-  both toggleable, and `prefers-reduced-motion` is respected throughout.
+- A shelf-style home with DVD spines, disc art, watch-time stats and what you are
+  watching right now.
+- **The Wall**: your favourite film, series and person, taped up on the home
+  screen.
+- **Cinema tickets**: mark a movie as seen in a cinema and it becomes a ticket in
+  the desk drawer, with date, time and cinema.
+- **Monthly Rental Receipt**: the month as a 1990s thermal receipt (movies,
+  rewatches, episodes, hours, top genre), for any past month, saved as an image to
+  share.
 
-### Cinema tickets
+### Built for a household
 
-- Toggling **Seen in cinema** on a movie's detail page mints a ticket — there is
-  no separate "add ticket" flow.
-- Every ticket is rendered from one shared component: a backdrop banner, the
-  title, *ADMIT ONE* with a deterministic row/seat, a CSS-only barcode and an
-  `SHF-nnnn` code.
-- Date, time and **cinema name** are editable in place. The cinema field is a
-  dropdown when `data/cinemas.txt` lists names and a free-text input otherwise
-  (see [Data layout](#data-layout)).
-- **My Tickets** (the desk drawer on Home) shows one ticket at a time with swipe
-  or arrow navigation and a `1 / 27` position indicator, newest screening first.
+- One instance per household. Everyone picks their profile on the sign-in screen
+  and has their own password; libraries, progress, stats, lists and receipts are
+  private to each member.
+- The master account (from `APP_PASSWORD`) invites members with a one-time link,
+  so it never learns their passwords, and can rename, disable, reset or remove
+  them. See [Household accounts](#household-accounts).
+- **Lend a title** to another member with a short note: they get a notification
+  and a popup the next time they open the app.
+- Safe on shared devices: **Switch profile** forgets the previous member's
+  on-device data.
 
-### Monthly Rental Receipt
+### On your phone
 
-- A shareable wrap-up rendered as a 1990s thermal receipt: movies watched,
-  each dated rewatch as its own line item, episodes grouped by series, total
-  hours, top genre, a membership number and a closing line.
-- A **month picker** rebuilds any past month exactly as it happened.
-- Customisable background (solid colour, gradient presets, or a poster with
-  optional blur) and a **Save as image** export that redraws the layout onto a
-  1080×1920 canvas and downloads it as a JPEG.
+- Installable PWA (Android and iOS) that opens instantly from a local cache and
+  keeps the home screen, What's Next and Plan to Watch pages working offline.
+- Push notifications for new episodes of the shows you are watching and for
+  titles lent to you.
+- Share a TMDB link from any app and shelfIt opens that title.
+- English or Italian interface, a separate language for titles and plots, and a
+  system, dark or light theme.
 
-### Metadata & artwork
+### Kodi (optional)
 
-- The Movie Database for metadata, posters, backdrops, cast, taglines and
-  air dates.
-- Optional Fanart.tv integration for clear logos and disc art (compressed to
-  WebP on the server).
-- On-disk and in-RAM image caches, warmed at boot with the highest-frequency
-  images, with a Settings panel to scan cache size per folder, force a refresh
-  of ongoing series, or wipe everything.
-- **Self-imposed API budgets**: TMDB and Fanart.tv publish no monthly quota, so
-  shelfIt meters its own metadata calls month by month against a cap you choose,
-  shows how much of it you have used, and offers a session-only bypass.
+- **Play on Kodi** from a title's page, and a **Now Playing** indicator with
+  one-tap *Mark as watched*.
+- A daily library sync that only moves progress forward and asks you to review
+  new titles before adding them. See [Kodi integration](#kodi-integration).
 
-### Languages & theming
+### Import, backup and security
 
-- Full **English and Italian** UI, auto-detected from the browser on first run
-  and switchable in Settings → General with no reload. Dates, numbers and
-  plurals follow the chosen locale; your own notes stay as you typed them.
-- A separate **metadata language** (Settings → Library) decides the language
-  shelfIt asks TMDB for — titles, plots, taglines and episode names. Changing it
-  re-downloads the metadata for every title you have, so the whole library
-  switches over at once. English by default; an existing library keeps Italian
-  until you choose otherwise.
-- **System / dark / light** theme. *System* follows the OS preference live, and
-  the browser theme colour follows along. A quick flip button on the home cover
-  pins the opposite of whatever is currently showing.
-
-### Kodi
-
-- Connect one or more local Kodi instances (host, port, credentials stored
-  server-side and encrypted at rest), pick an icon per instance, and test the
-  connection from Settings.
-- **Play on Kodi** starts playback of a title from its detail page.
-- **Now Playing**: a pulsing chip in the header and a wavy progress ring around
-  the home avatar while Kodi is playing. Tapping either opens a toast with the
-  poster, title or `SxxExx` label and audio/subtitle info, plus a one-tap
-  **Mark as watched** / **Add rewatch**.
-- **Library sync over JSON-RPC** (distinct from the one-off XML import): runs
-  daily at 22:00, or on demand from Settings. It is additive and never
-  destructive — it only *advances* watch status and collects titles Kodi has that
-  shelfIt does not, holding them as "pending review" so you approve each one in a
-  review sheet before anything is written.
-- **Kodi XML import** of an existing library from a `videodb.xml` export.
-
-### Statistics
-
-- Aggregate watch-time and counts on the home screen, computed from movie
-  runtimes and per-episode series runtimes, including rewatches.
-
-### PWA / offline
-
-- Installable to the home screen (Android/Chromium and iOS) with a service
-  worker; the *Install* row in Settings triggers the native prompt on Android and
-  shows illustrated Share-sheet instructions on iOS.
-- The home screen paints instantly from a durable local cache (name, avatar,
-  cover, badge, stats, currently-watching posters — image bytes included, so an
-  iOS PWA relaunch still has them) and revalidates from the network.
-- Offline, **Plan to Watch** detail pages open read-only, **Up Next** cards and
-  the whole **What's Next** payload still render (countdowns recomputed from
-  absolute air dates), and **The Wall** keeps its three images inline.
-- **Share target**: share a TMDB link from any other app straight into shelfIt
-  and it opens that title; any other shared text pre-fills search.
-- Web push notifications (VAPID, implemented with Node's built-in crypto — no
-  extra dependency) for **newly aired episodes** of shows you are watching,
-  either one per show or a digest when several air at once, for **loans** from
-  another member, plus a test notification from Settings.
-
-### Import & backup
-
-- TV Time CSV import and Kodi XML import, both rate-limited against TMDB.
-- Full, portable **XML library export / import** (statuses, ratings, play counts,
-  ownership, favourites, cinema fields, notes, watch dates, dated rewatches,
-  per-episode progress, list memberships) with a SHA-256 integrity checksum.
-  Import is **merge-only and never deletes**; older format versions still import,
-  and the UI reports added / merged / unchanged counts plus any failures.
-  Metadata is never exported — it is re-fetched from TMDB on import.
-
-### Household & security
-
-- **Profiles:** a profile picker ("Who's at the counter?") showing each member's
-  avatar and chosen badge, then each member's own password,
-  hashed with scrypt. The master account comes from `APP_PASSWORD`; the server
-  refuses to boot in production without one unless you explicitly opt out.
-- **Private libraries:** titles, progress, ratings, lists, The Wall, stats, Up
-  Next, receipts and backups are per member; the image cache and custom artwork
-  are shared by the household.
-- **Members join by invite:** the master adds a member and sends a one-time link;
-  the member chooses their own password, so the master never knows it. The master
-  can rename, turn sign-in off, reset (with a new invite) or remove a member, and
-  is the only one who sees the instance settings.
-- **Lend a title:** from a title's **⋯** menu, **Lend to…** another member with an
-  optional note (up to 100 characters). They get a notification and, the next
-  time they open the app, a popup with your note and the poster. See
-  [Lending a title](#lending-a-title).
-- **Shared devices:** **Switch profile** signs out and forgets what the device kept
-  about that member; each member's on-device cache is kept apart. A session that
-  ends elsewhere (expired, signed out of every device, sign-in turned off) is
-  forgotten by the device too, and the sign-in screen keeps nobody's data.
-- Passwordless **magic-link** login per member for signing in on another device
-  (tokens are redacted from the server logs). **Devices** lists where you are
-  signed in, with per-device sign-out; sessions survive restarts.
-- **Sign out of all devices** invalidates every one of your sessions, including the
-  current one, and stops your notifications on all of them.
-- **Recent access** list built from a privacy-preserving log that stores only
-  salted hashes of IP and user-agent, pruned after 90 days.
-- Per-IP **rate limiting** on `/api/*` (with tighter ceilings on search, Explore,
-  bulk imports and photo uploads) and stricter failed-attempt limits on login and
-  magic-link redemption, with an escalating delay.
-- Path-traversal guards on every filesystem path derived from a request, a tight
-  default body limit, correct client-IP extraction behind a reverse proxy, and no
-  stack-advertising response headers. Optional no-auth mode for trusted LAN-only
-  deployments.
+- Import your history from TV Time (CSV) or a Kodi library (XML). Each member can
+  back up and restore their library as XML: merge-only, never deletes, checksum
+  verified.
+- Optional Fanart.tv artwork (clear logos, disc art), on-disk and in-memory image
+  caches, and monthly API budgets you set yourself.
+- Passwords hashed with scrypt, magic-link sign-in, a list of signed-in devices
+  with per-device sign-out, *Sign out of all devices*, an access log that stores
+  only hashed IPs, and per-IP rate limiting.
 
 ## Tech stack
 
