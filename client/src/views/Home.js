@@ -558,22 +558,27 @@ export default async function Home(container) {
   }
   cleanups.push(() => clearTimeout(printFallback));
 
-  // Each custom list → a card: poster collage background, dark overlay, name
-  // bottom-left, and a type icon top-right on a small accent disc. The glyphs
-  // are the navbar's own clapperboard and TV, so a list's type reads the same
-  // here as it does in the tab bar.
+  // Each custom list → a card: up to three covers stacked like cases on a
+  // counter, then the name (up to two lines) and "Movies · 12 titles". The type
+  // glyphs are the navbar's own clapperboard and TV, so a list's type reads the
+  // same here as in the tab bar; with no covers the glyph stands in for the pile.
   function buildListCard(l) {
-    const collage = el('div', { class: 'list-collage' });
-    const covers = (l.preview || []).filter((it) => it.poster_url).slice(0, 4);
-    covers.forEach((it) => collage.append(cachedImg(it.poster_url, { class: 'list-collage-img', alt: '' })));
-    const card = el('div', { class: 'list-card' + (covers.length ? '' : ' no-covers') }, [
-      collage,
-      el('div', { class: 'list-card-overlay' }),
-      el('div', {
-        class: 'list-type-disc',
-        html: l.type === 'movie' ? icons.navMovies : icons.navSeries,
-      }),
-      el('div', { class: 'list-card-name', text: l.name }),
+    const typeIcon = l.type === 'movie' ? icons.navMovies : icons.navSeries;
+    const covers = (l.preview || []).filter((it) => it.poster_url).slice(0, 3);
+    const art = covers.length
+      ? el('div', { class: 'list-card-art' },
+          covers.map((it, i) => cachedImg(it.poster_url, { class: `list-card-case c${i}`, alt: '' })))
+      : el('div', { class: 'list-card-art is-empty', html: typeIcon });
+    const typeLabel = t(l.type === 'movie' ? 'nav.movies' : 'nav.series');
+    const card = el('div', { class: 'list-card', title: l.name }, [
+      art,
+      el('div', { class: 'list-card-text' }, [
+        el('div', { class: 'list-card-name', text: l.name }),
+        el('div', { class: 'list-card-meta' }, [
+          el('span', { class: 'list-card-type', html: typeIcon }),
+          el('span', { text: `${typeLabel} · ${t('lists.titles', { n: l.count })}` }),
+        ]),
+      ]),
     ]);
     card.addEventListener('click', () => navigate(`/list/${l.id}`));
     return card;
