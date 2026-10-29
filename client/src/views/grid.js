@@ -11,12 +11,13 @@
 // per-filter scroll memory.
 
 import { createApi, isAbortError } from '../api.js';
-import { navigate, openDetail, onCleanup } from '../router.js';
+import { navigate, openDetail, onCleanup, cameBack, afterTransition } from '../router.js';
 import {
   el,
   icons,
   poster,
   skelGrid,
+  skelLine,
   crossfadeSwap,
   segmentedBar,
   stateBlock,
@@ -45,6 +46,16 @@ export function collectionName(name) {
   return String(name || '').replace(COLLECTION_SUFFIX, '').trim() || name;
 }
 const isComplete = (c) => c.total > 0 && c.owned >= c.total;
+
+// The Collections chip's data for the session, shared by every mount of the
+// Movies grid, plus where the list was scrolled when it was left. Coming back
+// from a collection paints it at once, in place, with no skeleton. A library
+// change marks it stale: the next visit still paints it, then checks quietly.
+let collectionsCache = null; // { data, stale } | null
+let collectionsScrollY = 0;
+window.addEventListener('shelfit:library-changed', () => {
+  if (collectionsCache) collectionsCache.stale = true;
+});
 
 // Per-section (movie/show) chip / genre / sort selection that survives navigation,
 // so opening a poster and coming back restores the same filter. (Scroll position
@@ -90,8 +101,10 @@ export async function gridView(container, type) {
 
   // Offline Plan-to-Watch data (durable copy whose posters the SW warmed online).
   let planItems = null; // null = not loaded; [] or [{id,title,poster_url,rating}]
-  let collectionsData = null; // lazily loaded when the Collections chip is used
+  let collectionsData = null; // what the Collections chip shows (from collectionsCache)
   let standaloneOpen = false; // the standalone films grid, kept open across repaints
+  // Back on the Collections chip: return to where the list was left.
+  let restoreCollectionsScroll = cameBack() && state.status === 'collections';
   let genresShown = null; // the genre list in the pill, joined (skips identical refills)
   let planWarmed = false;
 
@@ -362,6 +375,7 @@ export async function gridView(container, type) {
     container.classList.remove('view-grid-virtual');
     document.body.classList.remove('grid-virtual-active');
     gridState[type] = { status: state.status, genre: state.genre, sort: state.sort, coll: state.coll };
+    if (state.status === 'collections') collectionsScrollY = window.scrollY;
   });
 
   // Bumped on every renderGrid() call; an async render whose token is stale (a
@@ -538,35 +552,69 @@ export async function gridView(container, type) {
   }
 
   // --- Collections view (movies only) ------------------------------------
+  // A saved copy paints at once (back from a collection, or the chip picked
+  // again), where the list was left when you came back; a stale one is then
+  // fetched again quietly and repainted only if something changed. With no copy
+  // yet, rows of shimmer hold the shape of the list until it loads.
   async function renderCollections() {
     filterBar.style.display = 'none';
     simpleGrid.className = '';
-    if (collectionsData === null) {
-      simpleGrid.innerHTML = '';
-      simpleGrid.append(skelGrid(6));
-      try {
-        collectionsData = await api.collections();
-      } catch (err) {
-        if (isAbortError(err)) return;
-        if (!isServerReachable()) {
-          markDegraded();
-          simpleGrid.innerHTML = '';
-          simpleGrid.append(skelGrid(6));
-          return;
-        }
-        simpleGrid.innerHTML = '';
-        simpleGrid.append(
-          stateBlock({
-            kind: 'error',
-            title: t('grid.collectionsError'),
-            action: { onClick: () => navigate(location.pathname + location.search, { replace: true }) },
-          })
-        );
-        return;
+    const saved = collectionsCache;
+    if (saved) {
+      collectionsData = saved.data;
+      paintCollections();
+      if (restoreCollectionsScroll) {
+        restoreCollectionsScroll = false;
+        const y = collectionsScrollY;
+        window.scrollTo(0, y);
+        requestAnimationFrame(() => window.scrollTo(0, y));
       }
-      if (state.status !== 'collections') return; // user switched away meanwhile
+      if (!saved.stale) return;
+      await afterTransition(); // check once the page has faded in
+    } else {
+      simpleGrid.innerHTML = '';
+      simpleGrid.append(collectionsSkeleton());
     }
+    let data;
+    try {
+      data = await api.collections();
+    } catch (err) {
+      if (isAbortError(err) || saved) return; // the saved copy stays on screen
+      if (!isServerReachable()) {
+        markDegraded();
+        return; // keep the shimmer; recovery re-renders
+      }
+      simpleGrid.innerHTML = '';
+      simpleGrid.append(
+        stateBlock({
+          kind: 'error',
+          title: t('grid.collectionsError'),
+          action: { onClick: () => navigate(location.pathname + location.search, { replace: true }) },
+        })
+      );
+      return;
+    }
+    collectionsCache = { data, stale: false };
+    if (saved && JSON.stringify(data) === JSON.stringify(saved.data)) return; // unchanged
+    collectionsData = data;
+    if (state.status !== 'collections') return; // user switched away meanwhile
     paintCollections();
+  }
+
+  function collectionsSkeleton() {
+    return el(
+      'div',
+      { class: 'cset-rows' },
+      Array.from({ length: 3 }, () =>
+        el('div', { class: 'cset-row' }, [
+          el('div', { class: 'poster-card cset-poster skeleton' }),
+          el('div', { class: 'cset-side' }, [
+            skelLine({ width: '65%', height: '16px' }),
+            skelLine({ cls: 'sm', width: '45%' }),
+          ]),
+        ])
+      )
+    );
   }
 
   function paintCollections() {

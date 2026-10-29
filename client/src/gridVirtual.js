@@ -27,6 +27,7 @@ import { createApi, isAbortError } from './api.js';
 import { el, stateBlock } from './ui.js';
 import { imageCache } from './imageCache.js';
 import { isServerReachable, markDegraded } from './network.js';
+import { afterTransition } from './router.js';
 import { t } from './i18n.js';
 
 const COLS = 3; // matches .grid { grid-template-columns: repeat(3, 1fr) }
@@ -138,6 +139,9 @@ window.addEventListener('shelfit:library-changed', () => {
 // scrolling. Three modes (poster / skeleton / retry) toggled by class.
 function createCell(onItemClick) {
   const img = el('img', { class: 'gc-img', alt: '' });
+  // Never hold a frame on decoding: a page change paints its first frame at once
+  // and the posters (already in memory) land a moment later.
+  img.decoding = 'async';
   img.addEventListener('error', () => {
     img.removeAttribute('src');
   });
@@ -385,15 +389,18 @@ export function createPosterGrid({ type, onItemClick, onActiveGroup, onUpdate })
     activeDivs.clear();
   }
 
-  function render() {
+  // `buffer`: rows kept mounted above and below the viewport. A mount passes 0
+  // so the page change only waits on the rows you can see; the next frame fills
+  // the rest in.
+  function render(buffer = ROW_BUFFER) {
     if (!store || !rows.length) return;
     const scrollTop = scroller.scrollTop;
     const clientH = scroller.clientHeight || 1;
     const firstRow = firstRowAt(scrollTop);
     let lastRow = firstRow;
     while (lastRow < rows.length && rows[lastRow].y < scrollTop + clientH) lastRow++;
-    const rStart = Math.max(0, firstRow - ROW_BUFFER);
-    const rEnd = Math.min(rows.length, lastRow + ROW_BUFFER);
+    const rStart = Math.max(0, firstRow - buffer);
+    const rEnd = Math.min(rows.length, lastRow + buffer);
 
     const wantCells = new Set();
     const wantDivs = new Set();
@@ -664,7 +671,12 @@ export function createPosterGrid({ type, onItemClick, onActiveGroup, onUpdate })
     recycleAll();
     // A saved copy is painted as it is; if the library changed since (or it is
     // old), it is checked in the background and updated in place.
-    if (cached && (s.stale || Date.now() - s.at > FRESH_MS)) revalidate();
+    // The check waits for the page change to finish fading in.
+    if (cached && (s.stale || Date.now() - s.at > FRESH_MS)) {
+      afterTransition().then(() => {
+        if (s === store) revalidate();
+      });
+    }
 
     if (!store.total) {
       rows = []; // a later scroll event's render() must no-op
@@ -693,7 +705,10 @@ export function createPosterGrid({ type, onItemClick, onActiveGroup, onUpdate })
       }
     };
     scroller.scrollTop = Math.min(savedTop, Math.max(0, totalHeight - scroller.clientHeight));
-    render();
+    render(0);
+    requestAnimationFrame(() => {
+      if (s === store) render();
+    });
     if (savedTop > 0) {
       requestAnimationFrame(applyScroll);
       requestAnimationFrame(() => requestAnimationFrame(applyScroll));

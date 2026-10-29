@@ -4,7 +4,7 @@
 // for instant return with scroll preserved; resetUpcoming() forces a refresh.
 
 import { createApi, isAbortError } from '../api.js';
-import { navigate, onCleanup } from '../router.js';
+import { navigate, onCleanup, afterTransition } from '../router.js';
 import {
   el,
   icons,
@@ -639,5 +639,11 @@ export default async function Upcoming(container) {
   // be reachable it supersedes this with fresh content.
   if (!painted && !isServerReachable()) showOffline();
 
+  // A saved copy is on screen: check it once the page has finished fading in,
+  // so a changed payload never rebuilds the page mid-fade.
+  if (painted) {
+    await afterTransition();
+    if (ac.signal.aborted) return; // left meanwhile
+  }
   await revalidate();
 }

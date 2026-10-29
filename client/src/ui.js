@@ -1377,6 +1377,14 @@ export function crossfadeSwap(mutate) {
     return;
   }
   const root = document.documentElement;
+  // A transition is already running (usually the page change that mounted this
+  // view, its skeleton fading in). Its incoming side is live, so the change just
+  // shows up in it. Starting a second one would cut the first short: a jump to
+  // its end, then another fade.
+  if (root.dataset.vt) {
+    mutate();
+    return;
+  }
   root.dataset.vt = 'fade';
   const t = document.startViewTransition(() => mutate());
   const done = () => {

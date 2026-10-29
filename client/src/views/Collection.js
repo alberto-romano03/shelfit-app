@@ -4,16 +4,18 @@
 // film), the overview, then every film in release order on the 3-column grid:
 // owned ones carry their watch status, missing ones are faded with a plus, and
 // unreleased ones say when they're coming. Tapping a film opens its detail (in
-// the library) or the add-to-library popup; adding one reloads the view.
+// the library) or the add-to-library popup; adding one refreshes the page in
+// place.
 
 import { createApi, isAbortError } from '../api.js';
-import { navigate, openDetail, onCleanup } from '../router.js';
+import { navigate, openDetail, onCleanup, cameBack, afterTransition } from '../router.js';
 import {
   el,
   poster,
   setBg,
   icons,
   skelGrid,
+  skelLine,
   crossfadeSwap,
   clear,
   stateBlock,
@@ -65,44 +67,47 @@ function unreleased(p) {
   return !p.year || Number(p.year) > new Date().getFullYear();
 }
 
-export default async function Collection(container, params) {
-  const ac = new AbortController();
-  onCleanup(() => ac.abort());
-  const api = createApi(ac.signal);
+// Collections seen this session: coming back to one (Back from a title, or from
+// the list) paints it at once, where it was left, with no skeleton. A library
+// change marks them stale; a stale one still paints, then is fetched again
+// quietly and repainted only if something changed.
+const pageCache = new Map(); // id -> { data, stale, scrollY }
+const PAGE_CACHE_MAX = 12;
+window.addEventListener('shelfit:library-changed', () => {
+  for (const e of pageCache.values()) e.stale = true;
+});
 
-  const id = params.id;
+function remember(id, data) {
+  const prev = pageCache.get(id);
+  pageCache.delete(id);
+  pageCache.set(id, { data, stale: false, scrollY: prev ? prev.scrollY : 0 });
+  while (pageCache.size > PAGE_CACHE_MAX) pageCache.delete(pageCache.keys().next().value);
+}
 
-  // Ghost frame while loading.
-  container.append(
+// The loading frame, shaped like the page: hero, the poster beside lines for the
+// name, years and ownership, then a grid of posters.
+function pageSkeleton() {
+  return [
     el('div', { class: 'detail-hero skeleton' }),
-    skelGrid(6)
-  );
+    el('div', { class: 'cp-head' }, [
+      el('div', { class: 'poster-card cp-poster skeleton' }),
+      el('div', { class: 'cp-head-text' }, [
+        skelLine({ width: '70%', height: '22px' }),
+        skelLine({ cls: 'sm', width: '45%' }),
+        skelLine({ cls: 'sm', width: '55%' }),
+      ]),
+    ]),
+    el('div', { class: 'cp-body' }, [
+      skelLine({ margin: '0 0 8px' }),
+      skelLine({ width: '92%', margin: '8px 0' }),
+      skelGrid(6),
+    ]),
+  ];
+}
 
-  let d;
-  try {
-    d = await api.collectionDetail(id);
-  } catch (err) {
-    if (isAbortError(err)) return; // navigated away — ignore silently
-    if (!isServerReachable()) {
-      // Server unreachable (transport failure OR a 5xx from the reverse proxy
-      // while the backend is down) → keep the ghost hero + grid; recovery
-      // re-fetches. A 4xx keeps the server reachable → real error below.
-      markDegraded();
-      return;
-    }
-    clear(container);
-    container.append(
-      stateBlock({
-        kind: 'error',
-        title: t('collection.loadError'),
-        error: err.message,
-        action: { onClick: () => navigate(location.pathname + location.search, { replace: true }) },
-      })
-    );
-    return;
-  }
-
-  const reload = () => navigate(location.pathname, { replace: true });
+// Hero, head and body for one payload. `onAdded` runs after a missing film was
+// added from the grid.
+function buildPage(d, onAdded) {
   const name = collectionName(d.name);
   const complete = d.total > 0 && d.owned >= d.total;
 
@@ -180,7 +185,7 @@ export default async function Collection(container, params) {
               year: p.year,
               overview: p.overview,
             },
-            { onAdded: reload }
+            { onAdded }
           )
     );
     grid.append(
@@ -198,8 +203,81 @@ export default async function Collection(container, params) {
   }
   body.append(grid);
 
-  crossfadeSwap(() => {
-    container.innerHTML = '';
-    container.append(hero, head, body);
+  return [hero, head, body];
+}
+
+export default async function Collection(container, params) {
+  const ac = new AbortController();
+  const api = createApi(ac.signal);
+  const id = params.id;
+  onCleanup(() => {
+    ac.abort();
+    const e = pageCache.get(id);
+    if (e) e.scrollY = window.scrollY; // where to return to
   });
+
+  let shown = null; // the payload on screen
+  // In place: the page's nodes swap, the scroll stays.
+  function paint(d) {
+    shown = d;
+    container.replaceChildren(...buildPage(d, refresh));
+  }
+
+  // Fetch again and repaint if anything changed (after an add, or a stale copy).
+  async function refresh() {
+    let d;
+    try {
+      d = await api.collectionDetail(id);
+    } catch (err) {
+      if (!isAbortError(err) && !isServerReachable()) markDegraded();
+      return; // the copy on screen stays
+    }
+    remember(id, d);
+    if (shown && JSON.stringify(d) === JSON.stringify(shown)) return;
+    const y = window.scrollY;
+    paint(d);
+    window.scrollTo(0, y);
+  }
+
+  const saved = pageCache.get(id);
+  if (saved) {
+    paint(saved.data);
+    if (cameBack()) {
+      const y = saved.scrollY || 0;
+      window.scrollTo(0, y);
+      requestAnimationFrame(() => window.scrollTo(0, y));
+    }
+    if (saved.stale) afterTransition().then(refresh); // once the page has faded in
+    return;
+  }
+
+  // First visit: the skeleton fades in with the page change, the real page
+  // replaces it (inside that same fade when the data is quick).
+  container.append(...pageSkeleton());
+  let d;
+  try {
+    d = await api.collectionDetail(id);
+  } catch (err) {
+    if (isAbortError(err)) return; // navigated away — ignore silently
+    if (!isServerReachable()) {
+      // Server unreachable (transport failure OR a 5xx from the reverse proxy
+      // while the backend is down) → keep the skeleton; recovery re-fetches.
+      // A 4xx keeps the server reachable → real error below.
+      markDegraded();
+      return;
+    }
+    clear(container);
+    container.append(
+      stateBlock({
+        kind: 'error',
+        title: t('collection.loadError'),
+        error: err.message,
+        action: { onClick: () => navigate(location.pathname + location.search, { replace: true }) },
+      })
+    );
+    return;
+  }
+  remember(id, d);
+  shown = d;
+  crossfadeSwap(() => container.replaceChildren(...buildPage(d, refresh)));
 }

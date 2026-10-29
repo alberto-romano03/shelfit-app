@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v153'; // bumped: collection page with status badges and missing films
+const CACHE = 'shelfit-shell-v155'; // bumped: lighter page changes into Movies, Series and What's Next
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by

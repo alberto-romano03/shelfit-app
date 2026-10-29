@@ -19,6 +19,22 @@ let onChange = null;
 // never prevents the rest from running.
 let cleanups = [];
 let renderToken = 0;
+// How the page now mounting was reached: 'pop' for Back/Forward, 'push' for
+// everything else. Views that keep their place between visits restore it only
+// when the user came back, so a fresh open still starts at the top.
+let lastNav = 'push';
+
+export function cameBack() {
+  return lastNav === 'pop';
+}
+
+// Settles once the page change in progress has finished fading (at once when
+// none is). A view that painted a saved copy waits on it before checking for
+// fresher data, so a refresh never rebuilds the page while it is fading in.
+let settled = Promise.resolve();
+export function afterTransition() {
+  return settled.then(() => new Promise((resolve) => setTimeout(resolve, 0)));
+}
 
 export function onCleanup(fn) {
   if (typeof fn === 'function') cleanups.push(fn);
@@ -60,6 +76,7 @@ export function initRouter(opts) {
     // state.path is stored root-relative; location.pathname carries the base.
     const path = (event.state && event.state.path) || stripBase(location.pathname);
     // Going back/forward gets the same quick cross-fade (e.g. closing a detail).
+    lastNav = 'pop';
     render(path, { transition: 'fade' });
   });
 }
@@ -160,6 +177,7 @@ export function render(path, opts = {}) {
   // can't currently render one); swallow it so it isn't an unhandled rejection.
   transition.ready.catch(() => {});
   transition.finished.then(done, done);
+  settled = transition.finished.catch(() => {});
   return transition.finished;
 }
 
@@ -172,6 +190,7 @@ export function navigate(path, { replace = false, transition = true } = {}) {
   // location.pathname): normalize to root-relative for state + matching, and
   // write the base-prefixed URL into history.
   path = stripBase(path);
+  lastNav = 'push';
   const state = { path };
   const url = withBase(path);
   if (replace) {
@@ -185,6 +204,7 @@ export function navigate(path, { replace = false, transition = true } = {}) {
 // Open a title's detail page with a quick, snappy cross-fade (no morph).
 export function openDetail(path) {
   path = stripBase(path);
+  lastNav = 'push';
   history.pushState({ path }, '', withBase(path));
   render(path, { transition: 'fade' });
 }
