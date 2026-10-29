@@ -11,7 +11,9 @@ import { withBase } from './basePath.js';
 const SUPPORTED =
   typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function';
 
-const MAX_ENTRIES = 300;
+// Enough for a large library's posters, which the grids keep for the session;
+// the byte cap is the real bound.
+const MAX_ENTRIES = 800;
 const MAX_BYTES = 150 * 1024 * 1024; // 150 MB
 
 // Map preserves insertion order → we use it directly as an LRU: least-recently

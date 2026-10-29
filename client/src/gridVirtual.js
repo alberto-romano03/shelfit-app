@@ -15,9 +15,13 @@
 // with a 1.5-page lead so the next page is ready before its rows scroll in.
 //
 // Fetched pages + scroll offset are cached per (type + active filter) for the
-// session, so switching chips and returning from a detail page never re-fetches
-// or loses your place. A library mutation (api.js → 'shelfit:library-changed')
-// drops the whole cache.
+// session, so switching chips, returning from a detail page or tapping the tab
+// never re-fetches or reloads a poster. Like What's Next, a library mutation
+// (api.js → 'shelfit:library-changed') only marks the cache STALE: the next visit
+// still paints the saved pages at once, then fetches page 1 in the background and
+// swaps in what changed (a grid on screen updates in place). A copy older than
+// FRESH_MS is quietly revalidated too, which catches what the server changes on
+// its own (the nightly Kodi sync).
 
 import { createApi, isAbortError } from './api.js';
 import { el, stateBlock } from './ui.js';
@@ -31,10 +35,11 @@ const PAGE_SIZE = 48; // items per page (multiple of the 3-column grid)
 const ROW_BUFFER = 3; // rows rendered above AND below the viewport
 const AHEAD_PAGES = 1.5; // prefetch pages within this many pages of the viewport
 const FALLBACK_DIVIDER_H = 34;
+const FRESH_MS = 30 * 60 * 1000;
 
 // Session caches, keyed by `${type}:${status}:${genre}:${sort}`. `store` holds a
 // filter's fetched pages + layout meta; `scrollMem` its last scroll offset. Both
-// are lost on reload (acceptable per spec) and cleared on any library mutation.
+// are lost on reload (acceptable per spec); a library mutation marks them stale.
 //
 // CACHE is bounded as an LRU: a store keeps one array slot PER LIBRARY ITEM for
 // its filter, and with many genres × sorts × chips it would otherwise keep
@@ -56,21 +61,27 @@ function rememberStore(key, s) {
   while (CACHE.size > CACHE_MAX) CACHE.delete(CACHE.keys().next().value);
 }
 
+function normFilter(f) {
+  return {
+    status: f.status || 'all',
+    genre: f.genre || '',
+    sort: f.sort || 'added_at',
+    owned: !!f.owned,
+  };
+}
+
 function keyOf(type, f) {
   return `${type}:${f.status || 'all'}:${f.genre || ''}:${f.sort || 'added_at'}:${f.owned ? 'owned' : ''}`;
 }
 
-// Seed a filter's page-1 store from a response the splash preloader already
-// fetched, so the first grid load for that filter is a cache hit (instant paint,
-// no refetch). No-op if a store for that filter already exists (never clobbers a
-// live view). `filter` is { status, genre, sort }.
-export function seedGridPage(type, filter, res) {
-  if (!res || !res.items) return;
-  const key = keyOf(type, filter || {});
-  if (CACHE.has(key)) return;
-  const total = Number.isFinite(res.total) ? res.total : res.items.length;
+// A filter's store from its page-1 response: layout meta, one slot per library
+// item, page 1 filled in. `filter` is kept so a stale store can fetch itself again.
+function newStore(filter, res) {
+  const items = res.items || [];
+  const total = Number.isFinite(res.total) ? res.total : items.length;
   const totalPages = res.totalPages || 1;
   const s = {
+    filter,
     total,
     pageSize: res.pageSize || PAGE_SIZE,
     totalPages,
@@ -78,27 +89,48 @@ export function seedGridPage(type, filter, res) {
     genres: res.genres || [],
     items: new Array(total),
     pageStatus: new Array(totalPages + 1),
+    at: Date.now(),
+    stale: false,
   };
-  for (let k = 0; k < res.items.length; k++) s.items[k] = res.items[k];
+  for (let k = 0; k < items.length; k++) s.items[k] = items[k];
   s.pageStatus[1] = 'loaded';
-  rememberStore(key, s);
+  return s;
 }
 
-// Drop the cached pages + scroll for one section (both its movie/show filters).
-// Called when a bottom-nav tap asks for a fresh load of that page.
-export function clearGridCache(type) {
+// Seed a filter's page-1 store from a response the splash preloader already
+// fetched, so the first grid load for that filter is a cache hit (instant paint,
+// no refetch). No-op if a current store for that filter already exists; a stale
+// one is replaced (a grid showing it keeps its copy until its own check swaps).
+// `filter` is { status, genre, sort }.
+export function seedGridPage(type, filter, res) {
+  if (!res || !res.items) return;
+  const f = normFilter(filter || {});
+  const key = keyOf(type, f);
+  if (hasGridPage(type, f)) return;
+  rememberStore(key, newStore(f, res));
+}
+
+// Whether a filter's pages are cached and current (not stale), so a warm-up can
+// skip fetching them again.
+export function hasGridPage(type, filter) {
+  const s = CACHE.get(keyOf(type, normFilter(filter || {})));
+  return !!s && !s.stale;
+}
+
+// Send a section back to the top of its lists on the next visit (a bottom-nav
+// tap). Its pages stay cached: no request, no poster reloads.
+export function forgetGridScroll(type) {
   const prefix = `${type}:`;
-  for (const k of [...CACHE.keys()]) if (k.startsWith(prefix)) CACHE.delete(k);
   for (const k of [...scrollMem.keys()]) if (k.startsWith(prefix)) scrollMem.delete(k);
 }
 
-// A mutation anywhere may have changed library data — drop every cached page so
-// the next grid load reflects it (scroll offsets are harmless to keep, but a
-// changed total/divider layout means their old positions may not apply, so clear
-// them too).
+// A mutation anywhere may have changed library data: mark every cached filter
+// stale (its next load checks it again) and update the grid on screen now.
+// Scroll offsets stay; a changed layout clamps them.
+let liveRevalidate = null; // set while a grid is mounted
 window.addEventListener('shelfit:library-changed', () => {
-  CACHE.clear();
-  scrollMem.clear();
+  for (const s of CACHE.values()) s.stale = true;
+  if (liveRevalidate) liveRevalidate();
 });
 
 // Build one recyclable poster cell: a persistent .poster-card whose <img> src,
@@ -134,23 +166,29 @@ function createCell(onItemClick) {
     } else {
       badge.style.display = 'none';
     }
-    // Shimmer through the (transparent) img until the poster decodes, then drop
-    // it. Guard against the cell being recycled to another item mid-load.
-    node.classList.add('skeleton');
-    if (item.poster_url) {
-      imageCache
-        .load(item.poster_url)
-        .then((u) => {
-          if (currentItem !== item) return;
-          if (u) img.src = u;
-          node.classList.remove('skeleton');
-        })
-        .catch(() => {
-          /* keep the shimmer; never a broken-image icon */
-        });
-    } else {
-      img.removeAttribute('src');
+    // A poster already in the image cache goes up at once, with no shimmer (the
+    // usual case when coming back to the grid).
+    const cached = item.poster_url ? imageCache.get(item.poster_url) : null;
+    if (cached) {
+      if (img.getAttribute('src') !== cached) img.src = cached;
+      node.classList.remove('skeleton');
+      return;
     }
+    // Otherwise shimmer until it decodes, never over the previous title's poster.
+    // Guard against the cell being recycled to another item mid-load.
+    img.removeAttribute('src');
+    node.classList.add('skeleton');
+    if (!item.poster_url) return;
+    imageCache
+      .load(item.poster_url)
+      .then((u) => {
+        if (currentItem !== item) return;
+        if (u) img.src = u;
+        node.classList.remove('skeleton');
+      })
+      .catch(() => {
+        /* keep the shimmer; never a broken-image icon */
+      });
   }
   function showSkeleton() {
     currentItem = null;
@@ -178,7 +216,9 @@ function createDivider() {
 
 // One virtual poster grid bound to a section (movie/show). grid.js inserts
 // `.el`, then calls `.load(filter)` on mount and on every chip/genre/sort change.
-export function createPosterGrid({ type, onItemClick, onActiveGroup }) {
+// `onUpdate` gets the same summary as `.load` when a background check swaps in
+// newer content.
+export function createPosterGrid({ type, onItemClick, onActiveGroup, onUpdate }) {
   const ac = new AbortController();
   const api = createApi(ac.signal);
 
@@ -321,7 +361,7 @@ export function createPosterGrid({ type, onItemClick, onActiveGroup }) {
     const item = store.items[idx];
     const p = pageOf(idx);
     let sig;
-    if (item) sig = `i${item.id}:${item.rating || 0}`;
+    if (item) sig = `i${item.id}:${item.rating || 0}:${item.poster_url || ''}`;
     else if (store.pageStatus[p] === 'error') sig = `r${p}`;
     else sig = 's';
     if (cell._i === idx && cell._sig === sig) return;
@@ -533,43 +573,88 @@ export function createPosterGrid({ type, onItemClick, onActiveGroup }) {
   // fetch page 1. Returns { total, genres } so grid.js can fill the genre
   // dropdown and know whether anything is here. Throws on a hard page-1 failure
   // (grid.js maps that to its offline / error handling).
-  async function load(filter) {
-    currentFilter = {
-      status: filter.status || 'all',
-      genre: filter.genre || '',
-      sort: filter.sort || 'added_at',
-      owned: !!filter.owned,
+  // What grid.js needs about the view on screen: whether anything is here, the
+  // genre list, and the ordered labels of its sections (title/rating sorts, else
+  // null), which the letter picker uses as its active set + scroll targets.
+  function summary() {
+    return {
+      total: store.total,
+      genres: store.genres,
+      groups: store.total && store.groups ? store.groups.map((g) => g.label) : null,
     };
+  }
+
+  // Swap a newer copy of the active filter in where it stands. Cells whose title,
+  // rating and poster didn't change keep their node and image, so an unchanged
+  // grid doesn't move at all.
+  function swapIn(fresh) {
+    const top = scroller.scrollTop;
+    store = fresh;
+    if (!store.total) {
+      rows = [];
+      recycleAll();
+      showEmpty(true, null);
+    } else {
+      showEmpty(false);
+      metrics = computeMetrics();
+      buildLayout();
+      sizeScroller();
+      scroller.scrollTop = Math.min(top, Math.max(0, totalHeight - scroller.clientHeight));
+      render();
+    }
+    if (onUpdate) onUpdate(summary());
+  }
+
+  // Fetch the active filter's page 1 again and swap it in. When the library kept
+  // its size, the other saved pages stay on screen until they are fetched again
+  // as they come into view; otherwise their rows shimmer until then.
+  async function revalidate() {
+    const s = store;
+    if (!s) return;
+    if (s.revalidating) {
+      s.recheck = true; // another change landed mid-check: check once more after
+      return;
+    }
+    s.revalidating = true;
+    let fresh;
+    try {
+      const res = await api.mediaPage(type, { ...s.filter, page: 1, pageSize: s.pageSize });
+      fresh = newStore(s.filter, res);
+    } catch {
+      return; // navigated away or offline: the saved copy stays, still stale
+    } finally {
+      s.revalidating = false;
+    }
+    const again = !!s.recheck;
+    s.recheck = false;
+    if (fresh.total === s.total) {
+      for (let i = fresh.pageSize; i < s.total; i++) fresh.items[i] = s.items[i];
+    }
+    rememberStore(keyOf(type, s.filter), fresh);
+    // Another filter on screen, or the grid hidden (collections, the offline
+    // grid): the next load picks the fresh copy up from the cache.
+    if (s !== store || !scroller.offsetWidth) {
+      if (again) fresh.stale = true;
+      return;
+    }
+    swapIn(fresh);
+    if (again) revalidate();
+  }
+
+  async function load(filter) {
+    currentFilter = normFilter(filter);
     const key = keyOf(type, currentFilter);
     filterKey = key;
     loadSeq += 1;
     const mySeq = loadSeq;
 
     let s = touchStore(key);
+    const cached = !!s;
     if (!s) {
       paintSkeleton(); // shimmer while page 1 loads (scroller must be visible)
-      const res = await api.mediaPage(type, {
-        status: currentFilter.status,
-        genre: currentFilter.genre,
-        sort: currentFilter.sort,
-        owned: currentFilter.owned,
-        page: 1,
-        pageSize: PAGE_SIZE,
-      });
+      const res = await api.mediaPage(type, { ...currentFilter, page: 1, pageSize: PAGE_SIZE });
       if (mySeq !== loadSeq) return null; // a newer load superseded us
-      const total = Number.isFinite(res.total) ? res.total : (res.items || []).length;
-      const totalPages = res.totalPages || 1;
-      s = {
-        total,
-        pageSize: res.pageSize || PAGE_SIZE,
-        totalPages,
-        groups: res.groups || null,
-        genres: res.genres || [],
-        items: new Array(total),
-        pageStatus: new Array(totalPages + 1),
-      };
-      placePage(s, 1, res.items || []);
-      s.pageStatus[1] = 'loaded';
+      s = newStore(currentFilter, res);
       rememberStore(key, s);
     }
     if (mySeq !== loadSeq) return null;
@@ -577,11 +662,14 @@ export function createPosterGrid({ type, onItemClick, onActiveGroup }) {
     store = s;
     lastActiveGroup = undefined; // force onActiveGroup to re-fire for the new view
     recycleAll();
+    // A saved copy is painted as it is; if the library changed since (or it is
+    // old), it is checked in the background and updated in place.
+    if (cached && (s.stale || Date.now() - s.at > FRESH_MS)) revalidate();
 
     if (!store.total) {
       rows = []; // a later scroll event's render() must no-op
       showEmpty(true, null);
-      return { total: 0, genres: store.genres, groups: null };
+      return summary();
     }
     showEmpty(false);
 
@@ -612,13 +700,7 @@ export function createPosterGrid({ type, onItemClick, onActiveGroup }) {
     }
     // Eagerly prefetch page 2 so scrolling past the first page has no gap.
     if (store.totalPages > 1 && !store.pageStatus[2]) fetchPage(2, store);
-    return {
-      total: store.total,
-      genres: store.genres,
-      // Ordered labels of the sections present in this view (title/rating sorts),
-      // else null. The letter picker uses these as its active set + scroll targets.
-      groups: store.groups ? store.groups.map((g) => g.label) : null,
-    };
+    return summary();
   }
 
   // --- scroll / resize wiring ---------------------------------------------
@@ -643,10 +725,13 @@ export function createPosterGrid({ type, onItemClick, onActiveGroup }) {
   }
   scroller.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onResize);
+  const live = () => revalidate();
+  liveRevalidate = live;
 
   function destroy() {
     scroller.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
+    if (liveRevalidate === live) liveRevalidate = null;
     ac.abort();
   }
 

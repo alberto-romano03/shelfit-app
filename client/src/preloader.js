@@ -15,7 +15,7 @@
 import { api, isAbortError } from './api.js';
 import { imageCache } from './imageCache.js';
 import { isServerReachable } from './network.js';
-import { seedGridPage } from './gridVirtual.js';
+import { seedGridPage, hasGridPage } from './gridVirtual.js';
 import {
   saveUpNext,
   saveUpcoming,
@@ -228,10 +228,11 @@ export const preloader = {
   },
 
   // Tier 3 — triggered on navigation into a page: top up the "All" chip for that
-  // page so switching to it is instant after the first visit.
+  // page so switching to it is instant after the first visit. Nothing to do while
+  // the grid holds a current copy of it.
   async triggerTier3(page) {
     const type = page === 'movies' ? 'movie' : page === 'series' ? 'show' : null;
-    if (!type) return;
+    if (!type || hasGridPage(type, { status: 'all', ...DEFAULT_FILTER })) return;
     await whenResumed();
     preloadUrls(await warmView(type, 'all'));
   },

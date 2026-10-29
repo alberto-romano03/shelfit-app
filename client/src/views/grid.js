@@ -24,7 +24,7 @@ import {
 import { isServerReachable, markDegraded } from '../network.js';
 import { pget, planKey } from '../persist.js';
 import { savePlanDetail, getPlanDetail, prunePlanDetails, savePlanTitles } from '../offlineCache.js';
-import { createPosterGrid, clearGridCache } from '../gridVirtual.js';
+import { createPosterGrid, forgetGridScroll } from '../gridVirtual.js';
 import { t } from '../i18n.js';
 
 const STATUSES = [
@@ -42,16 +42,17 @@ const STATUSES = [
 // a full page reload.
 const gridState = {};
 
-// type -> the next mount should load fresh (ignore remembered selection + cache).
+// type -> the next mount opens on the default filter (ignores the remembered one).
 const gridFresh = {};
 
-// Discard a section's remembered chip/sort AND its cached pages/scroll so the
-// next mount loads fresh. A bottom-nav tab tap calls this (a manual refresh).
+// A bottom-nav tab tap: the section opens on its default chip/sort, at the top of
+// the list. Its cached pages stay, so it paints at once with no poster reloads;
+// they update themselves when the library changes (see ../gridVirtual.js).
 export function resetGridSection(path) {
   const type = path === '/movies' ? 'movie' : path === '/series' ? 'show' : null;
   if (!type) return;
   gridFresh[type] = true;
-  clearGridCache(type);
+  forgetGridScroll(type);
 }
 
 // Shared filtered poster grid for Series and Movies.
@@ -79,7 +80,7 @@ export async function gridView(container, type) {
   // Offline Plan-to-Watch data (durable copy whose posters the SW warmed online).
   let planItems = null; // null = not loaded; [] or [{id,title,poster_url,rating}]
   let collectionsData = null; // lazily loaded when the Collections chip is used
-  let genresPopulated = false;
+  let genresShown = null; // the genre list in the pill, joined (skips identical refills)
   let planWarmed = false;
 
   // "Owned" filters to titles marked as owned on disc (any status). Movies also
@@ -206,6 +207,7 @@ export async function gridView(container, type) {
     type,
     onItemClick: (item) => openDetail(`/detail/${item.id}`),
     onActiveGroup: highlightLetter,
+    onUpdate: applyViewInfo, // a background check swapped in newer content
   });
   const simpleGrid = skelGrid(12);
 
@@ -231,13 +233,28 @@ export async function gridView(container, type) {
     filterBar.style.display = hide ? 'none' : '';
   }
 
-  // Populate the genre <select> once, from the type-wide list the server returns
-  // with page 1. (Genres reflect the whole type library regardless of status.)
+  // Fill the genre pill from the type-wide list the server returns with page 1
+  // (genres reflect the whole type library regardless of status), again only
+  // when that list changes.
   function populateGenres(genres) {
-    if (genresPopulated || !Array.isArray(genres)) return;
-    genresPopulated = true;
+    if (!Array.isArray(genres)) return;
+    const sig = genres.join('\n');
+    if (sig === genresShown) return;
+    genresShown = sig;
     genrePill.setOptions([ALL_GENRES, ...genres.map((g) => ({ value: g, text: g }))]);
     genrePill.set(state.genre);
+  }
+
+  // Genres and the letter picker for the view the virtual grid shows.
+  function applyViewInfo(res) {
+    if (res) populateGenres(res.genres);
+    // Letter picker: only for the alphabetical (Title A–Z) sort.
+    if (res && state.sort === 'title' && res.groups && res.groups.length) {
+      updatePicker(res.groups);
+      showLetterPicker(true);
+    } else {
+      showLetterPicker(false);
+    }
   }
 
   // --- Offline chip lockdown ---------------------------------------------
@@ -350,14 +367,7 @@ export async function gridView(container, type) {
         owned,
       });
       if (seq !== renderSeq) return; // superseded by a newer selection
-      if (res) populateGenres(res.genres);
-      // Letter picker: only for the alphabetical (Title A–Z) sort.
-      if (res && state.sort === 'title' && res.groups && res.groups.length) {
-        updatePicker(res.groups);
-        showLetterPicker(true);
-      } else {
-        showLetterPicker(false);
-      }
+      applyViewInfo(res);
       if (!planWarmed) {
         planWarmed = true;
         warmAndPersistPlan(); // fire-and-forget: keep the offline copy fresh

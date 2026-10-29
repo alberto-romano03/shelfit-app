@@ -123,9 +123,10 @@ const tabButtons = TABS.map((tab) => {
   const btn = el('button', {
     'data-path': tab.path,
     html: tab.icon,
-    // A bottom-nav tap resets the grids (defaults + top of list). What's Next
-    // keeps its saved page for the session and only returns to the top; it
-    // updates itself when the library changes (see views/Upcoming.js).
+    // A bottom-nav tap sends the grids back to their default filter and the top
+    // of the list; What's Next only returns to the top. Both keep their saved
+    // content for the session and update it when the library changes (see
+    // gridVirtual.js and views/Upcoming.js).
     onClick: () => {
       resetGridSection(tab.path);
       if (tab.path === '/upcoming') resetUpcoming();
@@ -222,10 +223,9 @@ onLangChange(() => {
   tabButtons.forEach((btn) => (btn._label.textContent = t(btn._key)));
   settingsBtn.setAttribute('aria-label', t('common.settings'));
   searchBtn.setAttribute('aria-label', t('common.search'));
-  // Sections that keep their rendered page around between visits would come
-  // back in the old language: drop those caches so they rebuild.
-  resetGridSection('/movies');
-  resetGridSection('/series');
+  // What's Next keeps its rendered page between visits and would come back in
+  // the old language: rebuild it. (The grids keep only data; labels are drawn
+  // at mount.)
   rebuildUpcoming();
   navigate(location.pathname, { replace: true, transition: false });
 });
