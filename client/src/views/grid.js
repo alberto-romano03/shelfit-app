@@ -14,6 +14,7 @@ import { createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup } from '../router.js';
 import {
   el,
+  icons,
   poster,
   skelGrid,
   crossfadeSwap,
@@ -35,6 +36,15 @@ const STATUSES = [
   { key: 'paused', labelKey: 'status.paused' },
   { key: 'dropped', labelKey: 'status.dropped' },
 ];
+
+// TMDB names every collection "<saga> - Collezione" / "<saga> Collection" and so
+// on; on the Collections chip and a collection's own page the suffix only
+// repeats itself.
+const COLLECTION_SUFFIX = /\s*[-–:]?\s*(Collezione|Collection|Colección|Coleção|Filmreihe|Sammlung)$/i;
+export function collectionName(name) {
+  return String(name || '').replace(COLLECTION_SUFFIX, '').trim() || name;
+}
+const isComplete = (c) => c.total > 0 && c.owned >= c.total;
 
 // Per-section (movie/show) chip / genre / sort selection that survives navigation,
 // so opening a poster and coming back restores the same filter. (Scroll position
@@ -67,9 +77,10 @@ export async function gridView(container, type) {
 
   const saved = fresh ? null : gridState[type];
   const defaultStatus = type === 'movie' ? 'completed' : 'watching';
+  // `coll`: the Collections view's filter ('' every collection, 'open', 'done').
   const state = saved
-    ? { status: saved.status, genre: saved.genre, sort: saved.sort }
-    : { status: defaultStatus, genre: '', sort: 'added_at' };
+    ? { status: saved.status, genre: saved.genre, sort: saved.sort, coll: saved.coll || '' }
+    : { status: defaultStatus, genre: '', sort: 'added_at', coll: '' };
 
   // Offline lockdown: when the server is unreachable, Movies/Series expose ONLY
   // the Plan to Watch chip (served from the durable cache). Force it active from
@@ -80,6 +91,7 @@ export async function gridView(container, type) {
   // Offline Plan-to-Watch data (durable copy whose posters the SW warmed online).
   let planItems = null; // null = not loaded; [] or [{id,title,poster_url,rating}]
   let collectionsData = null; // lazily loaded when the Collections chip is used
+  let standaloneOpen = false; // the standalone films grid, kept open across repaints
   let genresShown = null; // the genre list in the pill, joined (skips identical refills)
   let planWarmed = false;
 
@@ -147,6 +159,26 @@ export async function gridView(container, type) {
   });
   const filterBar = el('div', { class: 'filter-bar' }, [genrePill.el, sortPill.el]);
 
+  // --- Collections filter (movies only) -----------------------------------
+  // Takes the genre/sort row's place on the Collections chip: every collection,
+  // the ones still missing films, or the complete ones.
+  const collPill = selectPill({
+    label: t('grid.collShow'),
+    options: [
+      { value: '', text: t('common.all') },
+      { value: 'open', text: t('grid.collOpen') },
+      { value: 'done', text: t('grid.collDone') },
+    ],
+    value: state.coll,
+    placeholder: t('common.all'),
+    clearable: true,
+    onChange: (v) => {
+      state.coll = v;
+      if (collectionsData && state.status === 'collections') paintCollections();
+    },
+  });
+  const collBar = el('div', { class: 'filter-bar coll-filter' }, [collPill.el]);
+
   // --- Alphabetical letter picker (shown only for the Title A–Z sort) ------
   // A secondary nav strip: tap a letter to jump the grid to that section. Only
   // letters with titles in the current filtered view are active; the section
@@ -211,7 +243,7 @@ export async function gridView(container, type) {
   });
   const simpleGrid = skelGrid(12);
 
-  container.append(chipRow, offlineNote, filterBar, letterPicker, simpleGrid, virtual.el);
+  container.append(chipRow, offlineNote, filterBar, collBar, letterPicker, simpleGrid, virtual.el);
 
   function setMode(mode) {
     const useVirtual = mode === 'virtual';
@@ -226,11 +258,13 @@ export async function gridView(container, type) {
   }
   setMode('simple'); // start on the skeleton grid until the first load resolves
 
-  // Genre/sort filters don't apply to the collections view (or offline, where
-  // only Plan to Watch is available).
+  // Genre/sort filters don't apply to the collections view, which has its own
+  // (and neither shows offline, where only Plan to Watch is available).
   function syncChrome() {
-    const hide = state.status === 'collections' || !isServerReachable();
-    filterBar.style.display = hide ? 'none' : '';
+    const offline = !isServerReachable();
+    const inCollections = state.status === 'collections';
+    filterBar.style.display = inCollections || offline ? 'none' : '';
+    collBar.style.display = inCollections && !offline ? '' : 'none';
   }
 
   // Fill the genre pill from the type-wide list the server returns with page 1
@@ -327,7 +361,7 @@ export async function gridView(container, type) {
     // so the next view doesn't inherit the grid's flex layout.
     container.classList.remove('view-grid-virtual');
     document.body.classList.remove('grid-virtual-active');
-    gridState[type] = { status: state.status, genre: state.genre, sort: state.sort };
+    gridState[type] = { status: state.status, genre: state.genre, sort: state.sort, coll: state.coll };
   });
 
   // Bumped on every renderGrid() call; an async render whose token is stale (a
@@ -550,56 +584,116 @@ export async function gridView(container, type) {
     }
 
     if (collections.length) {
-      const cGrid = el('div', { class: 'grid coll-grid' });
-      for (const c of collections) {
-        const cell = el('div', { class: 'coll-cell' });
-        const card = poster(c.poster_url, c.name);
-        card.classList.add('coll-poster');
-        const pct = c.total ? Math.round((c.owned / c.total) * 100) : 0;
-        card.append(
-          el('div', { class: 'coll-count', text: `${c.owned}/${c.total}` }),
-          el('div', { class: 'coll-progress' }, [el('div', { style: { width: `${pct}%` } })])
+      // What the whole shelf adds up to, then the collections the filter keeps.
+      const owned = collections.reduce((a, c) => a + c.owned, 0);
+      const total = collections.reduce((a, c) => a + c.total, 0);
+      out.append(
+        el('div', { class: 'cset-summary' }, [
+          el('div', {
+            class: 'cset-summary-title',
+            text: t('grid.collSummary', { n: collections.length, done: collections.filter(isComplete).length }),
+          }),
+          el('div', { class: 'cset-summary-sub', text: t('grid.collFilms', { owned, total }) }),
+        ])
+      );
+      const shown = collections.filter((c) => !state.coll || (state.coll === 'done') === isComplete(c));
+      if (shown.length) {
+        out.append(el('div', { class: 'cset-rows' }, shown.map(collectionRow)));
+      } else {
+        out.append(
+          el('div', { class: 'muted cset-none', text: t(state.coll === 'done' ? 'grid.collNoneDone' : 'grid.collNoneOpen') })
         );
-        card.addEventListener('click', () => navigate(`/collection/${c.id}`));
-        cell.append(
-          card,
-          el('div', { class: 'coll-name', text: c.name }),
-          el('div', { class: 'coll-sub', text: t('grid.inLibrary', { owned: c.owned, total: c.total }) })
-        );
-        cGrid.append(cell);
       }
-      out.append(cGrid);
     }
 
-    if (standalone.length) {
-      const open = { v: false };
-      const chevron = el('span', { class: 'coll-chevron', text: '▸' });
-      const header = el('button', { class: 'standalone-header' }, [
-        chevron,
-        el('span', { text: t('grid.standalone', { count: standalone.length }) }),
-      ]);
-      const body = el('div', { class: 'grid', style: { display: 'none', marginTop: '10px' } });
-      for (const m of standalone) {
-        const card = poster(m.poster_url, m.title);
-        if (m.rating) {
-          card.append(el('div', { class: 'rating-badge', html: `★ ${m.rating}` }));
-        }
-        card.addEventListener('click', () => openDetail(`/detail/${m.item_id}`));
-        body.append(card);
-      }
-      header.addEventListener('click', () => {
-        open.v = !open.v;
-        body.style.display = open.v ? 'grid' : 'none';
-        chevron.textContent = open.v ? '▾' : '▸';
-      });
-      out.append(el('div', { class: 'standalone-section' }, [header, body]));
-    }
+    if (standalone.length) out.append(standaloneSection(standalone));
 
     crossfadeSwap(() => {
       simpleGrid.className = '';
       simpleGrid.innerHTML = '';
       simpleGrid.append(out);
     });
+  }
+
+  // One collection: its own poster large on the left; on the right the name, how
+  // much of it is in the library, and the owned films along the bottom (release
+  // order, the last slot turning into "+N" past four).
+  const SHELF_MAX = 4;
+  function collectionRow(c) {
+    const films = c.owned_movies || [];
+    const shown = films.length > SHELF_MAX ? films.slice(0, SHELF_MAX - 1) : films;
+    const shelf = el(
+      'div',
+      { class: 'cset-shelf' },
+      shown.map((m) => {
+        const card = poster(m.poster_url, m.title);
+        card.classList.add('cset-film');
+        return card;
+      })
+    );
+    if (films.length > shown.length) {
+      shelf.append(el('span', { class: 'cset-more', text: `+${films.length - shown.length}` }));
+    }
+    const done = isComplete(c);
+    const art = poster(c.poster_url, c.name);
+    art.classList.add('cset-poster');
+    return el('button', { class: 'cset-row', type: 'button', onClick: () => navigate(`/collection/${c.id}`) }, [
+      art,
+      el('div', { class: 'cset-side' }, [
+        el('div', { class: 'cset-name', text: collectionName(c.name) }),
+        el('div', {
+          class: `cset-meta${done ? ' is-done' : ''}`,
+          text: done ? t('grid.collComplete', { n: c.total }) : t('grid.inLibrary', { owned: c.owned, total: c.total }),
+        }),
+        shelf,
+      ]),
+    ]);
+  }
+
+  // Movies in no collection: a row (three of their posters stacked, a count, a
+  // chevron) that opens their poster grid underneath. The grid is built on the
+  // first open.
+  function standaloneSection(films) {
+    const grid = el('div', { class: 'grid cset-sa-grid' });
+    function fill() {
+      if (grid.childElementCount) return;
+      for (const m of films) {
+        const card = poster(m.poster_url, m.title);
+        if (m.rating) card.append(el('div', { class: 'rating-badge', html: `★ ${m.rating}` }));
+        card.addEventListener('click', () => openDetail(`/detail/${m.item_id}`));
+        grid.append(card);
+      }
+    }
+    function sync() {
+      if (standaloneOpen) fill();
+      grid.style.display = standaloneOpen ? '' : 'none';
+      row.setAttribute('aria-expanded', String(standaloneOpen));
+    }
+    const row = el(
+      'button',
+      {
+        class: 'cset-sa',
+        type: 'button',
+        onClick: () => {
+          standaloneOpen = !standaloneOpen;
+          sync();
+        },
+      },
+      [
+        el(
+          'div',
+          { class: 'cset-sa-art' },
+          films.slice(0, 3).map((m) => poster(m.poster_url, ''))
+        ),
+        el('div', { class: 'cset-sa-text' }, [
+          el('div', { class: 'cset-sa-name', text: t('grid.standaloneTitle') }),
+          el('div', { class: 'cset-sa-meta', text: t('grid.standaloneCount', { n: films.length }) }),
+        ]),
+        el('span', { class: 'cset-sa-chev', html: icons.forward }),
+      ]
+    );
+    sync();
+    return el('div', { class: 'cset-sa-section' }, [row, grid]);
   }
 
   // --- Mount --------------------------------------------------------------

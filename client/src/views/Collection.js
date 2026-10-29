@@ -1,7 +1,10 @@
-// Collection detail screen (/collection/:id) — a TMDB movie collection shown as
-// a hero, an owned/total progress summary, and its films in release order.
-// Tapping a film opens its detail (when in the library) or the add-to-library
-// popup; adding one reloads the view to refresh the progress.
+// Collection detail screen (/collection/:id): a TMDB movie collection laid out
+// like a title's detail page. A backdrop hero with the collection poster over its
+// edge, the name, the years it spans, how much of it is in the library (a pip per
+// film), the overview, then every film in release order on the 3-column grid:
+// owned ones carry their watch status, missing ones are faded with a plus, and
+// unreleased ones say when they're coming. Tapping a film opens its detail (in
+// the library) or the add-to-library popup; adding one reloads the view.
 
 import { createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup } from '../router.js';
@@ -14,11 +17,53 @@ import {
   crossfadeSwap,
   clear,
   stateBlock,
+  lucideIcon,
 } from '../ui.js';
 import { collapsibleText } from '../collapsibleText.js';
 import { isServerReachable, markDegraded } from '../network.js';
 import { openAddModal } from './Search.js';
+import { collectionName } from './grid.js';
+import { STATUS_LABELS } from '../statusSelect.js';
 import { t } from '../i18n.js';
+
+// The status picker's icon for each watch status (statusSelect.js).
+const STATUS_ICON = {
+  plan_to_watch: 'calendar-plus',
+  watching: 'eye',
+  completed: 'library-big',
+  paused: 'pause',
+  dropped: 'x',
+};
+// Past this many films the pips would be slivers: one plain bar instead.
+const PIPS_MAX = 14;
+
+// "2009 – 2031 · 5 films" (just the count when no film has a year yet).
+function yearsLine(parts) {
+  const ys = parts.map((p) => Number(p.year)).filter(Boolean);
+  const count = t('collection.filmCount', { n: parts.length });
+  if (!ys.length) return count;
+  const a = Math.min(...ys);
+  const b = Math.max(...ys);
+  return `${a === b ? a : `${a} – ${b}`} · ${count}`;
+}
+
+function progress(parts) {
+  if (parts.length > PIPS_MAX) {
+    const owned = parts.filter((p) => p.in_library).length;
+    return el('div', { class: 'cp-bar' }, [el('i', { style: { width: `${(owned / parts.length) * 100}%` } })]);
+  }
+  return el(
+    'div',
+    { class: 'cp-pips' },
+    parts.map((p) => el('i', { class: p.in_library ? 'on' : '' }))
+  );
+}
+
+// No release year yet, or one still ahead: not out, so there is nothing to add
+// beyond a plan.
+function unreleased(p) {
+  return !p.year || Number(p.year) > new Date().getFullYear();
+}
 
 export default async function Collection(container, params) {
   const ac = new AbortController();
@@ -58,9 +103,11 @@ export default async function Collection(container, params) {
   }
 
   const reload = () => navigate(location.pathname, { replace: true });
+  const name = collectionName(d.name);
+  const complete = d.total > 0 && d.owned >= d.total;
 
-  // --- Hero ---
-  const hero = el('div', { class: 'detail-hero coll-hero' });
+  // --- Hero + head ---
+  const hero = el('div', { class: 'detail-hero cp-hero' });
   setBg(hero, d.backdrop_url || d.poster_url);
   hero.append(
     el('button', {
@@ -74,20 +121,24 @@ export default async function Collection(container, params) {
         zIndex: 3,
       },
       onClick: () => history.back(),
-    }),
-    el('div', { class: 'coll-hero-title' }, [el('h2', { text: d.name })])
+    })
   );
-
-  // --- Summary + progress ---
-  const pct = d.total ? Math.round((d.owned / d.total) * 100) : 0;
-  const head = el('div', { class: 'coll-detail-head' }, [
-    el('div', { class: 'muted', text: t('collection.inLibrary', { owned: d.owned, total: d.total }) }),
-    el('div', { class: 'progress-bar' }, [el('div', { style: { width: `${pct}%` } })]),
+  const art = poster(d.poster_url, name);
+  art.classList.add('cp-poster');
+  const head = el('div', { class: 'cp-head' }, [
+    art,
+    el('div', { class: 'cp-head-text' }, [
+      el('h2', { class: 'cp-name', text: name }),
+      el('div', { class: 'cp-years', text: yearsLine(d.parts) }),
+      el('div', {
+        class: `cp-owned${complete ? ' is-done' : ''}`,
+        text: complete ? t('collection.complete') : t('collection.inLibrary', { owned: d.owned, total: d.total }),
+      }),
+      d.parts.length ? progress(d.parts) : null,
+    ]),
   ]);
 
-  const body = el('div', {});
-  body.append(head);
-
+  const body = el('div', { class: 'cp-body' });
   // Uses the shared collapsible (same as Detail/Person): the old local version
   // toggled a line-clamp class, which cannot transition — the text snapped open
   // and shut. This animates the height and crossfades the label like everywhere
@@ -96,12 +147,28 @@ export default async function Collection(container, params) {
 
   // --- Films (release order) ---
   body.append(el('div', { class: 'section-title', text: t('collection.films') }));
-  const grid = el('div', { class: 'grid' });
+  const grid = el('div', { class: 'grid cp-grid' });
   for (const p of d.parts) {
-    const cell = el('div', { class: 'coll-cell' });
-    // Clean tap target — no inline badges or overlays. Tapping opens the detail
-    // popup (in-library) or the add-to-library popup, exactly like the main grid.
     const card = poster(p.poster_url, p.title);
+    if (p.in_library) {
+      if (STATUS_ICON[p.status]) {
+        card.append(
+          el('span', { class: 'cp-status', title: STATUS_LABELS[p.status], 'aria-label': STATUS_LABELS[p.status] }, [
+            lucideIcon(STATUS_ICON[p.status], 'btn-lucide'),
+          ])
+        );
+      }
+    } else {
+      card.classList.add('cp-missing');
+      card.append(
+        unreleased(p)
+          ? el('span', {
+              class: 'cp-soon',
+              text: p.year ? t('collection.coming', { year: p.year }) : t('collection.announced'),
+            })
+          : el('span', { class: 'cp-add', 'aria-hidden': 'true', html: icons.plus })
+      );
+    }
     card.addEventListener('click', () =>
       p.in_library
         ? openDetail(`/detail/${p.item_id}`)
@@ -116,11 +183,13 @@ export default async function Collection(container, params) {
             { onAdded: reload }
           )
     );
-    cell.append(
-      card,
-      el('div', { class: 'coll-film-title', text: `${p.title}${p.year ? ` (${p.year})` : ''}` })
+    grid.append(
+      el('div', { class: `cp-cell${p.in_library ? '' : ' is-missing'}` }, [
+        card,
+        el('div', { class: 'cp-title', text: p.title }),
+        el('div', { class: 'cp-year', text: p.year || t('collection.noYear') }),
+      ])
     );
-    grid.append(cell);
   }
   if (!d.parts.length) {
     grid.append(
@@ -131,6 +200,6 @@ export default async function Collection(container, params) {
 
   crossfadeSwap(() => {
     container.innerHTML = '';
-    container.append(hero, body);
+    container.append(hero, head, body);
   });
 }
