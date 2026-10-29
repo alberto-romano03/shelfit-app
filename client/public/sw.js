@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v148'; // bumped: TV Time upload for every member, complete backups
+const CACHE = 'shelfit-shell-v149'; // bumped: What's Next kept for the session; cached images recover from a revoked copy
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by

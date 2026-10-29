@@ -26,7 +26,7 @@ import Season from './views/Season.js';
 import Settings from './views/Settings.js';
 import ListView from './views/List.js';
 import { resetGridSection } from './views/grid.js';
-import { resetUpcoming } from './views/Upcoming.js';
+import { resetUpcoming, rebuildUpcoming } from './views/Upcoming.js';
 import { preloader } from './preloader.js';
 
 initTheme();
@@ -122,8 +122,9 @@ const tabButtons = TABS.map((tab) => {
   const btn = el('button', {
     'data-path': tab.path,
     html: tab.icon,
-    // A bottom-nav tap is a manual refresh: discard any remembered state/cache
-    // for the target page so it reloads fresh (defaults + top of list).
+    // A bottom-nav tap resets the grids (defaults + top of list). What's Next
+    // keeps its saved page for the session and only returns to the top; it
+    // updates itself when the library changes (see views/Upcoming.js).
     onClick: () => {
       resetGridSection(tab.path);
       if (tab.path === '/upcoming') resetUpcoming();
@@ -223,7 +224,7 @@ onLangChange(() => {
   // back in the old language: drop those caches so they rebuild.
   resetGridSection('/movies');
   resetGridSection('/series');
-  resetUpcoming();
+  rebuildUpcoming();
   navigate(location.pathname, { replace: true, transition: false });
 });
 

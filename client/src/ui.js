@@ -480,11 +480,24 @@ export function starSvg(filled) {
 // and replaces its own skeleton the moment it decodes — nothing is batched
 // behind a blob round-trip that would hold images back and pop them in all at
 // once.
+// Cached images are blob: URLs owned by imageCache. One can be revoked while its
+// <img> sits in a page kept for later (the cache evicted it to stay in budget),
+// and a browser that dropped a detached page's decoded pixels (iOS does) then
+// fails to reload it on return: the image vanished and its shimmer stayed. Fall
+// back once to the file's own URL instead. Returns true when it retried.
+function retryWithoutBlob(img, url) {
+  if (!url || img.dataset.blobRetry || !String(img.src).startsWith('blob:')) return false;
+  img.dataset.blobRetry = '1';
+  img.src = withBase(url);
+  return true;
+}
+
 export function lazyLoad(img, url) {
   if (!url) return;
   url = withBase(url); // server emits root-absolute paths; serve under /base
   const cached = imageCache.get(url);
   if (cached) {
+    img.addEventListener('error', () => retryWithoutBlob(img, url));
     img.src = cached;
     return;
   }
@@ -523,6 +536,7 @@ export function cachedBlobImg(url, props = {}) {
   const img = el('img', props);
   fadeInOnLoad(img);
   if (url) {
+    img.addEventListener('error', () => retryWithoutBlob(img, url));
     imageCache
       .load(url)
       .then((resolved) => {
@@ -556,6 +570,8 @@ export function mountPoster(container, url, alt, opts = {}) {
     const show = () => container.classList.remove('skeleton');
     img.addEventListener('load', show);
     img.addEventListener('error', () => {
+      if (retryWithoutBlob(img, url)) return; // a revoked cache copy: try the file
+      container.classList.add('skeleton');
       if (img.parentNode) img.remove(); // keep the shimmer, never a broken icon
     });
     img.src = hit;
@@ -582,8 +598,10 @@ export function mountPoster(container, url, alt, opts = {}) {
   };
   img.addEventListener('load', reveal);
   // Keep the shimmer; drop the broken <img> so no broken-image icon appears.
-  // Do NOT re-fetch automatically.
+  // Do NOT re-fetch automatically, except once from a revoked cache copy.
   img.addEventListener('error', () => {
+    if (retryWithoutBlob(img, url)) return;
+    container.classList.add('skeleton');
     if (img.parentNode) img.remove();
   });
   container.append(img);

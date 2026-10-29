@@ -21,61 +21,78 @@ import { saveUpNext, getUpNext, saveUpcoming, getUpcoming, formatSyncTime } from
 import { t, locale, getLang } from '../i18n.js';
 import { userPrefix } from '../userScope.js';
 
-// Retain the built What's Next timeline (images decoded) so returning to it —
-// e.g. back from a title's detail — re-attaches it instantly with the scroll
-// position preserved, exactly like the Movies/Series grids. A mutation anywhere
-// (marking an episode changes what's next) fires 'shelfit:library-changed',
-// which drops it; tapping the What's Next tab (resetUpcoming) forces a refresh.
-let upcomingDom = null; // { node, scrollY, lang } | null
-let upcomingFresh = false; // next mount should rebuild (manual refresh)
+// What's Next is fetched once per session and then served from memory: reopening
+// it (from the tab bar too) re-attaches the page built last time, scroll and
+// decoded images included, with no skeleton and no request. Two layers:
+//   • upcomingDom: the built page itself (SPA navigation);
+//   • `session`: the last payload, mirrored in sessionStorage so a page reload in
+//     the same session paints instantly too. Wiped when the tab/PWA closes, and
+//     kept under the signed-in member's prefix like all their on-device data.
+// A library change (an episode marked, a series added or moved to Watching, an
+// import…) fires 'shelfit:library-changed', which only marks the copy STALE: the
+// next open still paints it at once, then fetches in the background and swaps the
+// page only if the content actually changed. If What's Next is on screen at that
+// moment it updates in place. A new day rebuilds the page from the saved payload
+// (countdowns are computed client-side from air dates) and revalidates it, and a
+// copy older than SESSION_FRESH_MS is quietly revalidated too, which catches what
+// the server changes on its own (the nightly Kodi sync).
+const SESSION_FRESH_MS = 30 * 60 * 1000;
+let upcomingDom = null; // { node, scrollY, lang, day, key } | null
+let session = null; // { data, at, day, stale, key } | null (key: whose copy it is)
+let upcomingToTop = false; // next mount scrolls to the top (a tab-bar tap)
+let liveRefresh = null; // set while What's Next is mounted: revalidate in place
 
-// Second cache layer: the last upcoming() payload, kept in sessionStorage so the
-// timeline (On the Horizon railway + Up Next) paints instantly even across a full
-// page reload — the in-memory `upcomingDom` above only survives SPA navigation.
-// The horizon episodes/series/air-dates rarely change during a day, so the cached
-// copy is almost always current and is revalidated by a background fetch. Cleared
-// on any library mutation (which can change what's up next) and wiped when the tab
-// closes (sessionStorage semantics), so it never goes stale across days. Kept
-// under the signed-in member's prefix, like every on-device copy of their data.
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function sessionKey() {
   const prefix = userPrefix();
   return prefix ? `${prefix}upcoming` : null;
 }
-function readSessionUpcoming() {
+function readSession() {
   const key = sessionKey();
   if (!key) return null;
   try {
     const raw = sessionStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
+    const v = raw ? JSON.parse(raw) : null;
+    // (ignores the older bare-payload format)
+    return v && v.data && typeof v.at === 'number' ? { ...v, key } : null;
   } catch {
     return null; // disabled/private storage or malformed
   }
 }
-function writeSessionUpcoming(data) {
+function writeSession(v) {
   const key = sessionKey();
+  session = { ...v, key };
   if (!key) return;
   try {
-    sessionStorage.setItem(key, JSON.stringify(data));
+    sessionStorage.setItem(key, JSON.stringify({ data: v.data, at: v.at, day: v.day, stale: v.stale }));
   } catch {
-    /* quota / disabled — best-effort */
-  }
-}
-function clearSessionUpcoming() {
-  const key = sessionKey();
-  if (!key) return;
-  try {
-    sessionStorage.removeItem(key);
-  } catch {
-    /* ignore */
+    /* quota / disabled: the in-memory copy still works */
   }
 }
 
+// The in-memory copy, only if it belongs to the member signed in now.
+function currentSession() {
+  if (!session || session.key !== sessionKey()) session = readSession();
+  return session;
+}
+
 window.addEventListener('shelfit:library-changed', () => {
-  upcomingDom = null;
-  clearSessionUpcoming();
+  const s = currentSession();
+  if (s && !s.stale) writeSession({ ...s, stale: true });
+  if (liveRefresh) liveRefresh();
 });
+
+// Tab-bar tap: show the saved page, from the top. No refetch.
 export function resetUpcoming() {
-  upcomingFresh = true;
+  upcomingToTop = true;
+}
+// The interface language changed: rebuild the page (its labels) from the saved
+// payload on the next mount. The data itself doesn't depend on the UI language.
+export function rebuildUpcoming() {
   upcomingDom = null;
 }
 
@@ -470,48 +487,51 @@ function mountUpcomingOffline(container, data, savedAt) {
 }
 
 // Paint a freshly built view into the container and record it for instant return.
-function mountUpcoming(container, data) {
+// `fade`: crossfade over what is on screen (a revalidation that found changes).
+function mountUpcoming(container, data, { fade = true } = {}) {
   const { content, railway } = buildUpcoming(data);
-  crossfadeSwap(() => {
+  const swap = () => {
     container.innerHTML = '';
     container.append(content);
-  });
-  upcomingDom = { node: content, scrollY: 0, lang: getLang() };
+  };
+  if (fade) crossfadeSwap(swap);
+  else swap();
+  upcomingDom = { node: content, scrollY: 0, lang: getLang(), day: todayKey(), key: sessionKey() };
   // Arrows need layout sizes, so initialise after the node is in the DOM.
   if (railway) requestAnimationFrame(() => railway.init());
 }
 
 export default async function Upcoming(container) {
-  const fresh = upcomingFresh;
-  upcomingFresh = false;
+  const toTop = upcomingToTop;
+  upcomingToTop = false;
+  const day = todayKey();
+  const cached = currentSession();
+  const needsFetch =
+    !cached || cached.stale || cached.day !== day || Date.now() - cached.at >= SESSION_FRESH_MS;
 
-  // Retained DOM hit: re-attach the exact timeline built last time and restore
-  // scroll — no refetch, no rebuild, no flash.
-  if (!fresh && upcomingDom && upcomingDom.lang === getLang()) {
-    container.append(upcomingDom.node);
-    onCleanup(() => {
-      if (upcomingDom) upcomingDom.scrollY = window.scrollY;
-    });
-    requestAnimationFrame(() => window.scrollTo(0, upcomingDom.scrollY || 0));
-    return;
-  }
-
-  const ac = new AbortController();
-  const api = createApi(ac.signal);
-
-  // Fast paint from the session cache (no skeleton) when we have a recent payload
-  // and this isn't a forced refresh. The background fetch below revalidates it.
-  const cached = fresh ? null : readSessionUpcoming();
+  // --- Paint: the retained page, else one built from the saved payload, else a
+  // skeleton (first open of the session). ---
   let painted = false;
-  if (cached) {
-    const { content, railway } = buildUpcoming(cached);
-    container.append(content);
-    upcomingDom = { node: content, scrollY: 0, lang: getLang() };
-    if (railway) requestAnimationFrame(() => railway.init());
+  if (
+    cached &&
+    upcomingDom &&
+    upcomingDom.key === cached.key &&
+    upcomingDom.lang === getLang() &&
+    upcomingDom.day === day
+  ) {
+    container.append(upcomingDom.node);
+    const y = toTop ? 0 : upcomingDom.scrollY || 0;
+    requestAnimationFrame(() => window.scrollTo(0, y));
+    painted = true;
+  } else if (cached) {
+    mountUpcoming(container, cached.data, { fade: false });
     painted = true;
   } else {
     container.append(upcomingSkeleton());
   }
+
+  const ac = new AbortController();
+  const api = createApi(ac.signal);
 
   // Swap the skeleton for the durable offline view when the server is unreachable.
   // Mirrors the Movies/Series grid: we must NOT sit on the skeleton waiting for a
@@ -524,7 +544,7 @@ export default async function Upcoming(container) {
   function showOffline() {
     if (done) return;
     markDegraded(); // recovery re-mounts this view when the server returns
-    if (painted) return; // session content already on screen — keep it
+    if (painted) return; // session content already on screen: keep it
     // Prefer the full durable payload while within its TTL: the whole view — "On
     // the Horizon" railway included — renders offline with countdowns recomputed
     // from each air_date. Once stale, fall back to the date-independent Up Next
@@ -553,53 +573,71 @@ export default async function Upcoming(container) {
     }
   }
   window.addEventListener('shelfit:server-change', onServerChange);
-  // Single teardown for this view: abort the fetch,
-  // drop the listener, and save scroll.
+
+  // Fetch, save, and repaint only when the payload differs from what is on
+  // screen (so an unchanged What's Next never flashes). One at a time.
+  let inflight = null;
+  function revalidate() {
+    if (inflight) return inflight;
+    inflight = (async () => {
+      let data;
+      try {
+        data = await api.upcoming();
+      } catch (err) {
+        if (isAbortError(err)) return; // navigated away, or aborted on going offline
+        if (!isServerReachable()) {
+          showOffline();
+          return;
+        }
+        // A real error from a reachable backend, with nothing on screen to keep.
+        if (!painted && !done) {
+          clear(container);
+          container.append(
+            stateBlock({
+              kind: 'error',
+              title: t('upcoming.loadError'),
+              error: err.message,
+              action: { onClick: () => navigate(location.pathname + location.search, { replace: true }) },
+            })
+          );
+        }
+        return;
+      }
+      done = true;
+      const shown = session && session.data;
+      writeSession({ data, at: Date.now(), day: todayKey(), stale: false });
+      // Durably persist the Up Next cards so they're available offline and after
+      // a relaunch (sessionStorage is wiped when the PWA reopens), plus the whole
+      // payload so "On the Horizon" also renders offline (within its TTL).
+      saveUpNext(data.watch_next || []);
+      saveUpcoming(data);
+      if (painted && shown && JSON.stringify(shown) === JSON.stringify(data)) return;
+      mountUpcoming(container, data, { fade: painted });
+      painted = true;
+    })().finally(() => {
+      inflight = null;
+    });
+    return inflight;
+  }
+
+  // While on screen, a library change updates the page in place.
+  liveRefresh = () => revalidate();
+
+  // Single teardown for this view: abort the fetch, drop the listeners, and
+  // save the scroll position for the next visit.
   onCleanup(() => {
     ac.abort();
+    liveRefresh = null;
     window.removeEventListener('shelfit:server-change', onServerChange);
     if (upcomingDom) upcomingDom.scrollY = window.scrollY;
   });
+
+  if (!needsFetch) return; // saved copy is current: no request at all
 
   // Already offline at mount → show the cached view now instead of waiting on a
   // fetch that would just stall. The fetch still runs; if the server turns out to
   // be reachable it supersedes this with fresh content.
   if (!painted && !isServerReachable()) showOffline();
 
-  let data;
-  try {
-    data = await api.upcoming();
-  } catch (err) {
-    if (isAbortError(err)) return; // navigated away, or aborted on going offline
-    if (!isServerReachable()) {
-      showOffline();
-      return;
-    }
-    // A real error from a reachable backend, with nothing cached to show.
-    if (!painted && !done) {
-      clear(container);
-      container.append(
-        stateBlock({
-          kind: 'error',
-          title: t('upcoming.loadError'),
-          error: err.message,
-          action: { onClick: () => navigate(location.pathname + location.search, { replace: true }) },
-        })
-      );
-    }
-    return;
-  }
-  done = true;
-
-  // Revalidate: refresh the session cache, and repaint only when the fresh
-  // payload actually differs from what was painted (so an unchanged day causes no
-  // flash). A skeleton (no cache) always swaps in the real content.
-  writeSessionUpcoming(data);
-  // Durably persist the Up Next cards so they're available offline and after a
-  // relaunch (sessionStorage above is wiped when the PWA reopens), plus the whole
-  // payload so "On the Horizon" also renders offline (within its TTL).
-  saveUpNext(data.watch_next || []);
-  saveUpcoming(data);
-  if (painted && JSON.stringify(cached) === JSON.stringify(data)) return;
-  mountUpcoming(container, data);
+  await revalidate();
 }
