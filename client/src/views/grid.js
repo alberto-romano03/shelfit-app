@@ -66,6 +66,11 @@ const gridState = {};
 // type -> the next mount opens on the default filter (ignores the remembered one).
 const gridFresh = {};
 
+// Where the status bar's chip was when a grid page was left ({ type, geometry,
+// collapsed }), so the other grid can glide its chip from there. Read once by the
+// next grid mount.
+let statusHandoff = null;
+
 // A bottom-nav tab tap: the section opens on its default chip/sort, at the top of
 // the list. Its cached pages stay, so it paints at once with no poster reloads;
 // they update themselves when the library changes (see ../gridVirtual.js).
@@ -130,6 +135,7 @@ export async function gridView(container, type) {
     },
   });
   const chipRow = statusBar.el;
+  chipRow.classList.add('grid-status'); // the bar held still across Movies <-> Series
   const chipByKey = {};
   chipDefs.forEach((s) => {
     chipByKey[s.key] = statusBar.optionEl(s.key);
@@ -375,6 +381,11 @@ export async function gridView(container, type) {
     container.classList.remove('view-grid-virtual');
     document.body.classList.remove('grid-virtual-active');
     gridState[type] = { status: state.status, genre: state.genre, sort: state.sort, coll: state.coll };
+    statusHandoff = {
+      type,
+      geometry: statusBar.geometry(),
+      collapsed: chipRow.classList.contains('segbar--collapsed'),
+    };
     if (state.status === 'collections') collectionsScrollY = window.scrollY;
   });
 
@@ -746,6 +757,21 @@ export async function gridView(container, type) {
 
   // --- Mount --------------------------------------------------------------
   lockChips(!isServerReachable());
+  // Arriving from the other grid (Movies <-> Series): the bar is held still
+  // through the page fade (styles.css, data-vt='grid') and its chip glides over
+  // from where the other page's chip was. Not when either bar is down to its
+  // single offline chip: there's nothing to travel between.
+  const handoff = statusHandoff;
+  statusHandoff = null;
+  if (
+    handoff &&
+    handoff.type !== type &&
+    !handoff.collapsed &&
+    !chipRow.classList.contains('segbar--collapsed') &&
+    document.documentElement.dataset.vt === 'grid'
+  ) {
+    statusBar.glideFrom(handoff.geometry);
+  }
   syncChrome();
   renderGrid();
 }

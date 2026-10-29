@@ -146,8 +146,13 @@ const navAnim = initNavAnimations(tabButtons);
 app.append(header, viewContainer, tabbar);
 
 // --- Router ---------------------------------------------------------------
+const GRID_PATHS = new Set(['/movies', '/series']);
 initRouter({
   container: viewContainer,
+  // Movies <-> Series: the status bar stays put while the page fades and its
+  // chip glides to the other page's filter (views/grid.js).
+  transitionFor: (from, to) =>
+    from !== to && GRID_PATHS.has(from) && GRID_PATHS.has(to) ? 'grid' : null,
   routes: [
     { path: '/', view: Home },
     { path: '/series', view: Series },

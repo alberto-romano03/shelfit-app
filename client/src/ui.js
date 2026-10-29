@@ -1014,19 +1014,33 @@ export function segmentedBar({
   });
 
   let active = Math.max(0, options.findIndex(([k]) => k === value));
+  // The first placement is instant: a new bar's chip would otherwise slide in
+  // from the track's left edge on every page that mounts one.
+  let placed = false;
 
   function paint(scrollIntoView) {
     const b = buttons[active];
     if (!b) return;
     // A hidden option has no box to sit on; leave the chip where it is.
     if (b.offsetParent === null && b.offsetWidth === 0) return;
+    if (!placed) chip.style.transition = 'none';
     chip.style.width = `${b.offsetWidth}px`;
     chip.style.transform = `translateX(${b.offsetLeft}px)`;
+    if (!placed) {
+      placed = true;
+      void chip.offsetWidth; // commit the placement before transitions return
+      chip.style.transition = '';
+    }
     buttons.forEach((x, i) => x.setAttribute('aria-checked', String(i === active)));
     // Without this, choosing an option that sits off-screen moves the chip
-    // somewhere the user cannot see.
+    // somewhere the user cannot see. On the next frame: the choice's onChange
+    // often changes the page's layout right after this (Movies -> Collections
+    // swaps the grid for a list), and that cancels a smooth scroll started
+    // before it, leaving the chip out of sight.
     if (scrollIntoView && typeof b.scrollIntoView === 'function') {
-      b.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+      requestAnimationFrame(() => {
+        if (buttons[active] === b) b.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+      });
     }
   }
   function pick(i, notify, scroll) {
@@ -1057,6 +1071,37 @@ export function segmentedBar({
     set: (v) => pick(options.findIndex(([k]) => k === v), false, false),
     refresh: () => paint(false),
     optionEl: (key) => byKey[key],
+    // Where the chip is now, to hand over to another bar (see glideFrom): its
+    // live position, so a hand-over in the middle of a glide (a quick second
+    // tap) picks up from where the chip actually is.
+    geometry() {
+      if (!buttons[active]) return null;
+      const m = new DOMMatrixReadOnly(getComputedStyle(chip).transform);
+      return { x: m.m41, w: chip.offsetWidth, scrollLeft: root.scrollLeft, key: options[active][0] };
+    },
+    // Start the chip where another bar's chip was (its geometry()) and glide it
+    // to this bar's option: Movies and Series hand their chip over this way. The
+    // two bars need not hold the same options; the start is just a position.
+    // Call once the bar is in the DOM.
+    glideFrom(prev) {
+      if (!prev) return;
+      placed = true;
+      root.scrollLeft = prev.scrollLeft;
+      // A shorter track (fewer options) can't scroll as far and clamps: start
+      // the chip where it was on screen, not where it was in the old track.
+      const x = prev.x - prev.scrollLeft + root.scrollLeft;
+      chip.style.transition = 'none';
+      chip.style.width = `${prev.w}px`;
+      chip.style.transform = `translateX(${x}px)`;
+      // The label the chip starts under stays dark until the chip leaves it.
+      const under = byKey[prev.key];
+      buttons.forEach((x) => x.setAttribute('aria-checked', String(x === under)));
+      void chip.offsetWidth; // commit the start before the transition returns
+      chip.style.transition = '';
+      root.classList.add('segbar--glide');
+      requestAnimationFrame(() => paint(true));
+      setTimeout(() => root.classList.remove('segbar--glide'), 600);
+    },
   };
 }
 

@@ -8,6 +8,11 @@ import { t } from './i18n.js';
 let routes = [];
 let container = null;
 let onChange = null;
+// Optional (from, to) => kind: lets the app pick a different transition than
+// the plain fade for a particular hop (Movies <-> Series, see main.js).
+let transitionFor = null;
+let currentPath = null; // the path on screen, for transitionFor
+let vtSeq = 0; // bumped per page transition; only the latest clears <html data-vt>
 // Teardown callbacks for the view currently being mounted. Registered
 // synchronously from a view's body (before its first await) so navigation can
 // abort in-flight requests even while the view is still loading.
@@ -70,6 +75,7 @@ function compile(pattern) {
 export function initRouter(opts) {
   container = opts.container;
   onChange = opts.onChange || null;
+  transitionFor = opts.transitionFor || null;
   routes = opts.routes.map((r) => ({ ...r, ...compile(r.path) }));
 
   window.addEventListener('popstate', (event) => {
@@ -156,13 +162,17 @@ function performRender(path) {
 // ('fade') exposed on <html data-vt> so the stylesheet can style it. Unsupported
 // browsers or reduced-motion just render instantly.
 export function render(path, opts = {}) {
-  const kind = opts.transition;
+  const from = currentPath;
+  currentPath = path;
+  let kind = opts.transition;
+  if (kind && transitionFor) kind = transitionFor(from, path) || kind;
   if (!kind || !supportsViewTransition() || prefersReduced()) {
     if (typeof opts.onFinish === 'function') opts.onFinish();
     return performRender(path);
   }
   const root = document.documentElement;
   root.dataset.vt = kind;
+  const mine = ++vtSeq;
   // The callback is synchronous as far as the API is concerned (we don't return
   // the view's data promise), so the transition captures the skeleton, not the
   // fully-loaded page — fast, no extra wait.
@@ -170,7 +180,9 @@ export function render(path, opts = {}) {
     performRender(path);
   });
   const done = () => {
-    if (root.dataset.vt === kind) delete root.dataset.vt;
+    // Only the latest transition clears the marker: a quick second tap starts a
+    // new one before this one's `finished` settles.
+    if (vtSeq === mine) delete root.dataset.vt;
     if (typeof opts.onFinish === 'function') opts.onFinish();
   };
   // `.ready` rejects when a transition is skipped/aborted (e.g. the document

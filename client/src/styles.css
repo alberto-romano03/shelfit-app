@@ -5650,12 +5650,31 @@ button.cset-row:active {
 /* Simple, fast dissolve between pages (e.g. shelf <-> detail): the incoming
    page fades in over the outgoing snapshot. No movement, no morph, no dip. */
 @media (prefers-reduced-motion: no-preference) {
-  html[data-vt='fade']::view-transition-old(root) {
+  html[data-vt='fade']::view-transition-old(root),
+  html[data-vt='grid']::view-transition-old(root) {
     animation: none;
   }
-  html[data-vt='fade']::view-transition-new(root) {
+  html[data-vt='fade']::view-transition-new(root),
+  html[data-vt='grid']::view-transition-new(root) {
     animation: vt-fade-in var(--dur-long) var(--ease-out) both;
   }
+}
+/* Movies <-> Series ('grid'): the status bar sits in the same place on both
+   pages, so it is lifted out of the fade and shown live and solid: no snapshot
+   of the old bar, no cross-fade of two bars, no size morph. Its chip glides from
+   the old page's option to the new one (segmentedBar's glideFrom), drawn above
+   the incoming page. */
+html[data-vt='grid'] .segbar.grid-status {
+  view-transition-name: grid-status;
+}
+html[data-vt='grid']::view-transition-group(grid-status) {
+  animation: none;
+}
+html[data-vt='grid']::view-transition-old(grid-status) {
+  display: none;
+}
+html[data-vt='grid']::view-transition-new(grid-status) {
+  animation: none;
 }
 @keyframes vt-fade-in {
   from {
@@ -9833,6 +9852,15 @@ textarea.lend-message-input:focus {
 }
 .segbar-opt[aria-checked='true'] {
   color: #000;
+}
+/* A chip handed over from another bar (glideFrom): a longer, eased glide that
+   spans the page fade, with the labels' colour change keeping pace. */
+.segbar--glide .segbar-chip {
+  transition-duration: var(--dur-long), var(--dur-long);
+  transition-timing-function: var(--ease-in-out), var(--ease-in-out);
+}
+.segbar--glide .segbar-opt {
+  transition-duration: var(--dur-long);
 }
 .segbar-opt:focus-visible {
   outline: 2px solid var(--accent);
