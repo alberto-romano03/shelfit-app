@@ -991,6 +991,12 @@ export function segmentedControl({
 //
 // Returns { el, set(value), refresh(), optionEl(key) }. Call refresh() after
 // showing or hiding options — their widths move the chip.
+
+// Length of the two pills whose overlap is the chip (styles.css --segbar-span).
+// Longer than any option plus the track's height, so their far ends never
+// reach the visible chip.
+const SEGBAR_SPAN = 600;
+
 export function segmentedBar({
   options = [],
   value,
@@ -1003,8 +1009,16 @@ export function segmentedBar({
   // chip covers a label shows that label dark, frame by frame, so the text is
   // never grey on the chip or dark on the track mid-move. (The labels used to
   // fade their colour on their own timer, which never matched the chip.)
+  //
+  // Its size changes by moving things, never by resizing them: the chip is
+  // where two long pills overlap, the outer one ending at the chip's right edge
+  // (it clips the right side) and the gold one starting at its left edge (it
+  // clips the left). Moving, growing or shrinking the chip only slides those
+  // two, so the whole change runs off the main thread and stays smooth while a
+  // page is being built (a width transition stalled there, then jumped).
   const ink = el('div', { class: 'segbar-ink' });
-  const chip = el('div', { class: 'segbar-chip', 'aria-hidden': 'true' }, [ink]);
+  const fill = el('div', { class: 'segbar-fill' }, [ink]);
+  const chip = el('div', { class: 'segbar-chip', 'aria-hidden': 'true' }, [fill]);
   const root = el('div', { class: 'segbar', role: 'radiogroup', 'aria-label': ariaLabel }, [chip]);
   const byKey = {};
   const buttons = [];
@@ -1046,14 +1060,18 @@ export function segmentedBar({
       s.width = `${w}px`;
     });
   }
+  // The chip spans [x, x + w]. Each of the three moves is linear in the same
+  // eased progress, so the overlap is a true pill at x..x+w on every frame and
+  // the ink stays on the labels (outer + fill = x, x + ink = 0).
   function place(x, w, instant) {
-    if (instant) chip.style.transition = ink.style.transition = 'none';
-    chip.style.width = `${w}px`;
-    chip.style.transform = `translateX(${x}px)`;
+    const parts = [chip, fill, ink];
+    if (instant) parts.forEach((p) => (p.style.transition = 'none'));
+    chip.style.transform = `translateX(${x + w - SEGBAR_SPAN}px)`;
+    fill.style.transform = `translateX(${SEGBAR_SPAN - w}px)`;
     ink.style.transform = `translateX(${-x}px)`;
     if (instant) {
       void chip.offsetWidth; // commit the placement before transitions return
-      chip.style.transition = ink.style.transition = '';
+      parts.forEach((p) => (p.style.transition = ''));
     }
   }
 
@@ -1118,8 +1136,10 @@ export function segmentedBar({
     // tap) picks up from where the chip actually is.
     geometry() {
       if (!buttons[active]) return null;
-      const m = new DOMMatrixReadOnly(getComputedStyle(chip).transform);
-      return { x: m.m41, w: chip.getBoundingClientRect().width, scrollLeft: root.scrollLeft, key: options[active][0] };
+      const outer = new DOMMatrixReadOnly(getComputedStyle(chip).transform).m41; // x + w - span
+      const inner = new DOMMatrixReadOnly(getComputedStyle(fill).transform).m41; // span - w
+      const w = SEGBAR_SPAN - inner;
+      return { x: outer + inner, w, scrollLeft: root.scrollLeft, key: options[active][0] };
     },
     // Start the chip where another bar's chip was (its geometry()) and glide it
     // to this bar's option: Movies and Series hand their chip over this way. The

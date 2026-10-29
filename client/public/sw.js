@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v157'; // bumped: segmented bar chip carries its own dark labels
+const CACHE = 'shelfit-shell-v158'; // bumped: segmented bar chip resizes with transforms only
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by

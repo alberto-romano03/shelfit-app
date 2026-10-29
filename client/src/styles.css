@@ -9774,6 +9774,7 @@ textarea.lend-message-input:focus {
    offset of the chip are set from JS because the labels differ in width. */
 .segbar {
   --segbar-pad: 5px;
+  --segbar-span: 600px; /* SEGBAR_SPAN in ui.js */
   position: relative;
   display: flex;
   align-items: stretch;
@@ -9823,19 +9824,34 @@ textarea.lend-message-input:focus {
 }
 /* The chip rides ABOVE the labels (taps fall through to them) and carries a
    dark copy of every label, the ink, sliding opposite to it: the part of the
-   chip over a label shows that label dark, on every frame of a move. */
+   chip over a label shows that label dark, on every frame of a move.
+   It is the overlap of two long pills, both only ever translated (see
+   segmentedBar): .segbar-chip ends at the chip's right edge and clips that
+   side, the gold .segbar-fill inside it starts at the left edge and clips the
+   other. Moving and resizing are both just transforms, so the compositor runs
+   them even while the page underneath is busy being built. */
 .segbar-chip {
   position: absolute;
   z-index: 2;
   top: var(--segbar-pad);
   left: 0;
+  width: var(--segbar-span);
   height: calc(100% - var(--segbar-pad) * 2);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  pointer-events: none;
+  transition: transform var(--dur-short) var(--ease-out);
+}
+.segbar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--segbar-span);
+  height: 100%;
   border-radius: var(--r-pill);
   background: var(--accent);
   overflow: hidden;
-  pointer-events: none;
-  transition: transform var(--dur-short) var(--ease-out),
-    width var(--dur-short) var(--ease-out);
+  transition: transform var(--dur-short) var(--ease-out);
 }
 .segbar-ink {
   position: absolute;
@@ -9875,11 +9891,9 @@ textarea.lend-message-input:focus {
   white-space: nowrap;
 }
 /* A chip handed over from another bar (glideFrom): a longer, eased glide that
-   spans the page fade; its ink keeps the same pace. */
-.segbar--glide .segbar-chip {
-  transition-duration: var(--dur-long), var(--dur-long);
-  transition-timing-function: var(--ease-in-out), var(--ease-in-out);
-}
+   spans the page fade; all three parts keep the same pace. */
+.segbar--glide .segbar-chip,
+.segbar--glide .segbar-fill,
 .segbar--glide .segbar-ink {
   transition-duration: var(--dur-long);
   transition-timing-function: var(--ease-in-out);
@@ -9888,9 +9902,12 @@ textarea.lend-message-input:focus {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-/* The chip covers the chosen option's own focus ring: draw it on the chip. */
-.segbar:has(.segbar-opt[aria-checked='true']:focus-visible) .segbar-chip {
-  box-shadow: inset 0 0 0 2px #000;
+/* The chip covers the chosen option: lift its focus ring above the chip, with
+   the grey text hidden so the chip's dark copy shows through. */
+.segbar-opt[aria-checked='true']:focus-visible {
+  z-index: 3;
+  color: transparent;
+  outline-color: #000;
 }
 /* Separates the "no filter" option from the watch statuses proper. */
 .segbar-divider {
@@ -9913,6 +9930,7 @@ textarea.lend-message-input:focus {
 }
 @media (prefers-reduced-motion: reduce) {
   .segbar-chip,
+  .segbar-fill,
   .segbar-ink {
     transition: none;
   }
