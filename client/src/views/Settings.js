@@ -3,7 +3,7 @@
 // (Add to Home Screen), notifications, list management, Kodi, and account. Tabs
 // are built from what actually exists; Account appears only when auth is on.
 
-import { api, createApi, isAbortError } from '../api.js';
+import { api, createApi, isAbortError, markLibraryChanged } from '../api.js';
 import { onCleanup } from '../router.js';
 import { currentTheme, setTheme } from '../theme.js';
 import { getPref, setPref } from '../prefs.js';
@@ -38,6 +38,7 @@ import { t, getLang, setLang, LANGUAGES, locale } from '../i18n.js';
 
 export default async function Settings(container) {
   let pollTimer = null;
+  let logSource = 'folder'; // whose not-found log the log row opens (see startPolling)
   let filesData = null; // filled when importFiles resolves
 
   const ac = new AbortController();
@@ -398,8 +399,52 @@ export default async function Settings(container) {
     );
   }
 
-  // --- TV Time Import (ON-DEMAND — files are scanned only when requested) ---
+  // --- TV Time Import ---
+  // Every member can upload the .zip TV Time sends them (their own library; the
+  // master's upload follows the "Import into" picker). The master also keeps the
+  // server-folder tools below it (files are scanned only when requested).
   const importSection = el('div', { class: 'settings-section' });
+  const importDesc = el('div', { class: 'muted usage-desc', text: t('settings.tvtime.descMember') });
+  const zipInput = el('input', {
+    type: 'file',
+    accept: '.zip,application/zip,application/x-zip-compressed',
+    style: { display: 'none' },
+  });
+  const uploadRow = settingsRow({
+    icon: 'file-up',
+    label: t('settings.tvtime.upload'),
+    sub: t('settings.tvtime.uploadSub'),
+    onClick: () => zipInput.click(),
+  });
+  zipInput.addEventListener('change', async () => {
+    const file = zipInput.files && zipInput.files[0];
+    zipInput.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+    uploadRow.busy(true);
+    startRow.setDisabled(true);
+    summaryText.textContent = '';
+    progressText.textContent = t('settings.tvtime.uploading');
+    try {
+      await api.uploadTvTime(file, importTarget);
+      startPolling('upload');
+    } catch (err) {
+      progressText.textContent = '';
+      const code = err.data && err.data.error;
+      const msg =
+        err.status === 413
+          ? t('settings.tvtime.tooBig')
+          : code === 'busy'
+            ? t('settings.tvtime.busy')
+            : code === 'tvtime_missing'
+              ? t('settings.tvtime.noTvTime')
+              : code === 'not_a_zip' || code === 'unreadable'
+                ? t('settings.tvtime.badZip')
+                : err.message;
+      toast(msg, 'bad');
+    } finally {
+      uploadRow.busy(false);
+    }
+  });
   const importResults = el('div', { class: 'import-results muted' });
   // Whose library the import fills: the master's own by default; with other
   // members in the household a picker appears (filled in once the master is
@@ -486,19 +531,19 @@ export default async function Settings(container) {
     label: t('settings.tvtime.notFound'),
     sub: t('settings.tvtime.notFoundSub'),
     control: 'chevron',
-    onClick: () => showLog(),
+    onClick: () => showLog(logSource),
   });
 
+  // The server-folder tools: shown once the master is confirmed (see below).
+  const folderTools = el('div', { class: 'tvtime-folder' }, [checkFilesRow.el, importResults, startRow.el]);
+  folderTools.style.display = 'none';
   importSection.append(
     settingsHeader('refresh-cw', t('settings.tvtime.title')),
-    el('div', {
-      class: 'muted usage-desc',
-      text: t('settings.tvtime.desc'),
-    }),
+    importDesc,
     importTargetSlot,
-    checkFilesRow.el,
-    importResults,
-    startRow.el,
+    uploadRow.el,
+    zipInput,
+    folderTools,
     progressWrap
   );
   progressWrap.append(bar, progressText, summaryText, logRow.el);
@@ -508,16 +553,21 @@ export default async function Settings(container) {
   function renderStatus(s) {
     const running = s.running;
     startRow.setDisabled(running || !(filesData && filesData.actions && filesData.actions.valid));
+    uploadRow.setDisabled(running);
     const pct = s.total ? Math.round((s.processed / s.total) * 100) : 0;
     bar.firstChild.style.width = `${pct}%`;
     // Only show the progress bar once an import is running or has run.
     bar.style.display = running || s.finished || s.processed > 0 ? 'block' : 'none';
     if (running) {
-      progressText.textContent = t('settings.tvtime.importing', { title: s.current_title || '…', processed: s.processed, total: s.total });
+      // An upload runs the extras (favourites, lists, rewatches) after the titles.
+      progressText.textContent =
+        s.phase === 'extras'
+          ? t('settings.tvtime.extrasPhase')
+          : t('settings.tvtime.importing', { title: s.current_title || '…', processed: s.processed, total: s.total });
       summaryText.textContent = '';
       logRow.el.style.display = 'none';
     } else if (s.finished || s.processed > 0) {
-      progressText.textContent = '';
+      progressText.textContent = s.error ? t('settings.tvtime.failed') : '';
       summaryText.textContent = t('settings.tvtime.summary', { shows: s.imported_shows, movies: s.imported_movies, skipped: s.skipped, notFound: s.not_found });
       logRow.el.style.display = s.not_found > 0 ? '' : 'none';
     } else {
@@ -1052,8 +1102,8 @@ export default async function Settings(container) {
     { key: 'account', label: t('settings.tab.account'), panel: wrapPanel(accountSection, devicesSection, magicSection), conditional: true },
   ];
   // The master's sections inside the shared Library tab, hidden until confirmed.
+  // (The TV Time section is for everyone; only its server-folder tools wait.)
   metadataSection.style.display = 'none';
-  importSection.style.display = 'none';
 
   // The tab strip uses the app's scrolling segmented track — same pattern as the
   // Movies/Series status filter, since this is likewise a single choice with more
@@ -1125,13 +1175,26 @@ export default async function Settings(container) {
   // Cache size and TV Time import files are NEVER scanned automatically — the
   // user triggers each with its own button (see cacheSection / importSection).
 
+  // Anyone's own uploaded TV Time import: show its last result, and follow it
+  // again if it is still running (e.g. after leaving Settings and coming back).
+  api
+    .tvtimeStatus()
+    .then((st) => {
+      if (!st || !st.mine || !st.phase || pollTimer) return;
+      logSource = 'upload';
+      renderStatus(st);
+      if (st.running) startPolling('upload');
+    })
+    .catch(() => {});
+
   // The instance controls appear for the master only; for a member nothing of
   // them is fetched at all.
   authP.then((s) => {
     if (!isMaster(s)) return;
     kodiSection.replaceWith(buildKodiSettings(api));
     metadataSection.style.display = '';
-    importSection.style.display = '';
+    folderTools.style.display = '';
+    importDesc.textContent = t('settings.tvtime.desc');
     for (const key of ['kodi', 'advanced']) chipByKey[key].style.display = '';
     if (s && s.enabled) {
       householdSection.replaceWith(buildHousehold(api));
@@ -1167,8 +1230,9 @@ export default async function Settings(container) {
     api
       .importStatus()
       .then((status) => {
+        if (pollTimer || logSource === 'upload') return; // an upload is shown instead
         renderStatus(status);
-        if (status.running) startPolling();
+        if (status.running) startPolling('folder');
       })
       .catch(() => {});
   });
@@ -1188,15 +1252,19 @@ export default async function Settings(container) {
     startPolling();
   }
 
-  function startPolling() {
+  // `source`: 'folder' (the master's server-folder import) or 'upload' (an
+  // uploaded export, which members can follow too). The log row reads the same one.
+  function startPolling(source = 'folder') {
     if (pollTimer) return;
+    logSource = source;
     pollTimer = setInterval(async () => {
       try {
-        const s = await api.importStatus();
+        const s = source === 'upload' ? await api.tvtimeStatus() : await api.importStatus();
         renderStatus(s);
         if (!s.running) {
           clearInterval(pollTimer);
           pollTimer = null;
+          markLibraryChanged(); // new titles: refresh the grids, home and What's Next
           // Cache is checked on demand only — do not auto-scan it after an import.
         }
       } catch {
@@ -1207,10 +1275,10 @@ export default async function Settings(container) {
 
 }
 
-async function showLog() {
+async function showLog(source) {
   let log = '';
   try {
-    const res = await api.importLog();
+    const res = source === 'upload' ? await api.tvtimeLog() : await api.importLog();
     log = res.log || '';
   } catch {
     log = '';

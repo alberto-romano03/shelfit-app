@@ -30,6 +30,8 @@ const RULES = [
   { method: 'POST', path: '/api/library/import', max: 3, windowMs: 60 * 60 * 1000 },
   { method: 'POST', path: '/api/import/tvtime', max: 3, windowMs: 60 * 60 * 1000 },
   { method: 'POST', path: '/api/import/extras', max: 3, windowMs: 60 * 60 * 1000 },
+  // A member's own TV Time export (unzipped and imported in the background).
+  { method: 'POST', path: '/api/tvtime/upload', max: 3, windowMs: 60 * 60 * 1000 },
   // Changing the metadata language re-fetches the WHOLE library from TMDB, so
   // it belongs with the bulk operations rather than the blanket default.
   { method: 'PATCH', path: '/api/settings/metadata-language', max: 4, windowMs: 60 * 60 * 1000 },

@@ -30,6 +30,10 @@ const ALLOWED = {
     'FROM progress WHERE season > 0',
   ],
   'language.js': ['SELECT 1 FROM items LIMIT 1'], // "is this an existing install?"
+  'metaBackfill.js': [
+    'SELECT DISTINCT type, tmdb_id FROM items', // which titles still lack shared cache data
+    'UPDATE items SET title_it = ?, title_orig = ?, year = ?, genres = ? WHERE type = ? AND tmdb_id = ?', // catalog fields
+  ],
   'routes/admin.js': ['SELECT DISTINCT tmdb_id FROM items'], // refresh every ongoing title once
   'routes/settings.js': [
     'SELECT type, tmdb_id FROM items GROUP BY type, tmdb_id', // language switch: each title once

@@ -6,6 +6,7 @@ import { startAccessLogCleanup } from './accessLog.js';
 import { startSessionCleanup } from './auth.js';
 import { startKodiScheduler } from './kodiSync.js';
 import { startPushScheduler } from './push.js';
+import { startMetaBackfill } from './metaBackfill.js';
 import { imageRamCache } from './imageRamCache.js';
 import { buildApp } from './app.js';
 
@@ -41,6 +42,10 @@ startKodiScheduler(fastify.log);
 // Daily new-episode push check (~09:00 server time). No-op unless notifications
 // are enabled with a stored subscription.
 startPushScheduler(fastify.log);
+
+// Fetch TMDB data for library titles that still lack it (a restore from another
+// instance, an import cut short by a restart). Starts shortly after boot.
+startMetaBackfill(fastify.log);
 
 // Magic-link housekeeping: purge expired tokens now (boot) and once daily.
 startMagicCleanup(fastify.log);

@@ -11,9 +11,20 @@ import { parseCsv } from '../csv.js';
 import { ensureCached, readMetaSync, readSeasonMetaSync } from '../cache.js';
 import { searchMovie, searchTv, setMinInterval } from '../tmdb.js';
 import { recomputeStats } from '../stats.js';
-import { runExtrasImport } from '../importExtras.js';
+import { runExtrasImport, EXTRAS_FILES } from '../importExtras.js';
+import { readZipEntries, ZipError } from '../zip.js';
 
+// The master's server-folder import logs here; an uploaded export logs inside its
+// own folder (see notFoundPath, set per run).
 const NOT_FOUND_PATH = path.join(IMPORT_DIR, 'not_found.log');
+let notFoundPath = NOT_FOUND_PATH;
+
+// Uploaded TV Time exports are unpacked here, one folder per member, and the
+// folder is deleted as soon as that member's import finishes: the export holds
+// personal data the library doesn't need.
+const UPLOAD_ROOT = path.join(IMPORT_DIR, 'uploads');
+// Generous for a zipped export; each file inside is still capped at MAX_IMPORT_BYTES.
+const MAX_UPLOAD_BYTES = 80 * 1024 * 1024;
 
 // Which member an import fills: `user_id` from the request (the master picks it
 // in Settings), else the caller. A member who hasn't joined yet is a valid
@@ -70,9 +81,9 @@ const EPISODES_CANDIDATES = [
   'tracking-prod-records-v2.csv',
 ];
 
-function resolveFile(candidates) {
+function resolveFile(candidates, dir = IMPORT_DIR) {
   for (const name of candidates) {
-    const p = path.join(IMPORT_DIR, name);
+    const p = path.join(dir, name);
     if (fs.existsSync(p)) return { path: p, name };
   }
   return { path: null, name: null };
@@ -96,11 +107,13 @@ function readImportText(p) {
   }
 }
 
-// In-memory job state (single-user, one-shot import).
+// In-memory job state: one TV Time import at a time for the whole household
+// (TMDB's rate limit is shared). `user_id` is whose library it fills.
 const job = {
   running: false,
   finished: false,
   job_id: null,
+  user_id: null,
   total: 0,
   processed: 0,
   imported_shows: 0,
@@ -110,10 +123,11 @@ const job = {
   current_title: null,
 };
 
-function resetJob(jobId) {
+function resetJob(jobId, userId) {
   job.running = true;
   job.finished = false;
   job.job_id = jobId;
+  job.user_id = userId;
   job.total = 0;
   job.processed = 0;
   job.imported_shows = 0;
@@ -139,7 +153,7 @@ function snapshot() {
 }
 
 function logNotFound(line) {
-  fs.appendFileSync(NOT_FOUND_PATH, `${line}\n`);
+  fs.appendFileSync(notFoundPath, `${line}\n`);
   job.not_found += 1;
 }
 
@@ -190,7 +204,8 @@ function totalRealEpisodes(tmdbId) {
 
 // --- Main import routine --------------------------------------------------
 
-async function runImport(userId) {
+async function runImport(userId, dir = IMPORT_DIR) {
+  notFoundPath = path.join(dir, 'not_found.log');
   // Space every TMDB call for the duration of the job to stay under the API limit.
   setMinInterval(TMDB_IMPORT_INTERVAL_MS);
 
@@ -200,13 +215,13 @@ async function runImport(userId) {
 
   // Fresh not_found log.
   try {
-    fs.writeFileSync(NOT_FOUND_PATH, '');
+    fs.writeFileSync(notFoundPath, '');
   } catch {
     /* ignore */
   }
 
-  const actionsFile = resolveFile(ACTIONS_CANDIDATES);
-  const episodesFile = resolveFile(EPISODES_CANDIDATES);
+  const actionsFile = resolveFile(ACTIONS_CANDIDATES, dir);
+  const episodesFile = resolveFile(EPISODES_CANDIDATES, dir);
 
   const actionsText = readImportText(actionsFile.path);
   const actions = parseCsv(actionsText);
@@ -505,6 +520,12 @@ async function runImport(userId) {
 }
 
 export default async function importRoutes(fastify) {
+  // Background job states. The extras import fills in favourites, lists, rewatch
+  // counts and the watchlist; `upload` follows a member's uploaded export through
+  // both steps (see /api/tvtime/ below).
+  const extrasJob = { running: false, finished: false, summary: null, started_at: null };
+  const upload = { user_id: null, running: false, phase: null, error: null, not_found_log: '', extras: null };
+
   // Import file status for the Settings UI.
   // GET /api/import/files — ON-DEMAND scan of data/import/ (the client calls it
   // only when the user taps "Check import files"). Reports presence, size, row
@@ -559,7 +580,7 @@ export default async function importRoutes(fastify) {
 
   // POST /api/import/tvtime → start the background import.
   fastify.post('/api/import/tvtime', async (request, reply) => {
-    if (job.running) {
+    if (job.running || upload.running) {
       reply.code(409);
       return { error: 'import already running', job_id: job.job_id };
     }
@@ -576,7 +597,7 @@ export default async function importRoutes(fastify) {
       return { error: 'member not found' };
     }
     const jobId = `import_${Date.now()}`;
-    resetJob(jobId);
+    resetJob(jobId, target);
     // Run in the background; never let a failure crash the process.
     runImport(target).catch((err) => {
       fastify.log.error(`import failed: ${err.message}`);
@@ -592,11 +613,10 @@ export default async function importRoutes(fastify) {
 
   // --- Supplemental "extras" import (favourites, lists, rewatch counts,
   // watchlist). Runs in-process so it shares the DB connection (no locking). ---
-  const extrasJob = { running: false, finished: false, summary: null, started_at: null };
 
   // POST /api/import/extras → start the background extras import.
   fastify.post('/api/import/extras', async (request, reply) => {
-    if (extrasJob.running) {
+    if (extrasJob.running || upload.running) {
       reply.code(409);
       return { error: 'extras import already running' };
     }
@@ -648,5 +668,111 @@ export default async function importRoutes(fastify) {
       content = '';
     }
     return { log: content };
+  });
+
+  // --- TV Time for every member: upload the export's .zip ------------------
+  // /api/tvtime/* sits outside the master-only /api/import/ prefix: any member
+  // can bring their own history over. The master's upload may name another
+  // member (?user_id=); a member's always fills their own library. The zip is
+  // unpacked to a private folder, imported (main pipeline, then the extras) and
+  // the folder deleted. The not-found list is kept in memory for its owner.
+  const uploadWanted = [...ACTIONS_CANDIDATES, ...EPISODES_CANDIDATES, ...EXTRAS_FILES];
+
+  fastify.post('/api/tvtime/upload', { bodyLimit: MAX_UPLOAD_BYTES }, async (request, reply) => {
+    if (job.running || extrasJob.running) {
+      reply.code(409);
+      return { error: 'busy' };
+    }
+    let target = request.user.id;
+    if (request.user.role === 'master' && request.query.user_id) {
+      const row = userExistsStmt.get(Number(request.query.user_id));
+      if (!row) {
+        reply.code(404);
+        return { error: 'member not found' };
+      }
+      target = row.id;
+    }
+    if (!Buffer.isBuffer(request.body) || !request.body.length) {
+      reply.code(400);
+      return { error: 'not_a_zip' };
+    }
+    let files;
+    try {
+      files = readZipEntries(request.body, uploadWanted, { maxEntryBytes: MAX_IMPORT_BYTES });
+    } catch (err) {
+      reply.code(400);
+      return { error: err instanceof ZipError ? 'not_a_zip' : 'unreadable', detail: err.message };
+    }
+    if (!ACTIONS_CANDIDATES.some((n) => files.has(n.toLowerCase()))) {
+      reply.code(400);
+      return { error: 'tvtime_missing' };
+    }
+
+    const dir = path.join(UPLOAD_ROOT, `u${target}`);
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    for (const name of uploadWanted) {
+      const content = files.get(name.toLowerCase());
+      if (content) fs.writeFileSync(path.join(dir, name), content);
+    }
+
+    const jobId = `upload_${Date.now()}`;
+    resetJob(jobId, target);
+    Object.assign(upload, { user_id: target, running: true, phase: 'import', error: null, not_found_log: '', extras: null });
+    extrasJob.summary = null;
+    (async () => {
+      try {
+        await runImport(target, dir);
+        upload.phase = 'extras';
+        extrasJob.running = true;
+        extrasJob.finished = false;
+        extrasJob.started_at = Date.now();
+        upload.extras = await runExtrasImport(target, dir);
+        extrasJob.summary = upload.extras;
+      } catch (err) {
+        fastify.log.error(`tvtime upload import failed: ${err.message}`);
+        upload.error = err.message;
+      } finally {
+        setMinInterval(0);
+        job.running = false;
+        job.finished = true;
+        job.current_title = null;
+        extrasJob.running = false;
+        extrasJob.finished = true;
+        try {
+          upload.not_found_log = fs.readFileSync(path.join(dir, 'not_found.log'), 'utf-8');
+        } catch {
+          upload.not_found_log = '';
+        }
+        fs.rmSync(dir, { recursive: true, force: true });
+        upload.running = false;
+        upload.phase = 'done';
+      }
+    })();
+    return { job_id: jobId };
+  });
+
+  // GET /api/tvtime/status → the upload import's progress, for the member it
+  // fills (and the master). Anyone else only learns that the importer is busy.
+  fastify.get('/api/tvtime/status', async (request) => {
+    const busy = job.running || extrasJob.running;
+    if (upload.user_id !== request.user.id && request.user.role !== 'master') return { busy, mine: false };
+    // `running` covers the whole upload (import, then extras): the main import
+    // marks itself finished before the extras start.
+    return {
+      ...snapshot(),
+      running: upload.running,
+      busy,
+      mine: true,
+      phase: upload.phase,
+      error: upload.error,
+      extras: upload.extras,
+    };
+  });
+
+  // GET /api/tvtime/log → the titles the upload import couldn't match.
+  fastify.get('/api/tvtime/log', async (request) => {
+    if (upload.user_id !== request.user.id && request.user.role !== 'master') return { log: '' };
+    return { log: upload.not_found_log };
   });
 }

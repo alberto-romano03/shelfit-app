@@ -29,10 +29,27 @@ import {
 } from './tmdb.js';
 import { recomputeStats } from './stats.js';
 
-const EXTRAS_LOG = path.join(IMPORT_DIR, 'import_extras.log');
+// The CSV files TV Time puts in its export that this importer reads (the main
+// importer in routes/import.js reads the others); an uploaded zip is filtered to
+// these names.
+export const EXTRAS_FILES = [
+  'ratings-live-votes.csv',
+  'emotions-live-votes.csv',
+  'comments-prod-comments.csv',
+  'lists-prod-lists.csv',
+  'rewatched_episode.csv',
+  'user_tv_show_data.csv',
+];
+
+// Where this run reads its files and writes its log: data/import/ for the
+// master's server-folder import, a member's own upload folder otherwise. Only
+// one extras import runs at a time (routes/import.js), so a module-level value
+// is safe.
+let srcDir = IMPORT_DIR;
+const extrasLog = () => path.join(srcDir, 'import_extras.log');
 
 function readCsv(name) {
-  const p = path.join(IMPORT_DIR, name);
+  const p = path.join(srcDir, name);
   if (!fs.existsSync(p)) return null;
   try {
     if (fs.statSync(p).size > MAX_IMPORT_BYTES) return null; // too large — skip
@@ -44,7 +61,7 @@ function readCsv(name) {
 
 function log(line) {
   try {
-    fs.appendFileSync(EXTRAS_LOG, `${line}\n`);
+    fs.appendFileSync(extrasLog(), `${line}\n`);
   } catch {
     /* ignore */
   }
@@ -180,9 +197,10 @@ function buildUuidNameMap() {
 }
 
 // --- Main routine ----------------------------------------------------------
-export async function runExtrasImport(userId) {
+export async function runExtrasImport(userId, dir = IMPORT_DIR) {
+  srcDir = dir;
   try {
-    fs.writeFileSync(EXTRAS_LOG, '');
+    fs.writeFileSync(extrasLog(), '');
   } catch {
     /* ignore */
   }

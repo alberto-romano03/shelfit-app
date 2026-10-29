@@ -5,6 +5,7 @@
 
 import db from '../db.js';
 import { readMetaSync, readSeasonMetaSync } from '../cache.js';
+import { enqueueMeta } from '../metaBackfill.js';
 
 // Return YYYY-MM-DD for `offset` days from today (local date).
 function dayStr(offset) {
@@ -43,12 +44,16 @@ function currentSeasonNext(orderedEps, counts, currentSeason) {
 }
 
 // Short-lived memo of the EXPENSIVE part: walking every watching show's cached
-// season files (O(shows×seasons×episodes) synchronous disk reads). Air dates and
-// library membership change slowly, so brief staleness is fine. The cheap,
-// progress-dependent part (Watch Next / suppression) is recomputed on every
-// request from the DB so it always reflects the latest watched state.
+// season files (O(shows×seasons×episodes) synchronous disk reads). Air dates
+// change slowly, so brief staleness is fine. The cheap, progress-dependent part
+// (Watch Next / suppression) is recomputed on every request from the DB so it
+// always reflects the latest watched state.
+// The memo is rebuilt early when the member's set of watching series changes
+// (a restore, an import, a title added or moved to Watching), and is never kept
+// while a watching series still lacks cached data: a library restored onto an
+// empty instance used to show an empty What's Next until the TTL ran out.
 const MEMO_TTL_MS = 5 * 60 * 1000;
-// One memo per member: user id -> { day, at, upcoming, shows: [{ id, tmdb_id, title, orderedEps }] }
+// One memo per member: user id -> { day, at, sig, incomplete, upcoming, shows: [...] }
 const memos = new Map();
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
@@ -73,13 +78,26 @@ function buildScan(today, end, userId) {
 
   const upcoming = [];
   const scanned = [];
+  let incomplete = false;
   for (const show of shows) {
     const meta = readMetaSync('show', show.tmdb_id);
-    if (!meta) continue;
+    if (!meta) {
+      // Restored or imported but never fetched: fetch it in the background and
+      // don't memoize, so the series appears as soon as its data lands.
+      incomplete = true;
+      enqueueMeta('show', show.tmdb_id);
+      continue;
+    }
     const orderedEps = [];
     for (const s of meta.seasons || []) {
       const sMeta = readSeasonMetaSync(show.tmdb_id, s.season_number);
-      if (!sMeta) continue; // future season not cached → skip
+      if (!sMeta) {
+        if ((s.episode_count || 0) > 0) {
+          incomplete = true;
+          enqueueMeta('show', show.tmdb_id);
+        }
+        continue; // future season not cached → skip
+      }
       for (const ep of sMeta.episodes) {
         // --- Coming Soon: episodes airing within the next 7 days (unchanged) ---
         if (ep.air_date && ep.air_date >= today && ep.air_date <= end) {
@@ -124,7 +142,7 @@ function buildScan(today, end, userId) {
     return a.episode - b.episode;
   });
 
-  return { upcoming, shows: scanned };
+  return { upcoming, shows: scanned, incomplete };
 }
 
 export default async function upcomingRoutes(fastify) {
@@ -138,9 +156,20 @@ export default async function upcomingRoutes(fastify) {
     const today = dayStr(0);
     const end = dayStr(7);
 
+    // Current watching membership + each show's current_season (fresh, cheap):
+    // read before the memo so a change in WHICH series are watching rebuilds it.
+    const watchingRows = watchingShowIdsStmt.all(userId);
+    const sig = watchingRows.map((r) => r.id).sort((a, b) => a - b).join(',');
+
     let memo = memos.get(userId);
-    if (!memo || memo.day !== today || Date.now() - memo.at >= MEMO_TTL_MS) {
-      memo = { day: today, at: Date.now(), ...buildScan(today, end, userId) };
+    if (
+      !memo ||
+      memo.incomplete ||
+      memo.sig !== sig ||
+      memo.day !== today ||
+      Date.now() - memo.at >= MEMO_TTL_MS
+    ) {
+      memo = { day: today, at: Date.now(), sig, ...buildScan(today, end, userId) };
       memos.set(userId, memo);
     }
 
@@ -160,11 +189,9 @@ export default async function upcomingRoutes(fastify) {
       if (r.watched_at && (!e.last || r.watched_at > e.last)) e.last = r.watched_at;
     }
 
-    // Current watching membership + each show's current_season (fresh, cheap): the
-    // memo above is cached for a few minutes, so a series just moved OUT of
-    // 'watching' — or whose current_season just changed on a mark — would otherwise
-    // be stale until it expires. Reading these live keeps both immediate.
-    const watchingRows = watchingShowIdsStmt.all(userId);
+    // Membership and current_season come from the live read above, so a series
+    // just moved OUT of 'watching', or whose current_season just changed on a
+    // mark, is reflected immediately even while the memo is reused.
     const watchingIds = new Set(watchingRows.map((r) => r.id));
     const currentSeasonById = new Map(watchingRows.map((r) => [r.id, r.current_season]));
 

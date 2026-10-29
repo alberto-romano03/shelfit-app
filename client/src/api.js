@@ -34,6 +34,13 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // flight when the write landed.
 let writeGeneration = 0;
 
+// For writes that don't go through request(): a raw-body upload, or a
+// background import that finished. Same effect as request()'s mutation hook.
+export function markLibraryChanged() {
+  writeGeneration++;
+  window.dispatchEvent(new CustomEvent('shelfit:library-changed'));
+}
+
 function buildApi(signal) {
   // Per-client de-duplication of identical concurrent GETs: if the same URL is
   // requested again while one is still in flight, both callers share the single
@@ -377,8 +384,29 @@ function buildApi(signal) {
         err.data = data;
         throw err;
       }
+      // A raw fetch bypasses request()'s mutation hook.
+      markLibraryChanged();
       return data;
     },
+
+    // TV Time for every member: upload the export's .zip as the raw body (no
+    // multipart dependency). The master may name another member's library.
+    uploadTvTime: async (file, userId) => {
+      const url = withBase('/api/tvtime/upload') + (userId ? `?user_id=${encodeURIComponent(userId)}` : '');
+      const opts = { method: 'POST', headers: { 'Content-Type': 'application/zip' }, body: file };
+      if (signal) opts.signal = signal;
+      const res = await fetch(url, opts);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const err = new Error((data && data.error) || t('api.importFailed', { status: res.status }));
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data; // the import runs in the background: see tvtimeStatus
+    },
+    tvtimeStatus: () => api.get('/api/tvtime/status'),
+    tvtimeLog: () => api.get('/api/tvtime/log'),
 
     // Kodi integration (all Kodi contact happens server-side).
     kodiConfig: () => api.get('/api/kodi/config'),

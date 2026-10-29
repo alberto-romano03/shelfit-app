@@ -1,15 +1,17 @@
-// Library export / import — a full, portable backup of everything the user owns
-// (statuses, ratings, play counts, ownership, notes, watch dates, per-episode
-// progress, list memberships). Metadata (posters, descriptions, cast…) is NEVER
+// Library export / import: a full, portable backup of everything a member did
+// in their library (statuses, ratings, play counts, ownership, notes, watch and
+// added dates, rewatches, cinema tickets, per-episode progress, lists, The Wall).
+// Imported into an empty library it restores the previous state exactly; into a
+// populated one it merges and never deletes. Metadata (posters, descriptions, cast…) is NEVER
 // exported: it is always re-fetched from TMDB on import. XML is built and parsed
 // with the project's existing dependency-free approach (string building + scoped
 // regexes, mirroring server/importKodi.js); SHA-256 uses Node's crypto.
 
 import crypto from 'node:crypto';
 import db from '../db.js';
-import { ensureCached } from '../cache.js';
+import { readMetaSync } from '../cache.js';
 import { scheduleStatsRecompute } from '../stats.js';
-import { TMDB_IMPORT_INTERVAL_MS } from '../config.js';
+import { enqueueMeta, metaState } from '../metaBackfill.js';
 
 // v2 added the per-title fields introduced after the initial export shipped:
 // favorite (movies + shows), the cinema screening fields watched_in_cinema /
@@ -20,8 +22,17 @@ import { TMDB_IMPORT_INTERVAL_MS } from '../config.js';
 // v3 adds a per-movie <rewatches> block (one <rewatch date="…"/> per dated
 // rewatch event). v1/v2 files still import cleanly — an absent block just means
 // the movie keeps its play_count-derived rewatch count.
-const EXPORT_VERSION = 3;
-const SUPPORTED_VERSIONS = new Set([1, 2, 3]);
+// v4 makes a restore onto an empty library an exact copy of the previous state:
+//   • <added_at> per title (the "Recently added" order and the home's order),
+//   • watched_at="…" per episode with the time of day (who you left off most
+//     recently, in What's Next), next to the date-only watch_date older readers use,
+//   • a <custom_lists> block with EVERY list, empty ones included, its creation
+//     time and each title's added time (v1-v3 carried only per-title memberships),
+//   • a <wall movie="…" show="…" person="…"/> element for The Wall.
+// Deliberately left out: profile photo, cover and badge (the account's look, not
+// the library), custom artwork (shared by the household), pending loans.
+const EXPORT_VERSION = 4;
+const SUPPORTED_VERSIONS = new Set([1, 2, 3, 4]);
 
 // DB status <-> XML status. The data value 'completed' surfaces as 'shelved'.
 const STATUS_DB_TO_XML = {
@@ -50,11 +61,17 @@ const STATUS_RANK = { plan_to_watch: 0, dropped: 1, paused: 2, watching: 3, comp
 const exportItemsStmt = db.prepare(
   'SELECT * FROM items WHERE user_id = ? ORDER BY type, CAST(tmdb_id AS INTEGER)'
 );
-const exportListsStmt = db.prepare(
-  `SELECT l.name AS name, l.type AS type, li.tmdb_id AS tmdb_id
-     FROM list_items li JOIN lists l ON l.id = li.list_id
-    WHERE l.user_id = ?
-    ORDER BY l.created_at`
+const exportCustomListsStmt = db.prepare(
+  'SELECT id, name, type, created_at FROM lists WHERE user_id = ? ORDER BY created_at, id'
+);
+const exportListItemsStmt = db.prepare(
+  'SELECT tmdb_id, added_at FROM list_items WHERE list_id = ? ORDER BY added_at, id'
+);
+const exportWallStmt = db.prepare(
+  `SELECT (SELECT tmdb_id FROM items WHERE id = f.movie_item_id AND user_id = f.user_id) AS movie,
+          (SELECT tmdb_id FROM items WHERE id = f.show_item_id AND user_id = f.user_id) AS show,
+          f.person_tmdb_id AS person
+     FROM favorites f WHERE f.user_id = ?`
 );
 const exportProgressStmt = db.prepare(
   'SELECT season, episode, watch_count, watched_at, notes FROM progress WHERE item_id = ? ORDER BY season, episode'
@@ -68,6 +85,13 @@ const insertListStmt = db.prepare(
 const addListItemStmt = db.prepare(
   'INSERT OR IGNORE INTO list_items (list_id, tmdb_id, added_at) VALUES (?, ?, ?)'
 );
+// The Wall: slots are filled only when empty, like every other merge here.
+const getWallStmt = db.prepare('SELECT * FROM favorites WHERE user_id = ?');
+const ensureWallStmt = db.prepare('INSERT OR IGNORE INTO favorites (user_id) VALUES (?)');
+const setWallStmt = db.prepare(
+  'UPDATE favorites SET movie_item_id = ?, show_item_id = ?, person_tmdb_id = ? WHERE user_id = ?'
+);
+const setAddedAtStmt = db.prepare('UPDATE items SET added_at = ? WHERE id = ?');
 const findProgressStmt = db.prepare(
   'SELECT * FROM progress WHERE item_id = ? AND season = ? AND episode = ?'
 );
@@ -75,8 +99,9 @@ const insertItemStmt = db.prepare(
   `INSERT INTO items
      (user_id, tmdb_id, type, title_it, title_orig, status, rating, notes, owned, rewatch_count,
       favorite, watched_in_cinema, cinema_date, cinema_time, cinema_name, current_season,
-      watch_date, updated_at)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`
+      watch_date, updated_at, added_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))`
 );
 // Movie rewatch export + idempotent import (matched on item_id + date so a
 // re-import never duplicates), plus the counter sync from the row count.
@@ -107,9 +132,6 @@ const updateItemMergeStmt = db.prepare(
 const updateProgressMergeStmt = db.prepare(
   'UPDATE progress SET watch_count = ?, notes = ? WHERE id = ?'
 );
-const backfillItemMetaStmt = db.prepare(
-  'UPDATE items SET title_it = ?, title_orig = ?, year = ?, genres = ? WHERE id = ?'
-);
 
 // --- XML helpers -----------------------------------------------------------
 function escXml(s) {
@@ -133,12 +155,24 @@ function dateOnly(v) {
   const m = String(v).match(/^(\d{4}-\d{2}-\d{2})/);
   return m ? m[1] : '';
 }
+// A stored SQLite timestamp ('YYYY-MM-DD HH:MM:SS', or an ISO string, or a bare
+// date). Anything else read from a file is dropped rather than written to the DB.
+const STAMP_RE = /^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z?)?$/;
+function stampOrNull(v) {
+  const s = String(v == null ? '' : v).trim();
+  return STAMP_RE.test(s) ? s : null;
+}
+// Lists and list items store creation times as epoch milliseconds.
+function msOrNull(v) {
+  const s = String(v == null ? '' : v).trim();
+  return /^\d{1,15}$/.test(s) ? Number(s) : null;
+}
 function sha256(str) {
   return crypto.createHash('sha256').update(str, 'utf8').digest('hex');
 }
 
 // ======================= EXPORT =======================
-function movieXml(it, lists, rewatchDates) {
+function movieXml(it, rewatchDates) {
   const status = STATUS_DB_TO_XML[it.status] || 'plan';
   const watched = it.status === 'completed';
   const playCount = (it.rewatch_count || 0) + (watched ? 1 : 0);
@@ -148,6 +182,7 @@ function movieXml(it, lists, rewatchDates) {
   let s = `    <movie tmdb_id="${escXml(it.tmdb_id)}">\n`;
   s += `      <title>${escXml(it.title_it || '')}</title>\n`;
   s += `      <status>${status}</status>\n`;
+  if (it.added_at) s += `      <added_at>${escXml(it.added_at)}</added_at>\n`;
   if (it.rating) s += `      <rating>${it.rating}</rating>\n`;
   s += `      <play_count>${playCount}</play_count>\n`;
   s += `      <owned>${it.owned ? 'true' : 'false'}</owned>\n`;
@@ -166,16 +201,16 @@ function movieXml(it, lists, rewatchDates) {
     for (const d of rewatchDates) s += `        <rewatch date="${escXml(d)}"/>\n`;
     s += `      </rewatches>\n`;
   }
-  s += listsXml(lists);
   s += `    </movie>\n`;
   return s;
 }
 
-function showXml(it, lists, eps) {
+function showXml(it, eps) {
   const status = STATUS_DB_TO_XML[it.status] || 'plan';
   let s = `    <show tmdb_id="${escXml(it.tmdb_id)}">\n`;
   s += `      <title>${escXml(it.title_it || '')}</title>\n`;
   s += `      <status>${status}</status>\n`;
+  if (it.added_at) s += `      <added_at>${escXml(it.added_at)}</added_at>\n`;
   if (it.rating) s += `      <rating>${it.rating}</rating>\n`;
   s += `      <owned>${it.owned ? 'true' : 'false'}</owned>\n`;
   s += `      <favorite>${it.favorite ? 'true' : 'false'}</favorite>\n`;
@@ -196,6 +231,8 @@ function showXml(it, lists, eps) {
         const attrs = [`number="${e.episode}"`, `watched="true"`, `play_count="${e.watch_count || 1}"`];
         const wd = dateOnly(e.watched_at);
         if (wd) attrs.push(`watch_date="${wd}"`);
+        // The full moment too (v4): What's Next orders series by it.
+        if (e.watched_at && String(e.watched_at) !== wd) attrs.push(`watched_at="${escXml(e.watched_at)}"`);
         if (e.notes && e.notes.trim()) attrs.push(`notes="${escXml(e.notes)}"`);
         s += `          <episode ${attrs.join(' ')}/>\n`;
       }
@@ -203,44 +240,60 @@ function showXml(it, lists, eps) {
     }
     s += `      </seasons>\n`;
   }
-  s += listsXml(lists);
   s += `    </show>\n`;
   return s;
 }
 
-function listsXml(lists) {
-  if (!lists || !lists.length) return '';
-  let s = `      <lists>\n`;
-  for (const n of lists) s += `        <list>${escXml(n)}</list>\n`;
-  s += `      </lists>\n`;
+// Every list (empty ones too) with its creation time and each title's added
+// time, so a restore rebuilds them in the same order. Titles are referenced by
+// TMDB id, like list_items itself.
+function customListsXml(userId) {
+  const lists = exportCustomListsStmt.all(userId);
+  if (!lists.length) return '';
+  let s = `    <custom_lists>\n`;
+  for (const l of lists) {
+    const items = exportListItemsStmt.all(l.id);
+    const head = `<list name="${escXml(l.name)}" type="${escXml(l.type)}" created_at="${escXml(l.created_at)}"`;
+    if (!items.length) {
+      s += `      ${head}/>\n`;
+      continue;
+    }
+    s += `      ${head}>\n`;
+    for (const li of items) {
+      s += `        <item tmdb_id="${escXml(li.tmdb_id)}" added_at="${escXml(li.added_at)}"/>\n`;
+    }
+    s += `      </list>\n`;
+  }
+  s += `    </custom_lists>\n`;
   return s;
 }
 
+function wallXml(userId) {
+  const w = exportWallStmt.get(userId);
+  if (!w || (!w.movie && !w.show && !w.person)) return '';
+  const attrs = [];
+  if (w.movie) attrs.push(`movie="${escXml(w.movie)}"`);
+  if (w.show) attrs.push(`show="${escXml(w.show)}"`);
+  if (w.person) attrs.push(`person="${escXml(w.person)}"`);
+  return `    <wall ${attrs.join(' ')}/>\n`;
+}
+
 // Build the raw string that goes between <library> and </library>, plus the
-// entry count. The checksum is computed over exactly this string.
+// entry count (titles only). The checksum is computed over exactly this string.
 function buildLibrary(userId) {
   const items = exportItemsStmt.all(userId);
-
-  const listRows = exportListsStmt.all(userId);
-  const listMap = new Map(); // `${type}:${tmdb_id}` -> [names]
-  for (const r of listRows) {
-    const key = `${r.type}:${r.tmdb_id}`;
-    if (!listMap.has(key)) listMap.set(key, []);
-    listMap.get(key).push(r.name);
-  }
-
-  const progStmt = exportProgressStmt;
 
   let inner = '';
   let count = 0;
   for (const it of items) {
     count += 1;
-    const lists = listMap.get(`${it.type}:${it.tmdb_id}`) || [];
     if (it.type === 'movie') {
       const rewatchDates = exportRewatchesStmt.all(it.id).map((r) => dateOnly(r.watched_at)).filter(Boolean);
-      inner += movieXml(it, lists, rewatchDates);
-    } else inner += showXml(it, lists, progStmt.all(it.id));
+      inner += movieXml(it, rewatchDates);
+    } else inner += showXml(it, exportProgressStmt.all(it.id));
   }
+  inner += customListsXml(userId);
+  inner += wallXml(userId);
   // The content between the tags (a leading newline + entries + closing indent).
   return { content: `\n${inner}  `, count };
 }
@@ -307,6 +360,7 @@ function parseEntries(libraryContent) {
       cinema_name: tagText(b, 'cinema_name') || null,
       notes: tagText(b, 'notes'),
       watch_date: tagText(b, 'watch_date'),
+      added_at: stampOrNull(tagText(b, 'added_at')),
       rewatches: parseRewatchDates(b),
       lists: parseListNames(b),
     });
@@ -329,7 +383,8 @@ function parseEntries(libraryContent) {
           season,
           episode: parseInt(attrOf(a, 'number'), 10),
           play_count: parseInt(attrOf(a, 'play_count'), 10) || 1,
-          watch_date: attrOf(a, 'watch_date'),
+          // v4 carries the full moment; older files only the date.
+          watch_date: stampOrNull(attrOf(a, 'watched_at')) || attrOf(a, 'watch_date'),
           notes: attrOf(a, 'notes'),
         });
       }
@@ -344,11 +399,46 @@ function parseEntries(libraryContent) {
       favorite: tagText(b, 'favorite') === 'true',
       current_season: parseSeason(tagText(b, 'current_season')),
       notes: tagText(b, 'notes'),
+      added_at: stampOrNull(tagText(b, 'added_at')),
       episodes,
       lists: parseListNames(b),
     });
   }
   return entries;
+}
+
+// v4 <custom_lists>: [{ name, type, created_at, items: [{ tmdb_id, added_at }] }].
+function parseCustomLists(libraryContent) {
+  const wrap = libraryContent.match(/<custom_lists>([\s\S]*?)<\/custom_lists>/);
+  if (!wrap) return [];
+  const out = [];
+  const re = /<list\s+([^>]*?)(\/>|>([\s\S]*?)<\/list>)/g;
+  let m;
+  while ((m = re.exec(wrap[1]))) {
+    const name = attrOf(m[1], 'name').trim();
+    const type = attrOf(m[1], 'type');
+    if (!name || (type !== 'movie' && type !== 'show')) continue;
+    const items = [];
+    const itemRe = /<item\s+([^>]*?)\/>/g;
+    let im;
+    while ((im = itemRe.exec(m[3] || ''))) {
+      const tmdbId = attrOf(im[1], 'tmdb_id');
+      if (/^\d+$/.test(tmdbId)) items.push({ tmdb_id: tmdbId, added_at: msOrNull(attrOf(im[1], 'added_at')) });
+    }
+    out.push({ name, type, created_at: msOrNull(attrOf(m[1], 'created_at')), items });
+  }
+  return out;
+}
+
+// v4 <wall movie="…" show="…" person="…"/> → TMDB ids (or null).
+function parseWall(libraryContent) {
+  const m = libraryContent.match(/<wall\s+([^>]*?)\/>/);
+  if (!m) return null;
+  const id = (name) => {
+    const v = attrOf(m[1], name);
+    return /^\d+$/.test(v) ? v : null;
+  };
+  return { movie: id('movie'), show: id('show'), person: id('person') };
 }
 
 function parseRating(v) {
@@ -434,13 +524,19 @@ export function validateImport(xml) {
       error: `Entry count mismatch (header says ${declaredCount}, found ${entries.length}). The file may be truncated.`,
     };
   }
-  return { ok: true, version, entries };
+  return {
+    ok: true,
+    version,
+    entries,
+    customLists: version >= 4 ? parseCustomLists(content) : [],
+    wall: version >= 4 ? parseWall(content) : null,
+  };
 }
 
 // Apply the parsed entries. Everything is one transaction; a per-entry failure is
 // recorded and skipped (the rest still commit). Returns a summary + the list of
 // newly-added items so metadata can be fetched in the background afterwards.
-function applyImport(entries, userId) {
+function applyImport(entries, userId, { customLists = [], wall = null } = {}) {
   const summary = { added: 0, merged: 0, unchanged: 0, failed: 0 };
   const failures = [];
   const newItems = []; // { id, type, tmdb_id }
@@ -510,7 +606,8 @@ function applyImport(entries, userId) {
             isMovie ? entry.cinema_name || null : null,
             currentSeason,
             watchDateCol,
-            updatedAt
+            updatedAt,
+            entry.added_at || null
           );
           const itemId = info.lastInsertRowid;
 
@@ -618,6 +715,12 @@ function applyImport(entries, userId) {
             );
             changed.v = true;
           }
+          // Added date → the earlier of the two: the title has been in the
+          // library at least since then.
+          if (entry.added_at && (!existing.added_at || entry.added_at < existing.added_at)) {
+            setAddedAtStmt.run(entry.added_at, existing.id);
+            changed.v = true;
+          }
 
           // Episodes → OR watched, higher play count, merged notes; never downgrade.
           if (entry.type === 'show') {
@@ -651,6 +754,37 @@ function applyImport(entries, userId) {
         });
       }
     }
+
+    // v4 lists: every list, empty ones too, with the original creation and
+    // added times. An existing list of the same name and type is reused, and a
+    // title already in it keeps its own added time (INSERT OR IGNORE).
+    for (const l of customLists) {
+      let list = findList.get(userId, l.name, l.type);
+      if (!list) {
+        const info = insertList.run(userId, l.name, l.type, l.created_at ?? Date.now());
+        list = { id: info.lastInsertRowid };
+      }
+      for (const it of l.items) addListItem.run(list.id, Number(it.tmdb_id), it.added_at ?? Date.now());
+    }
+
+    // v4 The Wall: each slot is filled only when it is empty, and only with a
+    // title that is now in this member's library (the slots point at items).
+    if (wall && (wall.movie || wall.show || wall.person)) {
+      ensureWallStmt.run(userId);
+      const cur = getWallStmt.get(userId);
+      const itemId = (type, tmdbId) => {
+        if (!tmdbId) return null;
+        const row = findItem.get(userId, type, String(tmdbId));
+        return row ? row.id : null;
+      };
+      setWallStmt.run(
+        cur.movie_item_id ?? itemId('movie', wall.movie),
+        cur.show_item_id ?? itemId('show', wall.show),
+        cur.person_tmdb_id ?? (wall.person ? Number(wall.person) : null),
+        userId
+      );
+    }
+
     scheduleStatsRecompute(db);
   });
 
@@ -658,29 +792,33 @@ function applyImport(entries, userId) {
   return { summary, failures, newItems };
 }
 
-// Fire-and-forget: fetch TMDB metadata for the newly added titles, throttled, and
-// backfill their real (localized) title/year/genres. Never blocks the response.
-function queueMetadataFetch(newItems, logger) {
-  if (!newItems.length) return;
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  (async () => {
-    for (const it of newItems) {
-      try {
-        const meta = await ensureCached(it.type, it.tmdb_id);
-        backfillItemMetaStmt.run(
-          meta.title_it || meta.title_orig || 'Untitled',
-          meta.title_orig || meta.title_it || 'Untitled',
-          meta.year || '',
-          JSON.stringify(meta.genres || []),
-          it.id
-        );
-      } catch (err) {
-        if (logger) logger.warn(`library import: metadata fetch failed for ${it.type} ${it.tmdb_id}: ${err.message}`);
-      }
-      await sleep(TMDB_IMPORT_INTERVAL_MS);
+// The newly added titles get their real (localized) title, year and genres:
+// straight from the shared cache when another member already has the title,
+// otherwise through the metadata backfill, which downloads it in the background
+// and survives a restart (see metaBackfill.js). Returns how many were queued.
+const backfillItemMetaStmt = db.prepare(
+  'UPDATE items SET title_it = ?, title_orig = ?, year = ?, genres = ? WHERE id = ?'
+);
+function fillNewItemsMeta(newItems) {
+  let queued = 0;
+  for (const it of newItems) {
+    const meta = readMetaSync(it.type, it.tmdb_id);
+    if (meta) {
+      backfillItemMetaStmt.run(
+        meta.title_it || meta.title_orig || 'Untitled',
+        meta.title_orig || meta.title_it || 'Untitled',
+        meta.year || '',
+        JSON.stringify(meta.genres || []),
+        it.id
+      );
     }
-    scheduleStatsRecompute(db);
-  })().catch(() => {});
+    if (metaState(it.type, it.tmdb_id)) {
+      enqueueMeta(it.type, it.tmdb_id);
+      queued += 1;
+    }
+  }
+  scheduleStatsRecompute(db);
+  return queued;
 }
 
 // ======================= ROUTES =======================
@@ -709,20 +847,23 @@ export default async function libraryRoutes(fastify) {
     }
     let result;
     try {
-      result = applyImport(check.entries, request.user.id);
+      result = applyImport(check.entries, request.user.id, {
+        customLists: check.customLists,
+        wall: check.wall,
+      });
     } catch (err) {
       // A catastrophic DB error → the transaction rolled back; nothing was written.
       fastify.log.error(err);
       reply.code(500);
       return { error: 'Import failed and was rolled back: no changes were made.' };
     }
-    queueMetadataFetch(result.newItems, fastify.log);
+    const queued = fillNewItemsMeta(result.newItems);
     return {
       ok: true,
       added: result.summary.added,
       merged: result.summary.merged,
       unchanged: result.summary.unchanged,
-      fetches_queued: result.newItems.length,
+      fetches_queued: queued,
       failed: result.summary.failed,
       failures: result.failures,
     };

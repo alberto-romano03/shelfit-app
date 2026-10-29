@@ -123,6 +123,13 @@ export async function buildApp({ quiet = false } = {}) {
     (req, body, done) => done(null, body)
   );
 
+  // Accept a raw ZIP body (a member's TV Time export, see routes/import.js).
+  fastify.addContentTypeParser(
+    ['application/zip', 'application/x-zip-compressed', 'application/octet-stream'],
+    { parseAs: 'buffer' },
+    (req, body, done) => done(null, body)
+  );
+
   // Accept a raw XML body for the library import (the client uploads the file's
   // text directly — no multipart dependency needed). Parse as a buffer and decode
   // with a STRICT UTF-8 decoder so a binary or mis-encoded upload is rejected with

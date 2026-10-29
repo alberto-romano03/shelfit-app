@@ -165,8 +165,10 @@ SQLite database and cache folder that you own.
 
 ### Import, backup and security
 
-- Import your history from TV Time (CSV) or a Kodi library (XML). Each member can
-  back up and restore their library as XML: merge-only, never deletes, checksum
+- Every member can import their history from TV Time by uploading its `.zip`; a
+  Kodi library (XML) can be imported too. Each member can back up and restore
+  their whole library as XML: an exact restore into an empty library, a merge
+  that never deletes otherwise, checksum
   verified.
 - Optional Fanart.tv artwork (clear logos, disc art), on-disk and in-memory image
   caches, and monthly API budgets you set yourself.
@@ -494,7 +496,7 @@ Everything persistent lives under `data/`, mounted into the container as
 | `data/shelfit.db` | The SQLite database (library, progress, settings, Kodi instances, access log). Accompanied by `-wal` / `-shm` files while running. |
 | `data/cache/` | Cached TMDB/Fanart metadata JSON and images. Regenerable; safe to wipe. |
 | `data/badges/` | Collection badge images shown on the shelf. |
-| `data/import/` | Drop-zone for import files (TV Time CSVs, Kodi `videodb.xml`). |
+| `data/import/` | Drop-zone for import files (TV Time CSVs, Kodi `videodb.xml`). A member's uploaded TV Time export is unpacked to `uploads/` here and deleted once imported. |
 | `data/profile/` | Profile photos, one folder per member (`data/profile/<id>/`). |
 | `data/cinemas.txt` | Optional, one cinema name per line — turns the ticket's cinema field into a dropdown. Re-read on every open, no restart needed; `#` comments and blank lines ignored. Copy `data/cinemas.example.txt` to start. |
 | `data/kodi.key` | Key used to encrypt stored Kodi credentials at rest. |
@@ -511,7 +513,7 @@ backup) and Account.
 | Tab | Sections |
 | --- | --- |
 | **General** | *Appearance* — language, theme, snow effect, vibration. *Install* — Add to Home Screen. *Notifications* — enable, plus a test notification. |
-| **Library** | *Metadata language* (master): the language TMDB metadata is fetched in (English / Italian). *Lists*: create / rename / delete custom lists. *Backup*: XML export and import of your own library. *Import from TV Time* (master), with **Import into** to pick the member. |
+| **Library** | *Metadata language* (master): the language TMDB metadata is fetched in (English / Italian). *Lists*: create / rename / delete custom lists. *Backup*: XML export and import of your own library. *Import from TV Time*: upload the export's `.zip` (everyone); the master also picks the member with **Import into** and has the `data/import/` tools. |
 | **Household** | Members and their state; add a member (one-time invite link), rename, **Can sign in**, reset password, remove (with a download of their library first). |
 | **Kodi** | Instances (add, name, icon, **Sync into** member, test, activate), the master enable toggle, and **Sync now**. |
 | **Advanced** | *API Usage* — monthly budget and usage per API, with a session-only bypass. *Cache* — scan size per folder, refresh ongoing series, clear all media cache (confirm-gated). |
@@ -562,11 +564,18 @@ shown, and no notification is sent for it.
 
 ### TV Time (CSV)
 
-1. Request your data export from TV Time and unzip it.
-2. Copy the relevant CSV files into `data/import/`.
-3. In the app open **Settings → Library → Import from TV Time** (master), pick
-   whose library it goes into with **Import into**, and start the import. Titles
-   are matched against TMDB (rate-limited) and added with their watch history.
+Any member can bring their own history over:
+
+1. Request your data export from TV Time (it arrives as a `.zip`).
+2. In the app open **Settings → Library → Import from TV Time** and tap **Upload
+   TV Time export**, then pick the `.zip` as it is. Titles are matched against
+   TMDB (rate-limited) and added to your own library with their watch history,
+   then favourites, lists and rewatches. The uploaded files are deleted as soon
+   as the import finishes; one import runs at a time for the whole household.
+
+The master can also pick whose library an upload goes into with **Import into**,
+or skip the upload: unzip the export into `data/import/` on the server, then
+**Check import files** and **Start import**.
 
 ### Kodi (XML)
 
@@ -578,7 +587,8 @@ shown, and no notification is sent for it.
 ### Another shelfit-app instance (XML)
 
 Export from **Settings → Library → Backup** on the source instance and import the
-file on the target. The merge is additive and never deletes; see
+file on the target, signed in as the member who should receive it. Into an empty
+library it restores the previous state exactly; see
 [Backup and restore](#backup-and-restore).
 
 ## Kodi integration
@@ -646,13 +656,19 @@ previous image. A build refuses to start on a database newer than it knows.
 - **Database:** the entire library lives in `data/shelfit.db`. To back up, stop
   the container and copy the file (together with any `-wal` / `-shm` files). To
   restore, put it back in `data/` and start the container again.
-- **Portable export:** **Settings → Library → Backup** writes an XML file with all
-  of your own data (statuses, ratings, play counts, ownership, favourites, cinema
-  fields, notes, watch dates, dated rewatches, per-episode progress, list
-  memberships) and a SHA-256 checksum. Each member exports and imports their own
-  library. Import **merges additively and never
-  deletes**, resolving conflicts in favour of the more advanced status; metadata
-  is re-fetched from TMDB, so the file stays small and portable across versions.
+- **Portable export:** **Settings → Library → Backup** writes an XML file with
+  everything you did in your library (statuses, ratings, play counts, ownership,
+  favourites, cinema tickets, notes, watch and added dates, dated rewatches,
+  per-episode progress with the time of each watch, every list including empty
+  ones, and The Wall) and a SHA-256 checksum. Left out: your profile photo, cover
+  and badge, the household's custom artwork, and pending loans. Each member exports
+  and imports their own library.
+- **Restore:** imported into an **empty** library, the file brings back the
+  previous state exactly, What's Next and On the Horizon included. Into a library
+  that already has titles it **merges and never deletes**, resolving conflicts in
+  favour of the more advanced status. Metadata is re-fetched from TMDB in the
+  background (resuming after a restart), so the file stays small and portable
+  across versions; older backup files still import.
 - **Artwork** in `data/cache/` is regenerable and does not need backing up.
 
 ## Development
