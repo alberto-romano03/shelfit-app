@@ -6580,14 +6580,14 @@ img.mood-emoji {
    "Movies · 12 titles" line beside them. */
 .list-card-row { gap: 12px; }
 .list-card {
-  flex: 0 0 min(240px, 72vw);
-  width: min(240px, 72vw);
-  height: 96px;
+  flex: 0 0 min(276px, 80vw);
+  width: min(276px, 80vw);
+  height: 112px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px 10px 10px;
+  gap: 14px;
+  padding: 10px 14px 10px 10px;
   border-radius: var(--r-lg);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -6596,31 +6596,31 @@ img.mood-emoji {
 .list-card-art {
   position: relative;
   flex: none;
-  width: 92px;
-  height: 76px;
+  width: 110px;
+  height: 92px;
 }
 .list-card-case {
   position: absolute;
   top: 0;
-  width: 50px;
-  height: 76px;
-  border-radius: 5px;
+  width: 60px;
+  height: 92px;
+  border-radius: 6px;
   object-fit: cover;
   box-shadow: 3px 0 8px rgba(0, 0, 0, 0.5);
 }
 .list-card-case.c0 { left: 0; z-index: 3; }
-.list-card-case.c1 { left: 21px; top: 4px; width: 45px; height: 68px; z-index: 2; filter: brightness(0.78); }
-.list-card-case.c2 { left: 42px; top: 8px; width: 40px; height: 60px; z-index: 1; filter: brightness(0.6); }
+.list-card-case.c1 { left: 25px; top: 5px; width: 54px; height: 82px; z-index: 2; filter: brightness(0.78); }
+.list-card-case.c2 { left: 50px; top: 10px; width: 48px; height: 72px; z-index: 1; filter: brightness(0.6); }
 /* No covers yet: one empty case carrying the type glyph. */
 .list-card-art.is-empty {
-  width: 50px;
+  width: 60px;
   display: grid;
   place-items: center;
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--surface-elevated);
   color: var(--text-secondary);
 }
-.list-card-art.is-empty svg { width: 22px; height: 22px; }
+.list-card-art.is-empty svg { width: 26px; height: 26px; }
 .list-card-text {
   min-width: 0; /* lets the name clamp instead of widening the card */
   display: grid;
@@ -6631,7 +6631,7 @@ img.mood-emoji {
 .list-card-name {
   color: var(--text-primary);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -6644,7 +6644,7 @@ img.mood-emoji {
   align-items: center;
   gap: 5px;
   min-width: 0;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-secondary);
 }
 .list-card-meta > span:last-child {
@@ -6653,7 +6653,7 @@ img.mood-emoji {
   white-space: nowrap;
 }
 .list-card-type { display: flex; flex: none; }
-.list-card-type svg { width: 13px; height: 13px; display: block; }
+.list-card-type svg { width: 14px; height: 14px; display: block; }
 
 /* ================= List detail (List.js) =================
    Built like a Collection page: a .detail-hero with the newest title's backdrop
