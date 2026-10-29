@@ -9821,16 +9821,41 @@ textarea.lend-message-input:focus {
 .segbar--collapsed::after {
   display: none;
 }
+/* The chip rides ABOVE the labels (taps fall through to them) and carries a
+   dark copy of every label, the ink, sliding opposite to it: the part of the
+   chip over a label shows that label dark, on every frame of a move. */
 .segbar-chip {
   position: absolute;
-  z-index: 0;
+  z-index: 2;
   top: var(--segbar-pad);
   left: 0;
   height: calc(100% - var(--segbar-pad) * 2);
   border-radius: var(--r-pill);
   background: var(--accent);
+  overflow: hidden;
+  pointer-events: none;
   transition: transform var(--dur-short) var(--ease-out),
     width var(--dur-short) var(--ease-out);
+}
+.segbar-ink {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  transition: transform var(--dur-short) var(--ease-out);
+}
+.segbar-ink-label {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1;
+  color: #000;
+  white-space: nowrap;
 }
 .segbar-opt {
   position: relative;
@@ -9848,23 +9873,24 @@ textarea.lend-message-input:focus {
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
-  transition: color var(--dur-short) var(--ease-state);
-}
-.segbar-opt[aria-checked='true'] {
-  color: #000;
 }
 /* A chip handed over from another bar (glideFrom): a longer, eased glide that
-   spans the page fade, with the labels' colour change keeping pace. */
+   spans the page fade; its ink keeps the same pace. */
 .segbar--glide .segbar-chip {
   transition-duration: var(--dur-long), var(--dur-long);
   transition-timing-function: var(--ease-in-out), var(--ease-in-out);
 }
-.segbar--glide .segbar-opt {
+.segbar--glide .segbar-ink {
   transition-duration: var(--dur-long);
+  transition-timing-function: var(--ease-in-out);
 }
 .segbar-opt:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+/* The chip covers the chosen option's own focus ring: draw it on the chip. */
+.segbar:has(.segbar-opt[aria-checked='true']:focus-visible) .segbar-chip {
+  box-shadow: inset 0 0 0 2px #000;
 }
 /* Separates the "no filter" option from the watch statuses proper. */
 .segbar-divider {
@@ -9887,7 +9913,7 @@ textarea.lend-message-input:focus {
 }
 @media (prefers-reduced-motion: reduce) {
   .segbar-chip,
-  .segbar-opt {
+  .segbar-ink {
     transition: none;
   }
 }

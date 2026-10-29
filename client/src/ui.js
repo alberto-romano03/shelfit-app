@@ -998,16 +998,26 @@ export function segmentedBar({
   ariaLabel = t('ui.selection'),
   dividerAfter = null,
 }) {
-  const chip = el('div', { class: 'segbar-chip', 'aria-hidden': 'true' });
+  // The chip sits ABOVE the labels and carries its own dark copy of them (the
+  // ink), which slides the opposite way as the chip moves. Whatever part of the
+  // chip covers a label shows that label dark, frame by frame, so the text is
+  // never grey on the chip or dark on the track mid-move. (The labels used to
+  // fade their colour on their own timer, which never matched the chip.)
+  const ink = el('div', { class: 'segbar-ink' });
+  const chip = el('div', { class: 'segbar-chip', 'aria-hidden': 'true' }, [ink]);
   const root = el('div', { class: 'segbar', role: 'radiogroup', 'aria-label': ariaLabel }, [chip]);
   const byKey = {};
   const buttons = [];
+  const inks = [];
   options.forEach(([key, label]) => {
     const b = el('button', { class: 'segbar-opt', type: 'button', role: 'radio', text: label });
     b.dataset.key = key;
     byKey[key] = b;
     buttons.push(b);
     root.append(b);
+    const copy = el('span', { class: 'segbar-ink-label', text: label });
+    inks.push(copy);
+    ink.append(copy);
     if (dividerAfter && key === dividerAfter) {
       root.append(el('span', { class: 'segbar-divider', 'aria-hidden': 'true' }));
     }
@@ -1018,19 +1028,44 @@ export function segmentedBar({
   // from the track's left edge on every page that mounts one.
   let placed = false;
 
+  // An option's box in the track's scrolling coordinates, to the fraction of a
+  // pixel (offsetLeft/Width round, which leaves the dark copies half a pixel
+  // off their labels).
+  function boxOf(b) {
+    const r = b.getBoundingClientRect();
+    const rr = root.getBoundingClientRect();
+    return { x: r.left - rr.left - root.clientLeft + root.scrollLeft, w: r.width };
+  }
+  // Each dark copy sits exactly over its label (hidden options included).
+  function layoutInk() {
+    buttons.forEach((b, i) => {
+      const s = inks[i].style;
+      s.display = b.style.display === 'none' ? 'none' : '';
+      const { x, w } = boxOf(b);
+      s.left = `${x}px`;
+      s.width = `${w}px`;
+    });
+  }
+  function place(x, w, instant) {
+    if (instant) chip.style.transition = ink.style.transition = 'none';
+    chip.style.width = `${w}px`;
+    chip.style.transform = `translateX(${x}px)`;
+    ink.style.transform = `translateX(${-x}px)`;
+    if (instant) {
+      void chip.offsetWidth; // commit the placement before transitions return
+      chip.style.transition = ink.style.transition = '';
+    }
+  }
+
   function paint(scrollIntoView) {
     const b = buttons[active];
     if (!b) return;
     // A hidden option has no box to sit on; leave the chip where it is.
     if (b.offsetParent === null && b.offsetWidth === 0) return;
-    if (!placed) chip.style.transition = 'none';
-    chip.style.width = `${b.offsetWidth}px`;
-    chip.style.transform = `translateX(${b.offsetLeft}px)`;
-    if (!placed) {
-      placed = true;
-      void chip.offsetWidth; // commit the placement before transitions return
-      chip.style.transition = '';
-    }
+    layoutInk();
+    const { x, w } = boxOf(b);
+    place(x, w, !placed);
+    placed = true;
     buttons.forEach((x, i) => x.setAttribute('aria-checked', String(i === active)));
     // Without this, choosing an option that sits off-screen moves the chip
     // somewhere the user cannot see. On the next frame: the choice's onChange
@@ -1065,6 +1100,13 @@ export function segmentedBar({
   });
   // Measured after layout — offsetWidth is 0 until the track is in the DOM.
   requestAnimationFrame(() => paint(false));
+  // Labels measured before the web font arrived are narrower than they end up:
+  // measure again once it has, so the chip and its dark copies fit.
+  if (document.fonts && document.fonts.status !== 'loaded') {
+    document.fonts.ready.then(() => {
+      if (placed) paint(false);
+    });
+  }
 
   return {
     el: root,
@@ -1077,7 +1119,7 @@ export function segmentedBar({
     geometry() {
       if (!buttons[active]) return null;
       const m = new DOMMatrixReadOnly(getComputedStyle(chip).transform);
-      return { x: m.m41, w: chip.offsetWidth, scrollLeft: root.scrollLeft, key: options[active][0] };
+      return { x: m.m41, w: chip.getBoundingClientRect().width, scrollLeft: root.scrollLeft, key: options[active][0] };
     },
     // Start the chip where another bar's chip was (its geometry()) and glide it
     // to this bar's option: Movies and Series hand their chip over this way. The
@@ -1089,15 +1131,8 @@ export function segmentedBar({
       root.scrollLeft = prev.scrollLeft;
       // A shorter track (fewer options) can't scroll as far and clamps: start
       // the chip where it was on screen, not where it was in the old track.
-      const x = prev.x - prev.scrollLeft + root.scrollLeft;
-      chip.style.transition = 'none';
-      chip.style.width = `${prev.w}px`;
-      chip.style.transform = `translateX(${x}px)`;
-      // The label the chip starts under stays dark until the chip leaves it.
-      const under = byKey[prev.key];
-      buttons.forEach((x) => x.setAttribute('aria-checked', String(x === under)));
-      void chip.offsetWidth; // commit the start before the transition returns
-      chip.style.transition = '';
+      layoutInk();
+      place(prev.x - prev.scrollLeft + root.scrollLeft, prev.w, true);
       root.classList.add('segbar--glide');
       requestAnimationFrame(() => paint(true));
       setTimeout(() => root.classList.remove('segbar--glide'), 600);
