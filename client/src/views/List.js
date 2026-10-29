@@ -147,7 +147,7 @@ export default async function List(container, params) {
 
   editBtn.addEventListener('click', () => {
     openModal((modal, close) => {
-      const input = el('input', { class: 'text-field', type: 'text', value: data.name });
+      const input = el('input', { class: 'text-field', type: 'text', value: data.name, maxlength: '40' });
       const save = el('button', { class: 'btn btn-primary' }, [
         lucideIcon('check', 'btn-lucide'),
         el('span', { text: t('common.save') }),

@@ -1256,7 +1256,7 @@ function openAddToListSheet(d) {
     }
 
     // "New list" shortcut
-    const nameInput = el('input', { class: 'text-field', placeholder: t('detail.newListName') });
+    const nameInput = el('input', { class: 'text-field', placeholder: t('detail.newListName'), maxlength: '40' });
     const createBtn = el('button', { class: 'btn btn-primary' }, [
       lucideIcon('plus', 'btn-lucide'),
       el('span', { text: t('detail.createAndAdd') }),

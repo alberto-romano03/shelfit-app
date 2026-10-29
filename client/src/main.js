@@ -25,6 +25,7 @@ import Collection from './views/Collection.js';
 import Season from './views/Season.js';
 import Settings from './views/Settings.js';
 import ListView from './views/List.js';
+import Lists from './views/Lists.js';
 import { resetGridSection } from './views/grid.js';
 import { resetUpcoming, rebuildUpcoming } from './views/Upcoming.js';
 import { preloader } from './preloader.js';
@@ -158,6 +159,7 @@ initRouter({
     { path: '/person/:id', view: Person },
     { path: '/collection/:id', view: Collection },
     { path: '/list/:id', view: ListView },
+    { path: '/lists', view: Lists },
     { path: '/season/:id/:n', view: Season },
   ],
   onChange: (path) => {

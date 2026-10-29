@@ -29,7 +29,6 @@ import {
   settingsRow,
   settingsHeader,
   settingsRule,
-  iconAction,
   confirmModal,
   lucideIcon,
   selectPill,
@@ -873,142 +872,6 @@ export default async function Settings(container) {
       });
   }
 
-  // --- Lists management ---
-  const listsSection = el('div', { class: 'settings-section' });
-  function renameListModal(list) {
-    openModal((modal, close) => {
-      const input = el('input', { class: 'text-field', type: 'text', value: list.name });
-      const save = el('button', { class: 'btn btn-primary' }, [
-      lucideIcon('check', 'btn-lucide'),
-      el('span', { text: t('common.save') }),
-    ]);
-      save.addEventListener('click', async () => {
-        const name = input.value.trim();
-        if (!name) return;
-        save.disabled = true;
-        try {
-          await api.renameList(list.id, name);
-          close();
-          reloadLists();
-        } catch (err) {
-          save.disabled = false;
-          toast(err.message || t('settings.failed'), 'bad');
-        }
-      });
-      modal.append(
-        el('h3', { text: t('settings.lists.renameTitle') }),
-        input,
-        el('div', { class: 'modal-actions' }, [
-          el('button', { class: 'btn btn-secondary', onClick: close }, [
-      lucideIcon('x', 'btn-lucide'),
-      el('span', { text: t('common.cancel') }),
-    ]),
-          save,
-        ])
-      );
-    });
-  }
-  function removeList(list) {
-    confirmModal({
-      title: t('settings.lists.deleteTitle', { name: list.name }),
-      body: t('settings.lists.deleteBody'),
-      confirmLabel: t('settings.lists.deleteConfirm'),
-      onConfirm: async () => {
-        try {
-          await api.deleteList(list.id);
-          toast(t('settings.lists.deleted'), 'ok');
-          reloadLists();
-        } catch (err) {
-          toast(err.message || t('settings.failed'), 'bad');
-          throw err;
-        }
-      },
-    });
-  }
-  function newListForm() {
-    const nameInput = el('input', { class: 'text-field', type: 'text', placeholder: t('settings.lists.namePlaceholder') });
-    let type = 'movie';
-    // Shared segmented control, centred in the form (the app default for this
-    // kind of choice).
-    const typeSeg = segmentedControl({
-      options: [
-        ['movie', t('media.movies')],
-        ['show', t('media.tvShows')],
-      ],
-      value: type,
-      ariaLabel: t('settings.lists.type'),
-      center: true,
-      onChange: (v) => {
-        type = v;
-      },
-    });
-    const typeRow = typeSeg.el;
-    const createBtn = el('button', { class: 'btn btn-primary' }, [
-      lucideIcon('plus', 'btn-lucide'),
-      el('span', { text: t('settings.lists.create') }),
-    ]);
-    createBtn.addEventListener('click', async () => {
-      const name = nameInput.value.trim();
-      if (!name) {
-        toast(t('settings.lists.enterName'));
-        return;
-      }
-      createBtn.disabled = true;
-      try {
-        await api.createList(name, type);
-        nameInput.value = '';
-        toast(t('settings.lists.created'), 'ok');
-        reloadLists();
-      } catch (err) {
-        toast(err.message || t('settings.failed'), 'bad');
-      } finally {
-        createBtn.disabled = false;
-      }
-    });
-    return el('div', { class: 'new-list-form' }, [
-      el('div', { class: 'field-label', text: t('settings.lists.newList') }),
-      nameInput,
-      typeRow,
-      el('div', { class: 'stack', style: { marginTop: '8px' } }, [createBtn]),
-    ]);
-  }
-  function renderLists(lists) {
-    clear(listsSection);
-    listsSection.append(settingsHeader('list-plus', t('settings.lists.title')));
-    if (lists === null) {
-      listsSection.append(el('div', { class: 'settings-row' }, [skelLine({ width: '70%' })]));
-      return;
-    }
-    if (!lists.length) {
-      listsSection.append(
-        el('div', { class: 'muted usage-desc', text: t('settings.lists.empty') })
-      );
-    }
-    for (const l of lists) {
-      listsSection.append(
-        settingsRow({
-          icon: l.type === 'movie' ? 'clapperboard' : 'tv',
-          label: l.name,
-          sub: t('settings.lists.sub', { type: l.type === 'movie' ? t('media.movies') : t('media.series'), n: l.count }),
-          end: [
-            iconAction({ icon: 'square-pen', label: t('settings.lists.rename'), onClick: () => renameListModal(l) }),
-            iconAction({ icon: 'trash-2', label: t('common.delete'), danger: true, onClick: () => removeList(l) }),
-          ],
-        }).el
-      );
-    }
-    listsSection.append(newListForm());
-  }
-  function reloadLists() {
-    api
-      .lists()
-      .then((d) => renderLists(d.lists || []))
-      .catch((err) => {
-        if (isAbortError(err)) return;
-        renderLists([]);
-      });
-  }
-  renderLists(null); // ghost frame
 
   // --- Kodi integration (self-contained section) ---
   // --- Metadata language (server-side: what shelfIt asks TMDB for) ---------
@@ -1094,7 +957,7 @@ export default async function Settings(container) {
   const wrapPanel = (...sections) => el('div', { class: 'settings-panel' }, sections);
   const TAB_DEFS = [
     { key: 'general', label: t('settings.tab.general'), panel: wrapPanel(appearanceSection, installSection, notificationsSection) },
-    { key: 'library', label: t('settings.tab.library'), panel: wrapPanel(metadataSection, listsSection, backupSection, importSection) },
+    { key: 'library', label: t('settings.tab.library'), panel: wrapPanel(metadataSection, backupSection, importSection) },
     { key: 'household', label: t('settings.tab.household'), panel: wrapPanel(householdSection), conditional: true },
     { key: 'kodi', label: 'Kodi', panel: wrapPanel(kodiSection), conditional: true },
     { key: 'advanced', label: t('settings.tab.advanced'), panel: wrapPanel(usageSection, cacheSection), conditional: true },
@@ -1170,7 +1033,6 @@ export default async function Settings(container) {
   container.append(header, tabRow, panels);
   selectTab('general');
 
-  reloadLists();
 
   // Cache size and TV Time import files are NEVER scanned automatically — the
   // user triggers each with its own button (see cacheSection / importSection).

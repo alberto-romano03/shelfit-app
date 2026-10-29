@@ -11,6 +11,7 @@ import { openRateOMatic } from '../rateOMatic.js';
 import { openCinemaTickets } from '../cinemaTickets.js';
 import { openShowcase } from '../showcase.js';
 import { createTheWall } from '../theWall.js';
+import { openNewListSheet } from './Lists.js';
 import { attachNowPlayingRing, detachNowPlayingRing } from '../nowPlaying.js';
 import { getSharedShelfQueue, prefetchShelfQueues } from '../shelfQueue.js';
 import { toggleTheme, resolvedTheme } from '../theme.js';
@@ -585,18 +586,38 @@ export default async function Home(container) {
   }
 
   // ------ Custom list cards (horizontally scrollable) ------
+  // The section title opens My Lists (all lists, create and remove), drawn like
+  // the series link on the season page. With no list holding titles yet, the row
+  // offers a "New list" card instead, so lists can always be started from here.
+  const listsLink = el(
+    'button',
+    { class: 'section-link', type: 'button', 'aria-label': t('home.myListsOpen'), onClick: () => navigate('/lists') },
+    [el('span', { class: 'section-title', text: t('home.myLists') }), el('span', { class: 'section-link-chev', html: icons.forward })]
+  );
   api
     .lists()
     .then((data) => {
       const lists = (data.lists || []).filter((l) => l.count > 0);
       listsContainer.innerHTML = '';
-      if (!lists.length) return;
       imageCache.preload(
         lists.flatMap((l) => (l.preview || []).map((it) => it.poster_url)).filter(Boolean)
       );
       const row = el('div', { class: 'hscroll list-card-row' });
       lists.forEach((l) => row.append(buildListCard(l)));
-      listsContainer.append(el('div', { class: 'section-title', text: t('home.myLists') }), row);
+      if (!lists.length) {
+        row.append(
+          el(
+            'button',
+            {
+              class: 'list-card list-card--new',
+              type: 'button',
+              onClick: () => openNewListSheet({ onCreated: () => navigate('/lists') }),
+            },
+            [el('span', { class: 'lw-new-plus', html: icons.plus }), el('span', { text: t('lists.new') })]
+          )
+        );
+      }
+      listsContainer.append(listsLink, row);
     })
     .catch((err) => {
       if (isAbortError(err)) return;

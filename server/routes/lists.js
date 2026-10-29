@@ -67,6 +67,8 @@ function itemMeta(type, tmdbId, userId) {
 }
 
 const PREVIEW_LIMIT = 5;
+// A list name fits a card on two lines (the client's field has the same cap).
+const NAME_MAX = 40;
 
 export default async function listRoutes(fastify) {
   // GET /api/lists  (optional ?type=movie|show, ?tmdbId=<id> for membership)
@@ -110,6 +112,10 @@ export default async function listRoutes(fastify) {
       reply.code(400);
       return { error: 'name and valid type are required' };
     }
+    if ([...String(name).trim()].length > NAME_MAX) {
+      reply.code(400);
+      return { error: `name is too long (max ${NAME_MAX} characters)` };
+    }
     const info = insertListStmt.run(request.user.id, String(name).trim(), type, Date.now());
     reply.code(201);
     return { id: info.lastInsertRowid };
@@ -121,6 +127,10 @@ export default async function listRoutes(fastify) {
     if (!name || !String(name).trim()) {
       reply.code(400);
       return { error: 'name is required' };
+    }
+    if ([...String(name).trim()].length > NAME_MAX) {
+      reply.code(400);
+      return { error: `name is too long (max ${NAME_MAX} characters)` };
     }
     const res = renameListStmt.run(String(name).trim(), request.params.id, request.user.id);
     if (!res.changes) {

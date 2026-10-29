@@ -106,7 +106,9 @@ SQLite database and cache folder that you own.
   rewatches, plus **Owned on disc** for what is physically on your shelf.
 - Per-episode progress for series: mark a season at once, get a catch-up prompt
   when you skipped episodes, track rewatches.
-- Box-set collections with owned-vs-total progress, and your own lists.
+- Box-set collections with owned-vs-total progress, and your own lists: **My
+  Lists** (the link on Home) shows them all, filtered by movies or series, and is
+  where you create and remove them.
 - Fast poster grids for Movies and Series, filtered by status, ownership and genre
   and sorted by date added, title (with an A–Z jump strip) or rating.
 
@@ -513,7 +515,7 @@ backup) and Account.
 | Tab | Sections |
 | --- | --- |
 | **General** | *Appearance* — language, theme, snow effect, vibration. *Install* — Add to Home Screen. *Notifications* — enable, plus a test notification. |
-| **Library** | *Metadata language* (master): the language TMDB metadata is fetched in (English / Italian). *Lists*: create / rename / delete custom lists. *Backup*: XML export and import of your own library. *Import from TV Time*: upload the export's `.zip` (everyone); the master also picks the member with **Import into** and has the `data/import/` tools. |
+| **Library** | *Metadata language* (master): the language TMDB metadata is fetched in (English / Italian). *Backup*: XML export and import of your own library. *Import from TV Time*: upload the export's `.zip` (everyone); the master also picks the member with **Import into** and has the `data/import/` tools. |
 | **Household** | Members and their state; add a member (one-time invite link), rename, **Can sign in**, reset password, remove (with a download of their library first). |
 | **Kodi** | Instances (add, name, icon, **Sync into** member, test, activate), the master enable toggle, and **Sync now**. |
 | **Advanced** | *API Usage* — monthly budget and usage per API, with a session-only bypass. *Cache* — scan size per folder, refresh ongoing series, clear all media cache (confirm-gated). |
