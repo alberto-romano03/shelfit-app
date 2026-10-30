@@ -1114,7 +1114,9 @@ export function segmentedBar({
   root.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
-    const next = active + (e.key === 'ArrowRight' ? 1 : -1);
+    const step = e.key === 'ArrowRight' ? 1 : -1;
+    let next = active + step;
+    while (buttons[next] && buttons[next].disabled) next += step; // skip options that can't be picked
     if (next < 0 || next >= buttons.length) return;
     pick(next, true, true);
     buttons[next].focus();
@@ -1142,7 +1144,8 @@ export function segmentedBar({
       const outer = new DOMMatrixReadOnly(getComputedStyle(chip).transform).m41; // x + w - span
       const inner = new DOMMatrixReadOnly(getComputedStyle(fill).transform).m41; // span - w
       const w = SEGBAR_SPAN - inner;
-      return { x: outer + inner, w, scrollLeft: root.scrollLeft, key: options[active][0] };
+      const left = root.getBoundingClientRect().left + root.clientLeft;
+      return { x: outer + inner, w, scrollLeft: root.scrollLeft, left, key: options[active][0] };
     },
     // Start the chip where another bar's chip was (its geometry()) and glide it
     // to this bar's option: Movies and Series hand their chip over this way. The
@@ -1153,9 +1156,12 @@ export function segmentedBar({
       placed = true;
       root.scrollLeft = prev.scrollLeft;
       // A shorter track (fewer options) can't scroll as far and clamps: start
-      // the chip where it was on screen, not where it was in the old track.
+      // the chip where it was on screen, not where it was in the old track. A
+      // centred track of another width starts elsewhere too: add that shift.
       layoutInk();
-      place(prev.x - prev.scrollLeft + root.scrollLeft, prev.w, true);
+      const left = root.getBoundingClientRect().left + root.clientLeft;
+      const shift = prev.left == null ? 0 : prev.left - left;
+      place(prev.x - prev.scrollLeft + root.scrollLeft + shift, prev.w, true);
       root.classList.add('segbar--glide');
       requestAnimationFrame(() => paint(true));
       setTimeout(() => root.classList.remove('segbar--glide'), 600);

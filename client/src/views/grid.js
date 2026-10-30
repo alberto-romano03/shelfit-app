@@ -67,9 +67,9 @@ const gridState = {};
 // type -> the next mount opens on the default filter (ignores the remembered one).
 const gridFresh = {};
 
-// Where the status bar's chip was when a grid page was left ({ type, geometry,
-// collapsed }), so the other grid can glide its chip from there. Read once by the
-// next grid mount.
+// Where the status bar's chip was when a grid page was left ({ type, geometry }),
+// so the other grid can glide its chip from there. Read once by the next grid
+// mount.
 let statusHandoff = null;
 
 // A bottom-nav tab tap: the section opens on its default chip/sort, at the top of
@@ -99,7 +99,7 @@ export async function gridView(container, type) {
     ? { status: saved.status, genre: saved.genre, sort: saved.sort, coll: saved.coll || '' }
     : { status: defaultStatus, genre: '', sort: 'added_at', coll: '' };
 
-  // Offline lockdown: when the server is unreachable, Movies/Series expose ONLY
+  // Offline lockdown: when the server is unreachable, Movies/Series allow ONLY
   // the Plan to Watch chip (served from the durable cache). Force it active from
   // the first paint. Server reachability — never navigator.onLine — is the single
   // source of truth (the device can be online while the backend is off).
@@ -312,20 +312,13 @@ export async function gridView(container, type) {
 
   // --- Offline chip lockdown ---------------------------------------------
   function lockChips(offline) {
-    // Offline the grid serves only Plan to Watch, so every other option is hidden
-    // outright — INCLUDING "All", which used to sit there greyed out. A track
-    // holding one live option and one dead one reads as broken; the collapsed
-    // state below drops the track chrome so the lone chip stands on its own.
+    // Offline the grid serves only Plan to Watch. The whole bar stays, so the
+    // page keeps its shape; every other option is dimmed and can't be picked.
     for (const key of Object.keys(chipByKey)) {
       if (key === 'plan_to_watch') continue; // always available offline
       const chip = chipByKey[key];
-      if (!chip) continue;
-      chip.style.display = offline ? 'none' : '';
-      chip.disabled = offline;
+      if (chip) chip.disabled = offline;
     }
-    chipRow.classList.toggle('segbar--collapsed', offline);
-    // Widths just changed — re-measure so the chip sits on its option.
-    statusBar.refresh();
     offlineNote.style.display = offline ? '' : 'none';
   }
   // The chip the user had selected before an outage forced Plan to Watch, so
@@ -381,11 +374,7 @@ export async function gridView(container, type) {
     container.classList.remove('view-grid-virtual');
     document.body.classList.remove('grid-virtual-active');
     gridState[type] = { status: state.status, genre: state.genre, sort: state.sort, coll: state.coll };
-    statusHandoff = {
-      type,
-      geometry: statusBar.geometry(),
-      collapsed: chipRow.classList.contains('segbar--collapsed'),
-    };
+    statusHandoff = { type, geometry: statusBar.geometry() };
     if (state.status === 'collections') collectionsScrollY = window.scrollY;
   });
 
@@ -691,17 +680,10 @@ export async function gridView(container, type) {
   lockChips(!isServerReachable());
   // Arriving from the other grid (Movies <-> Series): the bar is held still
   // through the page fade (styles.css, data-vt='grid') and its chip glides over
-  // from where the other page's chip was. Not when either bar is down to its
-  // single offline chip: there's nothing to travel between.
+  // from where the other page's chip was.
   const handoff = statusHandoff;
   statusHandoff = null;
-  if (
-    handoff &&
-    handoff.type !== type &&
-    !handoff.collapsed &&
-    !chipRow.classList.contains('segbar--collapsed') &&
-    document.documentElement.dataset.vt === 'grid'
-  ) {
+  if (handoff && handoff.type !== type && document.documentElement.dataset.vt === 'grid') {
     statusBar.glideFrom(handoff.geometry);
   }
   syncChrome();

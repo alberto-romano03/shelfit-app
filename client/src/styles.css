@@ -5499,6 +5499,12 @@ button.srow:active {
    of the old bar, no cross-fade of two bars, no size morph. Its chip glides from
    the old page's option to the new one (segmentedBar's glideFrom), drawn above
    the incoming page. */
+/* On a window wider than the options, the status bar sits centred over the
+   grid rather than hugging its left edge (auto margins also centre a flex
+   item across the column). */
+.segbar.grid-status {
+  margin-inline: auto;
+}
 html[data-vt='grid'] .segbar.grid-status {
   view-transition-name: grid-status;
 }
@@ -9706,9 +9712,6 @@ textarea.lend-message-input:focus {
   flex: 0 0 var(--segbar-pad);
   align-self: stretch;
 }
-.segbar--collapsed::after {
-  display: none;
-}
 /* The chip rides ABOVE the labels (taps fall through to them) and carries a
    dark copy of every label, the ink, sliding opposite to it: the part of the
    chip over a label shows that label dark, on every frame of a move.
@@ -9805,15 +9808,11 @@ textarea.lend-message-input:focus {
   margin: 0 5px;
   background: var(--border);
 }
-/* Offline the grid serves only Plan to Watch. A track holding one option reads
-   as broken, so the chrome collapses and the lone chip stands on its own. */
-.segbar--collapsed {
-  background: transparent;
-  padding: 0;
-  overflow: visible;
-}
-.segbar--collapsed .segbar-divider {
-  display: none;
+/* An option that can't be picked right now (offline, the grid serves only Plan
+   to Watch): still in the track, dimmed. */
+.segbar-opt:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 @media (prefers-reduced-motion: reduce) {
   .segbar-chip,

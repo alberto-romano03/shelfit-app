@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v163'; // bumped: home list row painted from a saved copy
+const CACHE = 'shelfit-shell-v164'; // bumped: status bar centred on wide windows, kept whole offline
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by
