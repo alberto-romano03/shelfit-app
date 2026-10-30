@@ -1877,7 +1877,17 @@ body { overflow-x: hidden; }
 .app-header { border-bottom: 1px solid transparent; transition: border-color var(--dur-medium) var(--ease-state); }
 .app-header.scrolled { border-bottom-color: var(--border); }
 .app-header h1 { color: var(--text-primary); }
-.site-nav { display: flex; gap: 2px; }
+/* Centred on the page itself, not between the brand and the actions: those
+   two differ in width, so a space-between row would pull the links off-centre.
+   The sticky header is positioned, so it is the containing block. */
+.site-nav {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + env(safe-area-inset-top) / 2);
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 2px;
+}
 .site-nav a {
   color: var(--text-secondary);
   font-size: 14px;
