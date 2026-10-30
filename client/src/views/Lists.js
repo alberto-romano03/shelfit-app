@@ -6,7 +6,7 @@
 // "My Lists" link on Home. Creating and removing lists used to live in Settings.
 
 import { createApi, isAbortError } from '../api.js';
-import { navigate, onCleanup } from '../router.js';
+import { onCleanup } from '../router.js';
 import {
   el,
   icons,
@@ -22,6 +22,7 @@ import {
   clear,
 } from '../ui.js';
 import { imageCache } from '../imageCache.js';
+import { wireListCard } from './List.js';
 import { t } from '../i18n.js';
 
 // Same cap as the server (routes/lists.js).
@@ -51,7 +52,6 @@ export function listRow(l, { onRemove, preview = false } = {}) {
     {
       class: 'lw-card',
       ...(preview ? { 'aria-hidden': 'true' } : { type: 'button', title: l.name }),
-      onClick: preview || onRemove ? null : () => navigate(`/list/${l.id}`),
     },
     [
       art,
@@ -65,7 +65,10 @@ export function listRow(l, { onRemove, preview = false } = {}) {
       preview ? null : el('span', { class: 'lw-chev', html: icons.forward }),
     ]
   );
-  if (!onRemove) return { el: row, name };
+  if (!onRemove) {
+    if (!preview) wireListCard(row, l); // opens the list, loading it from the press
+    return { el: row, name };
+  }
   // In edit mode the row itself doesn't navigate; the dot sits on its corner.
   const wrap = el('div', { class: 'lw-wrap' }, [
     row,

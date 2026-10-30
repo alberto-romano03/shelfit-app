@@ -12,6 +12,7 @@ import { openCinemaTickets } from '../cinemaTickets.js';
 import { openShowcase } from '../showcase.js';
 import { createTheWall } from '../theWall.js';
 import { openNewListSheet } from './Lists.js';
+import { wireListCard } from './List.js';
 import { attachNowPlayingRing, detachNowPlayingRing } from '../nowPlaying.js';
 import { getSharedShelfQueue, prefetchShelfQueues } from '../shelfQueue.js';
 import { toggleTheme, resolvedTheme } from '../theme.js';
@@ -581,7 +582,7 @@ export default async function Home(container) {
         ]),
       ]),
     ]);
-    card.addEventListener('click', () => navigate(`/list/${l.id}`));
+    wireListCard(card, l); // opens the list, loading it from the press
     return card;
   }
 
