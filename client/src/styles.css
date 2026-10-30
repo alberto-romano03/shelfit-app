@@ -6996,19 +6996,46 @@ button.lw-card.lw-new:disabled:active {
   color: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
   cursor: pointer;
+  /* Always in the row; it pops in (and out) with edit mode instead of being
+     added and removed, so nothing reloads or jumps. */
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+  transition: opacity var(--dur-short) var(--ease-out), transform var(--dur-short) var(--ease-out);
 }
 .lw-remove svg {
   width: 15px;
   height: 15px;
 }
+.is-editing .lw-remove {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+/* The covers dim and the chevron fades (it keeps its space, so the text
+   beside it never reflows). */
+.lw-wrap .lw-art,
+.lw-wrap .lw-chev {
+  transition: opacity var(--dur-short) var(--ease-state);
+}
 .is-editing .lw-card {
   cursor: default;
+}
+.is-editing button.lw-card:active {
+  scale: none;
 }
 .is-editing .lw-art {
   opacity: 0.55;
 }
 .is-editing .lw-chev {
-  display: none;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lw-remove,
+  .lw-wrap .lw-art,
+  .lw-wrap .lw-chev {
+    transition: none;
+  }
 }
 
 /* New-list sheet: type first, the row's live preview, the name and its counter. */

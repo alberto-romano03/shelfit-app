@@ -139,9 +139,11 @@ export function openList(l) {
 }
 
 // A card that opens a list: loading starts when it is pressed, not released.
+// Not while My Lists is in edit mode, where tapping a row does nothing.
 export function wireListCard(card, l) {
-  card.addEventListener('pointerdown', () => prefetchList(l.id), { passive: true });
-  card.addEventListener('click', () => openList(l));
+  const editing = () => !!card.closest('.is-editing');
+  card.addEventListener('pointerdown', () => editing() || prefetchList(l.id), { passive: true });
+  card.addEventListener('click', () => editing() || openList(l));
 }
 
 export default async function List(container, params) {

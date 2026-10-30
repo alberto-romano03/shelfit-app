@@ -40,7 +40,8 @@ function metaText(l) {
   return `${t(l.type === 'movie' ? 'media.movies' : 'media.series')} · ${t('lists.titles', { n: l.count })}`;
 }
 
-// One list as a row. `onRemove` (edit mode) adds the red remove dot.
+// One list as a row. `onRemove` adds a red remove dot on its corner, shown only
+// while the page is in edit mode (.is-editing), when the row stops opening.
 export function listRow(l, { onRemove, preview = false } = {}) {
   const covers = (l.preview || []).filter((it) => it.poster_url).slice(0, 3);
   const art = covers.length
@@ -65,11 +66,8 @@ export function listRow(l, { onRemove, preview = false } = {}) {
       preview ? null : el('span', { class: 'lw-chev', html: icons.forward }),
     ]
   );
-  if (!onRemove) {
-    if (!preview) wireListCard(row, l); // opens the list, loading it from the press
-    return { el: row, name };
-  }
-  // In edit mode the row itself doesn't navigate; the dot sits on its corner.
+  if (!preview) wireListCard(row, l); // opens the list, loading it from the press
+  if (!onRemove) return { el: row, name };
   const wrap = el('div', { class: 'lw-wrap' }, [
     row,
     el('button', {
@@ -213,7 +211,7 @@ export default async function Lists(container) {
     center: true,
     onChange: (v) => {
       filter = v;
-      render();
+      applyFilter();
     },
   });
   const body = el('div', { class: 'lp-body' }, [skeletonRows()]);
@@ -230,7 +228,7 @@ export default async function Lists(container) {
   }
   editBtn.addEventListener('click', () => {
     editing = !editing;
-    render();
+    applyEditing();
   });
 
   function remove(l) {
@@ -246,9 +244,13 @@ export default async function Lists(container) {
           throw err;
         }
         lists = lists.filter((x) => x.id !== l.id);
+        const row = rowEls.get(l.id);
+        rowEls.delete(l.id);
+        if (row) collapse(row).then(() => row.remove());
         if (!lists.length) editing = false;
         toast(t('lists.deleted'), 'ok');
-        render();
+        applyFilter();
+        applyEditing();
       },
     });
   }
@@ -270,29 +272,76 @@ export default async function Lists(container) {
     [el('span', { class: 'lw-new-plus', html: icons.plus }), el('span', { text: t('lists.new') })]
   );
 
-  // The rows container and the "New list" row stay in the page across renders
-  // (only the list rows and the note under them are rebuilt), so the row's
-  // disabled look fades in and out instead of being swapped.
+  // The rows are built once per load and then left alone: edit mode and the
+  // filter only switch classes and visibility, so the covers never reload or
+  // fade in again, the remove dots and chevrons ease in and out (styles.css),
+  // and the "New list" row only fades to disabled.
   const listHost = el('div', { class: 'lp-list-host' });
   const rows = el('div', { class: 'lp-rows' }, [newRow, listHost]);
   const note = el('div');
+  let rowEls = new Map(); // list id -> its row
 
   function render() {
-    paintEditButton();
-    page.classList.toggle('is-editing', editing);
-    const shown = (lists || []).filter((l) => filter === 'all' || l.type === filter);
-    newRow.disabled = editing;
-    listHost.replaceChildren(...shown.map((l) => listRow(l, { onRemove: editing ? remove : null }).el));
+    rowEls = new Map(lists.map((l) => [l.id, listRow(l, { onRemove: remove }).el]));
+    listHost.replaceChildren(...rowEls.values());
+    applyFilter();
+    applyEditing();
+    if (rows.parentNode !== body) body.replaceChildren(rows, note);
+  }
+
+  function applyFilter() {
+    let shown = 0;
+    for (const l of lists) {
+      const on = filter === 'all' || l.type === filter;
+      const row = rowEls.get(l.id);
+      if (row) row.hidden = !on;
+      if (on) shown++;
+    }
     if (!lists.length) {
       note.replaceChildren(
         stateBlock({ icon: 'list-plus', title: t('lists.noneTitle'), detail: t('lists.noneDetail'), tier: 'inline' })
       );
-    } else if (!shown.length) {
+    } else if (!shown) {
       note.replaceChildren(el('div', { class: 'muted lp-none', text: t('lists.noneFiltered') }));
     } else {
       note.replaceChildren();
     }
-    if (rows.parentNode !== body) body.replaceChildren(rows, note);
+  }
+
+  function applyEditing() {
+    paintEditButton();
+    page.classList.toggle('is-editing', editing);
+    newRow.disabled = editing;
+    // The dots are always there; out of edit mode they're invisible, so keep
+    // them out of the tab order and away from screen readers.
+    for (const row of rowEls.values()) {
+      const dot = row.querySelector('.lw-remove');
+      dot.tabIndex = editing ? 0 : -1;
+      dot.setAttribute('aria-hidden', String(!editing));
+    }
+  }
+
+  // A deleted list fades out, then its place closes up (the grid gap with it).
+  function collapse(node) {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return Promise.resolve();
+    const h = node.offsetHeight;
+    return node
+      .animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.96)' }], {
+        duration: 160,
+        easing: 'ease-out',
+        fill: 'forwards',
+      })
+      .finished.then(
+        () =>
+          node.animate(
+            [
+              { height: `${h}px`, marginBottom: '0px' },
+              { height: '0px', marginBottom: '-10px' }, // -10px: .lp-rows gap
+            ],
+            { duration: 220, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'forwards' }
+          ).finished
+      )
+      .catch(() => {});
   }
 
   async function load() {
