@@ -16,6 +16,7 @@ import {
   el,
   icons,
   poster,
+  cachedImg,
   skelGrid,
   skelLine,
   crossfadeSwap,
@@ -107,7 +108,6 @@ export async function gridView(container, type) {
   // Offline Plan-to-Watch data (durable copy whose posters the SW warmed online).
   let planItems = null; // null = not loaded; [] or [{id,title,poster_url,rating}]
   let collectionsData = null; // what the Collections chip shows (from collectionsCache)
-  let standaloneOpen = false; // the standalone films grid, kept open across repaints
   // Back on the Collections chip: return to where the list was left.
   let restoreCollectionsScroll = cameBack() && state.status === 'collections';
   let genresShown = null; // the genre list in the pill, joined (skips identical refills)
@@ -612,15 +612,16 @@ export async function gridView(container, type) {
     paintCollections();
   }
 
+  // Rows of shimmer shaped like the cards below (the My Lists skeleton).
   function collectionsSkeleton() {
     return el(
       'div',
       { class: 'cset-rows' },
       Array.from({ length: 3 }, () =>
-        el('div', { class: 'cset-row' }, [
-          el('div', { class: 'poster-card cset-poster skeleton' }),
-          el('div', { class: 'cset-side' }, [
-            skelLine({ width: '65%', height: '16px' }),
+        el('div', { class: 'lw-card lw-skel' }, [
+          el('div', { class: 'lw-art' }, [el('div', { class: 'lw-case c0 skeleton' })]),
+          el('div', { class: 'lw-text' }, [
+            skelLine({ width: '70%', height: '16px' }),
             skelLine({ cls: 'sm', width: '45%' }),
           ]),
         ])
@@ -629,10 +630,10 @@ export async function gridView(container, type) {
   }
 
   function paintCollections() {
-    const { collections = [], standalone = [] } = collectionsData || {};
+    const { collections = [] } = collectionsData || {};
     const out = document.createDocumentFragment();
 
-    if (!collections.length && !standalone.length) {
+    if (!collections.length) {
       out.append(
         stateBlock({
           icon: 'layers',
@@ -640,21 +641,7 @@ export async function gridView(container, type) {
           detail: t('grid.collectionsEmptyDetail'),
         })
       );
-    }
-
-    if (collections.length) {
-      // What the whole shelf adds up to, then the collections the filter keeps.
-      const owned = collections.reduce((a, c) => a + c.owned, 0);
-      const total = collections.reduce((a, c) => a + c.total, 0);
-      out.append(
-        el('div', { class: 'cset-summary' }, [
-          el('div', {
-            class: 'cset-summary-title',
-            text: t('grid.collSummary', { n: collections.length, done: collections.filter(isComplete).length }),
-          }),
-          el('div', { class: 'cset-summary-sub', text: t('grid.collFilms', { owned, total }) }),
-        ])
-      );
+    } else {
       const shown = collections.filter((c) => !state.coll || (state.coll === 'done') === isComplete(c));
       if (shown.length) {
         out.append(el('div', { class: 'cset-rows' }, shown.map(collectionRow)));
@@ -665,8 +652,6 @@ export async function gridView(container, type) {
       }
     }
 
-    if (standalone.length) out.append(standaloneSection(standalone));
-
     crossfadeSwap(() => {
       simpleGrid.className = '';
       simpleGrid.innerHTML = '';
@@ -674,85 +659,32 @@ export async function gridView(container, type) {
     });
   }
 
-  // One collection: its own poster large on the left; on the right the name, how
-  // much of it is in the library, and the owned films along the bottom (release
-  // order, the last slot turning into "+N" past four).
-  const SHELF_MAX = 4;
+  // One collection, drawn like a My Lists row: the collection's own poster in
+  // front with two of its films from the library behind it (release order),
+  // then the name, how much of it is in the library, and a chevron.
   function collectionRow(c) {
-    const films = c.owned_movies || [];
-    const shown = films.length > SHELF_MAX ? films.slice(0, SHELF_MAX - 1) : films;
-    const shelf = el(
-      'div',
-      { class: 'cset-shelf' },
-      shown.map((m) => {
-        const card = poster(m.poster_url, m.title);
-        card.classList.add('cset-film');
-        return card;
-      })
-    );
-    if (films.length > shown.length) {
-      shelf.append(el('span', { class: 'cset-more', text: `+${films.length - shown.length}` }));
-    }
+    const covers = [c.poster_url, ...(c.owned_movies || []).map((m) => m.poster_url)].filter(Boolean).slice(0, 3);
     const done = isComplete(c);
-    const art = poster(c.poster_url, c.name);
-    art.classList.add('cset-poster');
-    return el('button', { class: 'cset-row', type: 'button', onClick: () => navigate(`/collection/${c.id}`) }, [
-      art,
-      el('div', { class: 'cset-side' }, [
-        el('div', { class: 'cset-name', text: collectionName(c.name) }),
-        el('div', {
-          class: `cset-meta${done ? ' is-done' : ''}`,
-          text: done ? t('grid.collComplete', { n: c.total }) : t('grid.inLibrary', { owned: c.owned, total: c.total }),
-        }),
-        shelf,
-      ]),
-    ]);
-  }
-
-  // Movies in no collection: a row (three of their posters stacked, a count, a
-  // chevron) that opens their poster grid underneath. The grid is built on the
-  // first open.
-  function standaloneSection(films) {
-    const grid = el('div', { class: 'grid cset-sa-grid' });
-    function fill() {
-      if (grid.childElementCount) return;
-      for (const m of films) {
-        const card = poster(m.poster_url, m.title);
-        if (m.rating) card.append(el('div', { class: 'rating-badge', html: `★ ${m.rating}` }));
-        card.addEventListener('click', () => openDetail(`/detail/${m.item_id}`));
-        grid.append(card);
-      }
-    }
-    function sync() {
-      if (standaloneOpen) fill();
-      grid.style.display = standaloneOpen ? '' : 'none';
-      row.setAttribute('aria-expanded', String(standaloneOpen));
-    }
-    const row = el(
+    return el(
       'button',
-      {
-        class: 'cset-sa',
-        type: 'button',
-        onClick: () => {
-          standaloneOpen = !standaloneOpen;
-          sync();
-        },
-      },
+      { class: 'lw-card', type: 'button', title: collectionName(c.name), onClick: () => navigate(`/collection/${c.id}`) },
       [
         el(
           'div',
-          { class: 'cset-sa-art' },
-          films.slice(0, 3).map((m) => poster(m.poster_url, ''))
+          { class: 'lw-art' },
+          covers.map((url, i) => cachedImg(url, { class: `lw-case c${i}`, alt: '' }))
         ),
-        el('div', { class: 'cset-sa-text' }, [
-          el('div', { class: 'cset-sa-name', text: t('grid.standaloneTitle') }),
-          el('div', { class: 'cset-sa-meta', text: t('grid.standaloneCount', { n: films.length }) }),
+        el('div', { class: 'lw-text' }, [
+          el('div', { class: 'lw-name', text: collectionName(c.name) }),
+          el('div', { class: `lw-meta${done ? ' is-done' : ''}` }, [
+            el('span', {
+              text: done ? t('grid.collComplete', { n: c.total }) : t('grid.inLibrary', { owned: c.owned, total: c.total }),
+            }),
+          ]),
         ]),
-        el('span', { class: 'cset-sa-chev', html: icons.forward }),
+        el('span', { class: 'lw-chev', html: icons.forward }),
       ]
     );
-    sync();
-    return el('div', { class: 'cset-sa-section' }, [row, grid]);
   }
 
   // --- Mount --------------------------------------------------------------
