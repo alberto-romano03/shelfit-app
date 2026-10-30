@@ -525,6 +525,9 @@ export function cachedImg(url, props = {}) {
   const img = el('img', props);
   fadeInOnLoad(img);
   if (url) lazyLoad(img, url);
+  // Already in memory: show it as it is, with no fade, so a page drawn again
+  // from saved data doesn't blink its images in.
+  if (url && imageCache.get(url)) img.classList.add('in');
   return img;
 }
 

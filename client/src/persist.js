@@ -49,6 +49,9 @@ export const PK = {
   // The last /api/auth/status answer (login on/off, who, role), so Settings can
   // decide what to offer when the server can't be reached (fails closed).
   authStatus: 'auth:status',
+  // The home's list cards (id, name, type, count, up to three cover URLs), so
+  // the row paints at once instead of popping in and pushing the page down.
+  homeLists: 'home:lists',
 };
 
 // Plan-to-Watch titles are stored per library type: `plan:movie`, `plan:show`.

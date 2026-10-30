@@ -590,40 +590,61 @@ export default async function Home(container) {
   // The section title opens My Lists (all lists, create and remove), drawn like
   // the series link on the season page. With no list holding titles yet, the row
   // offers a "New list" card instead, so lists can always be started from here.
+  // Like Currently watching, the row paints at once from a durable copy (the
+  // member's last lists), then revalidates and redraws only if something changed:
+  // no pop-in pushing the page down, and no covers blinking back in.
   const listsLink = el(
     'button',
     { class: 'section-link', type: 'button', 'aria-label': t('home.myListsOpen'), onClick: () => navigate('/lists') },
     [el('span', { class: 'section-title', text: t('home.myLists') }), el('span', { class: 'section-link-chev', html: icons.forward })]
   );
+  function paintLists(lists) {
+    const row = el('div', { class: 'hscroll list-card-row' });
+    lists.forEach((l) => row.append(buildListCard(l)));
+    if (!lists.length) {
+      row.append(
+        el(
+          'button',
+          {
+            class: 'list-card list-card--new',
+            type: 'button',
+            onClick: () => openNewListSheet({ onCreated: () => navigate('/lists') }),
+          },
+          [el('span', { class: 'lw-new-plus', html: icons.plus }), el('span', { text: t('lists.new') })]
+        )
+      );
+    }
+    listsContainer.replaceChildren(listsLink, row);
+  }
+  // Only what the cards show, so the saved copy stays small.
+  const compactLists = (lists) =>
+    lists
+      .filter((l) => l.count > 0)
+      .map((l) => ({
+        id: l.id,
+        name: l.name,
+        type: l.type,
+        count: l.count,
+        preview: (l.preview || [])
+          .filter((it) => it.poster_url)
+          .slice(0, 3)
+          .map((it) => ({ poster_url: it.poster_url })),
+      }));
+  const savedLists = pget(PK.homeLists);
+  if (Array.isArray(savedLists)) paintLists(savedLists);
   api
     .lists()
     .then((data) => {
-      const lists = (data.lists || []).filter((l) => l.count > 0);
-      listsContainer.innerHTML = '';
-      imageCache.preload(
-        lists.flatMap((l) => (l.preview || []).map((it) => it.poster_url)).filter(Boolean)
-      );
-      const row = el('div', { class: 'hscroll list-card-row' });
-      lists.forEach((l) => row.append(buildListCard(l)));
-      if (!lists.length) {
-        row.append(
-          el(
-            'button',
-            {
-              class: 'list-card list-card--new',
-              type: 'button',
-              onClick: () => openNewListSheet({ onCreated: () => navigate('/lists') }),
-            },
-            [el('span', { class: 'lw-new-plus', html: icons.plus }), el('span', { text: t('lists.new') })]
-          )
-        );
-      }
-      listsContainer.append(listsLink, row);
+      const lists = compactLists(data.lists || []);
+      imageCache.preload(lists.flatMap((l) => l.preview.map((it) => it.poster_url)));
+      if (Array.isArray(savedLists) && JSON.stringify(lists) === JSON.stringify(savedLists)) return; // unchanged
+      paintLists(lists);
+      pset(PK.homeLists, lists);
     })
     .catch((err) => {
       if (isAbortError(err)) return;
       if (!isServerReachable()) markDegraded(); // recover on reconnect
-      listsContainer.innerHTML = '';
+      if (!Array.isArray(savedLists)) listsContainer.replaceChildren(); // nothing saved to keep showing
     });
 
   // ------ Idle border-draw: after a few idle seconds a glowing orange stroke
