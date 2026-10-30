@@ -6827,6 +6827,11 @@ img.mood-emoji {
   gap: 10px;
   margin-top: 16px;
 }
+/* The list rows sit in their own host so the "New list" row above them is
+   never rebuilt; the host itself takes no box in the grid. */
+.lp-list-host {
+  display: contents;
+}
 .lp-none {
   text-align: center;
   margin-top: 18px;
@@ -6955,6 +6960,17 @@ button.lw-card:active {
 .lw-new-plus svg {
   width: 22px;
   height: 22px;
+}
+/* Edit mode: still there (the rows keep their place), just switched off. */
+.lw-card.lw-new {
+  transition: opacity var(--dur-short) var(--ease-state);
+}
+.lw-card.lw-new:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button.lw-card.lw-new:disabled:active {
+  scale: none;
 }
 .lw-skel {
   cursor: default;

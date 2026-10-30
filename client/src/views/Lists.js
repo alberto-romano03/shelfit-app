@@ -253,36 +253,46 @@ export default async function Lists(container) {
     });
   }
 
-  function newRow() {
-    return el(
-      'button',
-      {
-        class: 'lw-card lw-new',
-        type: 'button',
-        onClick: () =>
-          openNewListSheet({
-            type: filter === 'show' ? 'show' : 'movie',
-            onCreated: () => load(),
-          }),
-      },
-      [el('span', { class: 'lw-new-plus', html: icons.plus }), el('span', { text: t('lists.new') })]
-    );
-  }
+  // One "New list" row for the page. Edit mode only disables it, so the rows
+  // below don't jump up when editing starts and back down when it ends, and it
+  // fades rather than vanishing.
+  const newRow = el(
+    'button',
+    {
+      class: 'lw-card lw-new',
+      type: 'button',
+      onClick: () =>
+        openNewListSheet({
+          type: filter === 'show' ? 'show' : 'movie',
+          onCreated: () => load(),
+        }),
+    },
+    [el('span', { class: 'lw-new-plus', html: icons.plus }), el('span', { text: t('lists.new') })]
+  );
+
+  // The rows container and the "New list" row stay in the page across renders
+  // (only the list rows and the note under them are rebuilt), so the row's
+  // disabled look fades in and out instead of being swapped.
+  const listHost = el('div', { class: 'lp-list-host' });
+  const rows = el('div', { class: 'lp-rows' }, [newRow, listHost]);
+  const note = el('div');
 
   function render() {
     paintEditButton();
     page.classList.toggle('is-editing', editing);
     const shown = (lists || []).filter((l) => filter === 'all' || l.type === filter);
-    const rows = el('div', { class: 'lp-rows' });
-    if (!editing) rows.append(newRow());
-    for (const l of shown) rows.append(listRow(l, { onRemove: editing ? remove : null }).el);
-    const parts = [rows];
+    newRow.disabled = editing;
+    listHost.replaceChildren(...shown.map((l) => listRow(l, { onRemove: editing ? remove : null }).el));
     if (!lists.length) {
-      parts.push(stateBlock({ icon: 'list-plus', title: t('lists.noneTitle'), detail: t('lists.noneDetail'), tier: 'inline' }));
+      note.replaceChildren(
+        stateBlock({ icon: 'list-plus', title: t('lists.noneTitle'), detail: t('lists.noneDetail'), tier: 'inline' })
+      );
     } else if (!shown.length) {
-      parts.push(el('div', { class: 'muted lp-none', text: t('lists.noneFiltered') }));
+      note.replaceChildren(el('div', { class: 'muted lp-none', text: t('lists.noneFiltered') }));
+    } else {
+      note.replaceChildren();
     }
-    body.replaceChildren(...parts);
+    if (rows.parentNode !== body) body.replaceChildren(rows, note);
   }
 
   async function load() {
