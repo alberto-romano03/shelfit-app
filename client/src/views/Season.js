@@ -11,6 +11,7 @@
 // not-yet-fetched ranges render shimmer skeletons; a failed page shows a retry
 // row. Scroll position is remembered per season (in memory) for the session.
 
+import { haptic } from '../haptic.js';
 import { createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup } from '../router.js';
 import {
@@ -326,8 +327,19 @@ export default async function Season(container, params) {
     main.addEventListener('click', () => {
       if (currentEp) openNoteSheet(currentEp);
     });
+    // Only a tap on an unwatched episode draws the tick. Rows are recycled while
+    // scrolling, so the watched state alone must never animate.
+    check.addEventListener('animationend', (e) => {
+      if (e.animationName === 'check-fill') check.classList.remove('check-draw');
+    });
     check.addEventListener('click', () => {
-      if (currentEp) onCheck(currentEp);
+      if (!currentEp) return;
+      const marking = !currentEp.watched;
+      onCheck(currentEp); // paints the tick before its first await
+      if (marking) {
+        check.classList.add('check-draw');
+        haptic();
+      }
     });
     retryBtn.addEventListener('click', () => {
       if (retryHandler) retryHandler();
@@ -343,6 +355,7 @@ export default async function Season(container, params) {
       if (ep.air_date) bits.push(formatDate(ep.air_date));
       if (ep.runtime) bits.push(t('season.runtime', { min: ep.runtime }));
       sub.textContent = bits.join(' · ');
+      check.classList.remove('check-draw');
       check.classList.toggle('done', !!ep.watched);
       if (ep.watched && ep.watch_count > 1) check.innerHTML = `<span class="check-count">×${ep.watch_count}</span>`;
       else if (ep.watched) check.innerHTML = icons.check;
