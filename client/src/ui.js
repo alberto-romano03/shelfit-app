@@ -1525,12 +1525,35 @@ export function spinner(opts = {}) {
 // The glyph defaults by kind and can be overridden with any file in
 // public/icons/lucide.
 const STATE_ICONS = { error: 'signpost', offline: 'earth', empty: 'shelving-unit' };
+// Small drawings from the rental shop, for the page and section sizes (an inline state
+// is a single row, too small for one). One line colour and one detail in the kind's ink.
+// Glyphs not listed here say something more specific, and stay as they are.
+const STATE_ART = {
+  sleeve:
+    '<rect x="10" y="5" width="28" height="38" rx="3"/><rect class="art-detail" x="15" y="11" width="18" height="26" rx="1.5" stroke-dasharray="3 3"/>',
+  shelf:
+    '<path d="M5 40h38"/><rect x="8" y="14" width="7" height="26" rx="1"/><rect x="16" y="10" width="7" height="30" rx="1"/><rect class="art-detail" x="25" y="12" width="7" height="28" rx="1" stroke-dasharray="3 3"/><rect x="34" y="16" width="7" height="24" rx="1"/>',
+  popcorn:
+    '<path d="M13 21l3 22h16l3-22z"/><path d="M20 21l1.5 22M28 21l-1.5 22"/><path class="art-detail" d="M12 21a4.5 4.5 0 0 1 2-8.5 5.5 5.5 0 0 1 9-5 5.5 5.5 0 0 1 9.5 4 4.5 4.5 0 0 1 3 9.5"/>',
+  tape:
+    '<rect x="6" y="6" width="36" height="23" rx="3"/><circle cx="17" cy="17.5" r="4.5"/><circle cx="31" cy="17.5" r="4.5"/><path class="art-detail" d="M20 29c-1 4-9 2-9 7s8 6 10 2 2-6 6-5 4 7 8 5 3-5 0-9"/>',
+  sign:
+    '<path d="M12 19l12-12 12 12"/><circle cx="24" cy="6" r="1.5"/><rect x="7" y="19" width="34" height="21" rx="2"/><path class="art-detail" d="M14 27h20M14 33h12"/>',
+};
+const STATE_ICON_ART = { 'shelving-unit': 'shelf', 'library-big': 'sleeve', 'list-plus': 'sleeve', popcorn: 'popcorn' };
+function stateArtFor(kind, tier, icon) {
+  if (tier === 'inline') return null;
+  if (kind === 'error') return STATE_ART.tape;
+  if (kind === 'offline') return STATE_ART.sign;
+  return STATE_ART[STATE_ICON_ART[icon || STATE_ICONS.empty]] || null;
+}
 const STATE_TIERS = ['page', 'section', 'inline'];
 const RETRY_REARM_MS = 4000;
 
 export function stateBlock(opts = {}) {
   const kind = STATE_ICONS[opts.kind] ? opts.kind : 'empty';
   const tier = STATE_TIERS.includes(opts.tier) ? opts.tier : 'page';
+  const art = stateArtFor(kind, tier, opts.icon);
   const node = el(
     'div',
     {
@@ -1539,9 +1562,12 @@ export function stateBlock(opts = {}) {
       role: kind === 'error' ? 'alert' : null,
     },
     [
-      el('div', { class: 'empty-art' }, [
-        lucideIcon(opts.icon || STATE_ICONS[kind], 'empty-ico'),
-      ]),
+      art
+        ? el('div', {
+            class: 'empty-art empty-art--drawn',
+            html: `<svg viewBox="0 0 48 48" aria-hidden="true">${art}</svg>`,
+          })
+        : el('div', { class: 'empty-art' }, [lucideIcon(opts.icon || STATE_ICONS[kind], 'empty-ico')]),
       el('h3', { class: 'empty-title', text: opts.title || '' }),
       opts.detail ? el('p', { class: 'empty-detail', text: opts.detail }) : null,
     ]
