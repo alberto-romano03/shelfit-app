@@ -274,7 +274,6 @@ textarea,
 .detail-poster::after,
 .detail-poster-wrap::before,
 .brand-line,
-.snow-canvas,
 .snow-layer {
   pointer-events: none;
 }
@@ -861,12 +860,6 @@ body.grid-virtual-active .gc-scroller {
   border-color: var(--accent);
   font-weight: 600;
 }
-/* Offline-disabled chip: greyed and non-interactive (no hover/active state). */
-.chip.chip-disabled {
-  opacity: 0.4;
-  pointer-events: none;
-  cursor: default;
-}
 /* Inline note under the chips explaining the offline lock. */
 .offline-chip-note {
   margin: 2px 0 10px;
@@ -897,15 +890,6 @@ body.grid-virtual-active .gc-scroller {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-/* Thin vertical rule separating the "All" chip from the status chips. */
-.chip-divider {
-  flex: 0 0 auto;
-  align-self: center;
-  width: 1px;
-  height: 20px;
-  margin: 0 2px;
-  background: var(--border);
 }
 
 /* ============================= Home ============================= */
@@ -1562,31 +1546,6 @@ body.grid-virtual-active .gc-scroller {
   margin-bottom: 12px;
 }
 
-.segments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 14px 0;
-}
-.segments button {
-  transition: background-color var(--dur-short) var(--ease-state),
-    border-color var(--dur-short) var(--ease-state),
-    color var(--dur-short) var(--ease-state);
-  padding: 8px 12px;
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-size: 13px;
-  min-height: 40px;
-}
-.segments button.active {
-  background: var(--accent);
-  color: #000;
-  border-color: var(--accent);
-  font-weight: 600;
-}
-
 .stars {
   display: flex;
   gap: 4px;
@@ -1947,9 +1906,6 @@ body.season-active .ep-scroller {
 }
 .ep-retry-btn {
   color: var(--text-secondary);
-}
-.ep-note {
-  margin-top: 8px;
 }
 /* Multiline note input inside the episode-note bottom sheet. */
 .note-sheet-input {
@@ -3260,9 +3216,6 @@ textarea.note-sheet-input:focus {
   width: 11px;
   height: 11px;
 }
-.ht-dot {
-  opacity: 0.5;
-}
 /* The one action on the row. Not a label, because the row itself already
    opens the title: this adds it where it stands. */
 .ht-add {
@@ -4404,28 +4357,6 @@ button.srow:active {
   gap: 10px;
   margin-top: 12px;
 }
-/* Action-menu rows: one shape for every item (icon + label, left-aligned, same
-   padding/radius via .btn). Neutral rows use .btn-secondary; the destructive row
-   uses the muted-red tertiary treatment below and sits last. */
-.menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  text-align: left;
-}
-.menu-item svg {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-.menu-item-danger {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  color: var(--danger);
-}
-.menu-item-danger:active {
-  background: color-mix(in srgb, var(--danger) 20%, transparent);
-}
 .import-file {
   font-size: 13px;
   color: var(--text-secondary);
@@ -4607,7 +4538,6 @@ button.srow:active {
   mix-blend-mode: overlay;
   opacity: 0.5;
 }
-
 
 /* cover-art label in the center region (~46% of the disc) */
 .cd-label {
@@ -5281,25 +5211,6 @@ button.srow:active {
   font-weight: 600;
 }
 
-/* Owned / locked poster states (collection detail + "more from" row). */
-.owned-check {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--success);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.owned-check svg {
-  width: 14px;
-  height: 14px;
-}
-
 /* Watched indicator — white eye on an orange rounded badge, bottom-left of the
    poster, always painted on top of the art. Shown only on watched titles. */
 .watched-badge {
@@ -5327,19 +5238,6 @@ button.srow:active {
 }
 .poster-card.locked {
   cursor: pointer;
-}
-.lock-badge {
-  position: absolute;
-  left: 50%;
-  bottom: 8px;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.75);
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: var(--r-md);
-  white-space: nowrap;
 }
 
 /* Collection detail hero. */
@@ -5734,13 +5632,6 @@ img.mood-emoji {
   color: var(--accent);
   font-weight: 700;
 }
-
-/* Minimum rating — star rows */
-.rating-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
 .rating-row {
   display: flex;
   align-items: center;
@@ -5754,12 +5645,6 @@ img.mood-emoji {
   transition: background-color var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
     scale var(--dur-short) var(--ease-out);
-}
-.rating-label {
-  width: 34px;
-  font-size: 14px;
-  font-weight: 700;
-  text-align: left;
 }
 .rating-row.active {
   background: var(--surface-elevated);
@@ -5982,22 +5867,6 @@ img.mood-emoji {
   margin-bottom: 10px;
 }
 
-/* ===================== Home custom-list rows ===================== */
-.list-row-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.list-row-head .section-title {
-  margin-bottom: 6px;
-}
-
-/* ===================== Add-to-list sheet ===================== */
-.add-to-list-btn {
-  width: 100%;
-  margin-top: 12px;
-}
-
 .row-actions {
   display: flex;
   align-items: center;
@@ -6005,9 +5874,6 @@ img.mood-emoji {
 }
 .link-danger {
   color: var(--danger);
-}
-.new-list-form {
-  margin-top: 16px;
 }
 .switch {
   position: relative;
@@ -6417,9 +6283,6 @@ img.mood-emoji {
   align-items: center;
   gap: 8px;
   margin-left: auto;
-}
-.rewatch-wrap .rewatch-remove {
-  color: var(--danger);
 }
 .notes-wrap { margin-top: 16px; }
 
@@ -7331,16 +7194,6 @@ button.lw-card.lw-new:disabled:active {
   height: 14px;
 }
 
-/* ================= Settings — list section spacing ================= */
-.new-list-form {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-/* The type selector needs the same rhythm the old chip row had — it sits between
-   the name field and the Create button, not flush against either. */
-.new-list-form .seg { margin-top: 14px; margin-bottom: 14px; }
-
 /* ================= App logo — idle slide animation ================= */
 .brand { position: relative; }
 .brand-line {
@@ -7517,18 +7370,6 @@ button.lw-card.lw-new:disabled:active {
   height: 100%;
   width: auto;
   display: block;
-}
-/* Accessible/attribution text kept in the DOM but off-screen. */
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 /* A spine: one side of a DVD/Blu-ray boxset case. All the same HEIGHT; only the
    thickness (width) varies. Bottom sits on the shelf surface.
@@ -7714,7 +7555,6 @@ button.lw-card.lw-new:disabled:active {
    skeleton→content swap fades instead of hard-cutting, dynamic areas reserve
    their space so nothing reflows on load, and all inputs share one spacing +
    focus system. */
-
 
 /* --- Label crossfade (ui.js setLabel) -------------------------------------
    A state label fades out, swaps at the midpoint, and fades back in, so text
@@ -7983,11 +7823,6 @@ textarea.notes:focus,
   background-size: cover;
   background-position: center;
 }
-.rcpt-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
 .rcpt-paper {
   position: absolute;
   transform-origin: top left;
@@ -8003,28 +7838,6 @@ textarea.notes:focus,
   max-height: 120px;
   object-fit: contain;
   display: block;
-}
-
-/* Customization controls. */
-.rcpt-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.rcpt-control {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.rcpt-ctl-label {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-}
-.rcpt-chips {
-  flex-wrap: wrap;
 }
 .rcpt-bg-scroller {
   display: flex;
@@ -8049,26 +7862,6 @@ textarea.notes:focus,
 }
 .rcpt-bg-thumb.active {
   border-color: var(--accent);
-}
-.rcpt-bg-none {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-}
-.rcpt-controls .btn svg {
-  width: 18px;
-  height: 18px;
-  vertical-align: -3px;
-  margin-right: 8px;
-}
-.rcpt-save-row {
-  margin-top: 18px;
-}
-.rcpt-save-row .btn {
-  width: 100%;
 }
 
 /* --- iOS-style background picker ---------------------------------------- */
@@ -9673,7 +9466,6 @@ textarea.lend-message-input:focus {
 .detail-actions-row .cinema-toggle { margin-top: 0; flex: 1; }
 .status-slot { flex: 1; display: flex; }
 .status-slot .status-select { margin: 0; }
-
 
 /* ===================== Segmented control ===================== */
 /* The design-system default for a chip-style choice between a small set of
