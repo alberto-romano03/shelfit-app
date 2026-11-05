@@ -255,9 +255,14 @@ export function openDustItOff() {
     function buildDuration() {
       const N = DURATIONS.length;
       const labelEl = el('div', { class: 'dur-label' });
+      // Everything that moves is moved by transform, on a rail as wide as the track
+      // (a transform's percentage is of the element's own width), so a step never
+      // lays out the sheet.
+      const labelRail = el('div', { class: 'dur-rail' }, [labelEl]);
       const fill = el('div', { class: 'dur-fill' });
       const thumb = el('div', { class: 'dur-thumb' });
-      const track = el('div', { class: 'dur-track' }, [fill, thumb]);
+      const thumbRail = el('div', { class: 'dur-rail' }, [thumb]);
+      const track = el('div', { class: 'dur-track' }, [el('div', { class: 'dur-fill-clip' }, [fill]), thumbRail]);
       const ticks = el('div', { class: 'dur-ticks' });
       DURATIONS.forEach(([, tickKey], i) => {
         const s = el('span', { text: t(tickKey) });
@@ -265,7 +270,7 @@ export function openDustItOff() {
         ticks.append(s);
       });
       const wrap = el('div', { class: 'dur-slider' }, [
-        el('div', { class: 'dur-label-track' }, [labelEl]),
+        el('div', { class: 'dur-label-track' }, [labelRail]),
         track,
         ticks,
       ]);
@@ -276,9 +281,9 @@ export function openDustItOff() {
       function apply(i) {
         idx = Math.max(0, Math.min(N - 1, i));
         const pct = (idx / (N - 1)) * 100;
-        thumb.style.left = pct + '%';
-        fill.style.width = pct + '%';
-        labelEl.style.left = pct + '%';
+        thumbRail.style.transform = `translateX(${pct}%)`;
+        labelRail.style.transform = `translateX(${pct}%)`;
+        fill.style.transform = `translateX(${pct - 100}%)`;
         // Anchor the label to the edge at the extremes so it never overflows the
         // sheet: left-aligned at the first stop, right-aligned at the last,
         // centred over the thumb everywhere in between.

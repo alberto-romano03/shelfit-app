@@ -514,7 +514,7 @@ export default async function Settings(container) {
   }
 
   const progressWrap = el('div', { class: 'import-progress' });
-  const bar = el('div', { class: 'bar-progress' }, [el('div', { style: { width: '0%' } })]);
+  const bar = el('div', { class: 'bar-progress' }, [el('div', { style: { transform: 'translateX(-100%)' } })]);
   const progressText = el('div', { class: 'muted' });
   const summaryText = el('div', { class: 'import-summary' });
 
@@ -554,7 +554,7 @@ export default async function Settings(container) {
     startRow.setDisabled(running || !(filesData && filesData.actions && filesData.actions.valid));
     uploadRow.setDisabled(running);
     const pct = s.total ? Math.round((s.processed / s.total) * 100) : 0;
-    bar.firstChild.style.width = `${pct}%`;
+    bar.firstChild.style.transform = `translateX(${pct - 100}%)`;
     // Only show the progress bar once an import is running or has run.
     bar.style.display = running || s.finished || s.processed > 0 ? 'block' : 'none';
     if (running) {
