@@ -82,7 +82,7 @@
        sm   — small chrome: badges, thumbs, inline art
        md   — controls and cards: buttons, inputs, cells
        lg   — panels and large surfaces
-       xl   — sheets, popups and the tab bar: the surfaces that sit over the page
+       xl:  sheets, popups and the tab bar, the surfaces that sit over the page
        pill — anything fully rounded (tracks, chips, switches)
      A handful of radii stay literal on purpose: the 2-3px mouldings on the DVD
      spines are physical detail, and 50% circles are circles. */
