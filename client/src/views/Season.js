@@ -18,7 +18,7 @@ import {
   icons,
   skelLine,
   toast,
-  openModal,
+  confirmModal,
   openSheet,
   openWatchCountModal,
   epLabel,
@@ -207,17 +207,27 @@ export default async function Season(container, params) {
     'button',
     {
       class: 'btn btn-secondary',
-      onClick: async () => {
-        try {
-          const res = await api.markSeason(id, parseInt(n, 10));
-          toast(t('season.allMarked'), 'ok');
-          if (res.caught_up) confetti.trigger(); // finished the last available episode
-          navigate(location.pathname, { replace: true }); // re-mount → scroll restored from memory
-          offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
-        } catch (err) {
-          toast(err.message, 'bad');
-        }
-      },
+      onClick: () =>
+        confirmModal({
+          title: t('season.watchedAllTitle'),
+          body: t('season.watchedAllBody', { n: total }),
+          confirmLabel: t('season.watchedAllConfirm'),
+          confirmIcon: 'check-check',
+          danger: false,
+          onConfirm: async (close) => {
+            try {
+              const res = await api.markSeason(id, parseInt(n, 10));
+              close();
+              toast(t('season.allMarked'), 'ok');
+              if (res.caught_up) confetti.trigger(); // finished the last available episode
+              navigate(location.pathname, { replace: true }); // re-mount → scroll restored from memory
+              offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
+            } catch (err) {
+              toast(err.message, 'bad');
+              throw err;
+            }
+          },
+        }),
     },
     [lucideIcon('check-check', 'btn-lucide'), el('span', { text: t('season.watchedAll') })]
   );
@@ -582,69 +592,56 @@ export default async function Season(container, params) {
   }
 
   function promptCatchUp(ep, count) {
-    openModal((modal, close) => {
-      const yes = el('button', { class: 'btn btn-primary btn-catchup' }, [
-        lucideIcon('check-check', 'btn-lucide'),
-        el('span', { text: t('season.markN', { n: count }) }),
-      ]);
-      yes.addEventListener('click', async () => {
-        yes.disabled = true;
-        try {
-          const res = await api.catchUpEpisodes(id, data.season_number, ep.episode_number);
-          close();
-          if (res.caught_up) confetti.trigger(); // catching up finished the series
-          toast(t('season.caughtUp', { n: count }), 'ok');
-          offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
-          // Reconcile the affected episodes in place. Prefer the server-returned
-          // list; fall back to re-fetching page 1 (where earlier episodes live).
-          if (Array.isArray(res.marked_episodes)) {
-            for (const m of res.marked_episodes) {
-              if (m.season !== data.season_number) continue;
-              const idx = indexByEp.get(m.episode);
-              if (idx == null) continue; // its page isn't loaded → reflects on fetch
-              const cur = episodes[idx];
-              if (cur && !cur.watched) {
-                cur.watched = true;
-                if (!cur.watch_count) cur.watch_count = 1;
-                refreshEp(cur);
-              }
-            }
-          } else {
+    confirmModal({
+      title: t('season.catchUpTitle'),
+      body: t('season.catchUpBody', { n: count }),
+      confirmLabel: t('season.markN', { n: count }),
+      confirmIcon: 'check-check',
+      danger: false,
+      cancelLabel: t('season.no'),
+      onConfirm: async (close) => {
             try {
-              const fresh = await api.seasonPage(id, n, 1, pageSize);
-              for (const nu of fresh.episodes || []) {
-                const idx = indexByEp.get(nu.episode_number);
-                if (idx == null) continue;
-                const cur = episodes[idx];
-                if (cur && (cur.watched !== nu.watched || cur.watch_count !== nu.watch_count)) {
-                  Object.assign(cur, nu);
-                  cur._i = idx;
-                  refreshEp(cur);
+              const res = await api.catchUpEpisodes(id, data.season_number, ep.episode_number);
+              close();
+              if (res.caught_up) confetti.trigger(); // catching up finished the series
+              toast(t('season.caughtUp', { n: count }), 'ok');
+              offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
+              // Reconcile the affected episodes in place. Prefer the server-returned
+              // list; fall back to re-fetching page 1 (where earlier episodes live).
+              if (Array.isArray(res.marked_episodes)) {
+                for (const m of res.marked_episodes) {
+                  if (m.season !== data.season_number) continue;
+                  const idx = indexByEp.get(m.episode);
+                  if (idx == null) continue; // its page isn't loaded → reflects on fetch
+                  const cur = episodes[idx];
+                  if (cur && !cur.watched) {
+                    cur.watched = true;
+                    if (!cur.watch_count) cur.watch_count = 1;
+                    refreshEp(cur);
+                  }
+                }
+              } else {
+                try {
+                  const fresh = await api.seasonPage(id, n, 1, pageSize);
+                  for (const nu of fresh.episodes || []) {
+                    const idx = indexByEp.get(nu.episode_number);
+                    if (idx == null) continue;
+                    const cur = episodes[idx];
+                    if (cur && (cur.watched !== nu.watched || cur.watch_count !== nu.watch_count)) {
+                      Object.assign(cur, nu);
+                      cur._i = idx;
+                      refreshEp(cur);
+                    }
+                  }
+                } catch (e) {
+                  if (isAbortError(e)) return;
                 }
               }
-            } catch (e) {
-              if (isAbortError(e)) return;
+            } catch (err) {
+              toast(err.message, 'bad');
+              throw err;
             }
-          }
-        } catch (err) {
-          yes.disabled = false;
-          toast(err.message, 'bad');
-        }
-      });
-      modal.append(
-        el('h3', { text: t('season.catchUpTitle') }),
-        el('div', {
-          class: 'muted',
-          text: t('season.catchUpBody', { n: count }),
-        }),
-        el('div', { class: 'modal-actions' }, [
-          el('button', { class: 'btn btn-secondary', onClick: close }, [
-      lucideIcon('x', 'btn-lucide'),
-      el('span', { text: t('season.no') }),
-    ]),
-          yes,
-        ])
-      );
+      },
     });
   }
 

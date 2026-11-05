@@ -18,6 +18,7 @@ import { offerShelve } from '../finishSeries.js';
 import { openNewTicketModal } from '../cinemaTickets.js';
 import { t, locale, getLang } from '../i18n.js';
 import {
+  confirmModal,
   el,
   icons,
   poster,
@@ -1393,16 +1394,23 @@ function openMenu(d, reload) {
         icon: 'trash-2',
         label: t('common.remove'),
         danger: true,
-        onClick: async (_c, cl) => {
-          if (!confirm(t('detail.confirmRemove'))) return;
-          try {
-            await api.deleteMedia(d.id);
-            cl();
-            toast(t('detail.removed'), 'ok');
-            navigate(d.type === 'movie' ? '/movies' : '/series');
-          } catch (err) {
-            toast(err.message, 'bad');
-          }
+        onClick: (_c, cl) => {
+          cl(); // the menu steps aside: one sheet at a time
+          confirmModal({
+            title: t('detail.removeTitle', { title: d.title_it }),
+            body: t('detail.removeBody'),
+            confirmLabel: t('common.remove'),
+            onConfirm: async () => {
+              try {
+                await api.deleteMedia(d.id);
+                toast(t('detail.removed'), 'ok');
+                navigate(d.type === 'movie' ? '/movies' : '/series');
+              } catch (err) {
+                toast(err.message, 'bad');
+                throw err;
+              }
+            },
+          });
         },
       },
       {

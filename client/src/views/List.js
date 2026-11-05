@@ -22,6 +22,7 @@ import {
   skelGrid,
   skelLine,
   toast,
+  confirmModal,
   openModal,
   crossfadeSwap,
   clear,
@@ -264,17 +265,24 @@ export default async function List(container, params) {
       );
     });
   });
-  delBtn.addEventListener('click', async () => {
+  delBtn.addEventListener('click', () => {
     if (!data) return;
-    if (!confirm(t('lists.confirmDelete', { name: data.name }))) return;
-    try {
-      await api.deleteList(id);
-      pageCache.delete(id);
-      toast(t('lists.deleted'), 'ok');
-      navigate('/');
-    } catch (err) {
-      toast(err.message || t('lists.failed'), 'bad');
-    }
+    confirmModal({
+      title: t('lists.deleteTitle', { name: data.name }),
+      body: t('lists.deleteBody'),
+      confirmLabel: t('lists.deleteConfirm'),
+      onConfirm: async () => {
+        try {
+          await api.deleteList(id);
+          pageCache.delete(id);
+          toast(t('lists.deleted'), 'ok');
+          navigate('/');
+        } catch (err) {
+          toast(err.message || t('lists.failed'), 'bad');
+          throw err;
+        }
+      },
+    });
   });
 
   // A saved copy: paint it now, where it was left when coming back, and check

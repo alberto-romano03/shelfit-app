@@ -9,6 +9,7 @@
 // here reads a library.
 
 import {
+  confirmModal,
   el,
   toast,
   formatDate,
@@ -200,28 +201,15 @@ export function buildHousehold(api) {
   }
 
   function confirmReset(m) {
-    openModal((modal, close) => {
-      const go = el('button', { class: 'btn btn-primary' }, [
-        lucideIcon('send', 'btn-lucide'),
-        el('span', { text: t('household.resetConfirm') }),
-      ]);
-      go.addEventListener('click', async () => {
-        go.disabled = true;
-        const ok = await reinvite(m);
-        if (ok) close();
-        else go.disabled = false;
-      });
-      modal.append(
-        el('h3', { text: t('household.resetTitle', { name: m.display_name }) }),
-        el('div', { class: 'muted', text: t('household.resetBody') }),
-        el('div', { class: 'modal-actions' }, [
-          el('button', { class: 'btn btn-secondary', onClick: close }, [
-            lucideIcon('x', 'btn-lucide'),
-            el('span', { text: t('common.cancel') }),
-          ]),
-          go,
-        ])
-      );
+    confirmModal({
+      title: t('household.resetTitle', { name: m.display_name }),
+      body: t('household.resetBody'),
+      confirmLabel: t('household.resetConfirm'),
+      confirmIcon: 'send',
+      danger: false,
+      onConfirm: async () => {
+        if (!(await reinvite(m))) throw new Error('reinvite failed'); // reinvite showed it
+      },
     });
   }
 
@@ -248,49 +236,35 @@ export function buildHousehold(api) {
   }
 
   function confirmRemove(m) {
-    openModal((modal, close) => {
-      const backup = el('button', { class: 'btn btn-secondary' }, [
-        lucideIcon('file-down', 'btn-lucide'),
-        el('span', { text: t('household.downloadBackup') }),
-      ]);
-      backup.addEventListener('click', async () => {
-        backup.disabled = true;
-        try {
-          await downloadBackup(m);
-          backup.querySelector('span').textContent = t('household.backupSaved');
-        } catch (err) {
-          backup.disabled = false;
-          toast(err.message || t('settings.backup.exportFailed'), 'bad');
-        }
-      });
-      const go = el('button', { class: 'btn btn-danger' }, [
-        lucideIcon('trash-2', 'btn-lucide'),
-        el('span', { text: t('household.removeConfirm') }),
-      ]);
-      go.addEventListener('click', async () => {
-        go.disabled = true;
+    const backup = el('button', { class: 'btn btn-secondary' }, [
+      lucideIcon('file-down', 'btn-lucide'),
+      el('span', { text: t('household.downloadBackup') }),
+    ]);
+    backup.addEventListener('click', async () => {
+      backup.disabled = true;
+      try {
+        await downloadBackup(m);
+        backup.querySelector('span').textContent = t('household.backupSaved');
+      } catch (err) {
+        backup.disabled = false;
+        toast(err.message || t('settings.backup.exportFailed'), 'bad');
+      }
+    });
+    confirmModal({
+      title: t('household.removeTitle', { name: m.display_name }),
+      body: t('household.removeBody'),
+      content: el('div', { class: 'household-backup' }, [backup]),
+      confirmLabel: t('household.removeConfirm'),
+      onConfirm: async () => {
         try {
           await api.removeMember(m.id);
           toast(t('household.removed', { name: m.display_name }), 'ok');
-          close();
           refresh();
         } catch (err) {
-          go.disabled = false;
           toast(err.message || t('settings.failed'), 'bad');
+          throw err;
         }
-      });
-      modal.append(
-        el('h3', { text: t('household.removeTitle', { name: m.display_name }) }),
-        el('div', { class: 'muted', text: t('household.removeBody') }),
-        el('div', { class: 'household-backup' }, [backup]),
-        el('div', { class: 'modal-actions' }, [
-          el('button', { class: 'btn btn-secondary', onClick: close }, [
-            lucideIcon('x', 'btn-lucide'),
-            el('span', { text: t('common.cancel') }),
-          ]),
-          go,
-        ])
-      );
+      },
     });
   }
 

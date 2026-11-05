@@ -335,37 +335,57 @@ export function iconAction({ icon, label, danger = false, onClick } = {}) {
   return btn;
 }
 
-// A confirm dialog in the app's own language. Replaces the native confirm()
-// calls that were left in Settings and the Kodi panel — an OS dialog in the OS
-// font, which is exactly what the grid filters stopped using.
-export function confirmModal({ title, body, confirmLabel = t('common.delete'), onConfirm } = {}) {
-  openModal((modal, close) => {
-    const go = el('button', { class: 'btn btn-danger' }, [
-      lucideIcon('trash-2', 'btn-lucide'),
-      el('span', { text: confirmLabel }),
-    ]);
-    go.addEventListener('click', async () => {
-      go.disabled = true;
-      try {
-        const r = onConfirm ? onConfirm() : undefined;
-        if (r && typeof r.then === 'function') await r;
-        close();
-      } catch {
-        go.disabled = false; // the caller surfaced the error; keep the dialog open
-      }
-    });
-    modal.append(
-      el('h3', { text: title || t('ui.confirm.title') }),
-      body ? el('div', { class: 'muted', text: body }) : null,
-      el('div', { class: 'modal-actions' }, [
-        el('button', { class: 'btn btn-secondary', onClick: close }, [
-      lucideIcon('x', 'btn-lucide'),
-      el('span', { text: t('common.cancel') }),
-    ]),
-        go,
-      ])
-    );
-  });
+// The app's one decision dialog: rises from the bottom like every sheet, asks one
+// question, and offers Cancel next to the action. Use this for any "are you sure?"
+// or "do this too?", never the browser's confirm(), which is an OS dialog in the OS
+// font and cannot be themed.
+//
+//   danger    true (default) is a red button with a bin, for something that destroys;
+//             false is the gold primary, for something that only does a lot at once.
+//   content   optional extra nodes between the text and the buttons.
+//   onConfirm may be async and gets `close`, to leave before its slower work. If it
+//             throws, the dialog stays open: the caller has shown the error.
+export function confirmModal({
+  title,
+  body,
+  content = null,
+  confirmLabel = t('common.delete'),
+  confirmIcon = 'trash-2',
+  danger = true,
+  cancelLabel = t('common.cancel'),
+  cancelIcon = 'x',
+  onConfirm,
+} = {}) {
+  return openModal(
+    (modal, close) => {
+      const go = el('button', { class: `btn ${danger ? 'btn-danger' : 'btn-primary'}` }, [
+        lucideIcon(confirmIcon, 'btn-lucide'),
+        el('span', { text: confirmLabel }),
+      ]);
+      go.addEventListener('click', async () => {
+        go.disabled = true;
+        try {
+          if (onConfirm) await onConfirm(close);
+          close();
+        } catch {
+          go.disabled = false;
+        }
+      });
+      modal.append(
+        el('h3', { text: title || t('ui.confirm.title') }),
+        body ? el('div', { class: 'muted', text: body }) : '',
+        content || '',
+        el('div', { class: 'modal-actions' }, [
+          el('button', { class: 'btn btn-secondary', onClick: close }, [
+            lucideIcon(cancelIcon, 'btn-lucide'),
+            el('span', { text: cancelLabel }),
+          ]),
+          go,
+        ])
+      );
+    },
+    { handle: true }
+  );
 }
 
 // --- Select pill ------------------------------------------------------------

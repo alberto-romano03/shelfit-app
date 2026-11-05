@@ -3505,10 +3505,20 @@ body.modal-open {
   margin: 0 0 14px;
   font-size: 18px;
 }
+/* Two equal buttons side by side, on one line each. A label too long to fit (long
+   Italian ones, a count) stacks the pair at full width rather than breaking inside a
+   button and making it taller than its neighbour. */
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 18px;
+}
+.modal-actions .btn {
+  flex: 1 1 0;
+  min-width: min-content;
+  padding-inline: 12px;
+  white-space: nowrap;
 }
 /* Stacked variant for modals whose actions carry a long label (e.g. Rate-O-Matic's
    "Rate N skipped titles") that would wrap if sat beside another button in the
@@ -3623,12 +3633,6 @@ body.modal-open {
 .btn-secondary {
   background: var(--surface-elevated);
   color: var(--text-primary);
-}
-/* Season catch-up "Mark N watched": the count makes the label long enough to
-   wrap beside "No" (especially in Italian) — a slightly smaller type keeps it on
-   one line. */
-.btn.btn-catchup {
-  font-size: 13px;
 }
 .btn-danger {
   background: var(--danger);
@@ -5179,6 +5183,12 @@ button.srow:active {
 }
 .toast.toast-out {
   animation: toast-out var(--dur-medium) var(--ease-in) forwards;
+}
+/* Its usual place is exactly where a bottom dialog rises to, and a toast would sit on
+   the dialog's text: an error from the dialog itself, or the toast of the step before. */
+body:has(.modal-backdrop) .toast {
+  top: calc(env(safe-area-inset-top) + 12px);
+  bottom: auto;
 }
 .toast-ico {
   flex: 0 0 auto;
