@@ -240,7 +240,7 @@ function runSession({ stage, close, footer, counter, rateHost }) {
 
     card.style.zIndex = '3';
     const offX = dir >= 0 ? window.innerWidth + 140 : -(window.innerWidth + 140);
-    card.style.transition = 'transform 0.4s ease-in, opacity 0.4s ease-in';
+    card.style.transition = 'transform var(--dur-medium) var(--ease-in), opacity var(--dur-medium) var(--ease-in)';
     card.style.transform = `translate(${offX}px, 30px) rotate(${dir * 20}deg)`;
     card.style.opacity = '0';
 
