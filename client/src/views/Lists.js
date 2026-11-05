@@ -5,6 +5,7 @@
 // dot on every row (renaming stays on the list's own page). Reached from the
 // "My Lists" link on Home. Creating and removing lists used to live in Settings.
 
+import { deferred } from '../undoable.js';
 import { createApi, isAbortError } from '../api.js';
 import { onCleanup } from '../router.js';
 import {
@@ -236,21 +237,23 @@ export default async function Lists(container) {
       title: t('lists.deleteTitle', { name: l.name }),
       body: t('lists.deleteBody'),
       confirmLabel: t('lists.deleteConfirm'),
-      onConfirm: async () => {
-        try {
-          await api.deleteList(l.id);
-        } catch (err) {
-          toast(err.message || t('lists.failed'), 'bad');
-          throw err;
-        }
+      onConfirm: () => {
         lists = lists.filter((x) => x.id !== l.id);
         const row = rowEls.get(l.id);
         rowEls.delete(l.id);
         if (row) collapse(row).then(() => row.remove());
         if (!lists.length) editing = false;
-        toast(t('lists.deleted'), 'ok');
         applyFilter();
         applyEditing();
+        // Not deleted yet: Undo, or a failed delete, simply reads the page again.
+        deferred({
+          msg: t('lists.deleted'),
+          run: (a) => a.deleteList(l.id),
+          selector: `[data-list-id="${l.id}"]`,
+          stayOn: '/lists',
+          onUndo: load,
+          onFailed: load,
+        });
       },
     });
   }

@@ -12,6 +12,7 @@
 // row. Scroll position is remembered per season (in memory) for the session.
 
 import { haptic } from '../haptic.js';
+import { markedToast } from '../undoable.js';
 import { createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup } from '../router.js';
 import {
@@ -219,10 +220,11 @@ export default async function Season(container, params) {
             try {
               const res = await api.markSeason(id, parseInt(n, 10));
               close();
-              toast(t('season.allMarked'), 'ok');
               if (res.caught_up) confetti.trigger(); // finished the last available episode
-              navigate(location.pathname, { replace: true }); // re-mount → scroll restored from memory
-              offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
+              const reload = () => navigate(location.pathname, { replace: true });
+              reload(); // re-mount → scroll restored from memory
+              const prompt = offerShelve(res, { id, onShelved: reload });
+              markedToast(res, t('season.allMarked'), { id, prompt, reload });
             } catch (err) {
               toast(err.message, 'bad');
               throw err;
@@ -617,8 +619,9 @@ export default async function Season(container, params) {
               const res = await api.catchUpEpisodes(id, data.season_number, ep.episode_number);
               close();
               if (res.caught_up) confetti.trigger(); // catching up finished the series
-              toast(t('season.caughtUp', { n: count }), 'ok');
-              offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
+              const reload = () => navigate(location.pathname, { replace: true });
+              const prompt = offerShelve(res, { id, onShelved: reload });
+              markedToast(res, t('season.caughtUp', { n: count }), { id, prompt, reload });
               // Reconcile the affected episodes in place. Prefer the server-returned
               // list; fall back to re-fetching page 1 (where earlier episodes live).
               if (Array.isArray(res.marked_episodes)) {

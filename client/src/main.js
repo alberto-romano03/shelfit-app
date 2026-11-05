@@ -1,3 +1,4 @@
+import { settleDeferredOnRoute } from './undoable.js';
 import { mountHeaderTitle } from './headerTitle.js';
 import { openRateOMatic } from './rateOMatic.js';
 import './styles.css';
@@ -175,6 +176,7 @@ initRouter({
     { path: '/season/:id/:n', view: Season },
   ],
   onChange: (path) => {
+    settleDeferredOnRoute(path);
     // Track the route history (one step back) for the Settings-icon toggle.
     if (path !== currentPath) previousPath = currentPath;
     currentPath = path;

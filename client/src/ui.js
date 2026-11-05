@@ -799,6 +799,7 @@ function dismissToast(node) {
 }
 
 export function toast(msg, kind = 'info') {
+  finishUndo();
   clearTimeout(toastHoldTimer);
   clearTimeout(toastSwapTimer);
 
@@ -826,6 +827,50 @@ export function toast(msg, kind = 'info') {
 
   const shown = toastNode;
   toastHoldTimer = setTimeout(() => dismissToast(shown), TOAST_HOLD_MS);
+}
+
+// The toast with a way back, for serious actions (see undoable.js). It holds longer, and
+// a thin line shows how long is left. There is one toast slot, so anything that takes it
+// ends this one's window, the same as the time running out.
+const UNDO_HOLD_MS = 6000;
+let activeUndo = null;
+function finishUndo() {
+  if (activeUndo) activeUndo.finish();
+}
+export function undoToast({ msg, onUndo, onExpire }) {
+  finishUndo();
+  clearTimeout(toastHoldTimer);
+  clearTimeout(toastSwapTimer);
+  if (toastNode) dismissToast(toastNode);
+  const undoBtn = el('button', { class: 'toast-undo', type: 'button', text: t('toast.undo') });
+  const node = el('div', { class: `${toastKindClass('ok')} toast--undo`, role: 'status' }, [
+    lucideIcon(toastIconName('ok'), 'toast-ico'),
+    el('span', { class: 'toast-msg', text: msg }),
+    undoBtn,
+    el('i', { class: 'toast-drain', style: { animationDuration: `${UNDO_HOLD_MS}ms` } }),
+  ]);
+  let timer = 0;
+  const entry = {
+    finish() {
+      if (activeUndo !== entry) return;
+      activeUndo = null;
+      clearTimeout(timer);
+      dismissToast(node);
+      if (onExpire) onExpire();
+    },
+  };
+  undoBtn.addEventListener('click', () => {
+    if (activeUndo !== entry) return;
+    activeUndo = null;
+    clearTimeout(timer);
+    dismissToast(node);
+    if (onUndo) onUndo();
+  });
+  activeUndo = entry;
+  toastNode = node;
+  document.body.append(node);
+  timer = setTimeout(entry.finish, UNDO_HOLD_MS);
+  return entry;
 }
 
 // --- Body scroll lock (shared by every modal / sheet) ----------------------

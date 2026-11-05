@@ -163,6 +163,7 @@ function createCell(onItemClick) {
   function show(item) {
     currentItem = item;
     retryHandler = null;
+    node.dataset.itemId = item.id;
     node.classList.remove('is-skel', 'is-retry');
     if (item.rating) {
       badge.style.display = '';
@@ -197,6 +198,7 @@ function createCell(onItemClick) {
   function showSkeleton() {
     currentItem = null;
     retryHandler = null;
+    delete node.dataset.itemId;
     node.classList.remove('is-retry');
     node.classList.add('is-skel', 'skeleton');
     img.removeAttribute('src');
@@ -205,6 +207,7 @@ function createCell(onItemClick) {
   function showRetry(fn) {
     currentItem = null;
     retryHandler = fn;
+    delete node.dataset.itemId;
     node.classList.remove('is-skel', 'skeleton');
     node.classList.add('is-retry');
     img.removeAttribute('src');

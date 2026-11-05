@@ -3,6 +3,7 @@
 // rating, notes, series progress/seasons, a "Liner Notes" bento, and Kodi play.
 // Edits persist immediately; built views are retained (LRU) for instant return.
 
+import { markedToast, undoable, deferred } from '../undoable.js';
 import { followTitle } from '../headerTitle.js';
 import { api, createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup } from '../router.js';
@@ -776,6 +777,14 @@ export default async function Detail(container, params) {
           await api.updateMedia(id, { watched_in_cinema: false });
           d.watched_in_cinema = false;
           renderCinema();
+          undoable({
+            msg: t('ticket.removed'),
+            undo: async (a) => {
+              await a.updateMedia(id, { watched_in_cinema: true });
+              d.watched_in_cinema = true;
+              renderCinema();
+            },
+          });
         },
       });
     });
@@ -999,10 +1008,10 @@ export default async function Detail(container, params) {
             e.stopPropagation();
             try {
               const res = await api.markSeason(id, s.season_number);
-              toast(t('detail.seasonMarked'), 'ok');
               if (res.caught_up) confetti.trigger(); // finished the last available episode
               reload();
-              offerShelve(res, { id, onShelved: reload });
+              const prompt = offerShelve(res, { id, onShelved: reload });
+              markedToast(res, t('detail.seasonMarked'), { id, prompt, reload });
             } catch (err) {
               toast(err.message, 'bad');
             }
@@ -1428,15 +1437,17 @@ function openMenu(d, reload) {
             title: t('detail.removeTitle', { title: d.title_it }),
             body: t('detail.removeBody'),
             confirmLabel: t('common.remove'),
-            onConfirm: async () => {
-              try {
-                await api.deleteMedia(d.id);
-                toast(t('detail.removed'), 'ok');
-                navigate(d.type === 'movie' ? '/movies' : '/series');
-              } catch (err) {
-                toast(err.message, 'bad');
-                throw err;
-              }
+            onConfirm: () => {
+              const home = d.type === 'movie' ? '/movies' : '/series';
+              // A gap stays on the shelf until the delete goes out or is undone.
+              deferred({
+                msg: t('detail.removed'),
+                run: (a) => a.deleteMedia(d.id),
+                selector: `[data-item-id="${d.id}"]`,
+                rule: 'visibility:hidden',
+                stayOn: home,
+              });
+              navigate(home);
             },
           });
         },

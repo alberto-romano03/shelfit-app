@@ -13,6 +13,7 @@
 // it was left. A library change marks it stale; it still paints, then refreshes
 // in place once the page has faded in.
 
+import { deferred } from '../undoable.js';
 import { api as sharedApi, createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup, cameBack, afterTransition } from '../router.js';
 import {
@@ -271,16 +272,15 @@ export default async function List(container, params) {
       title: t('lists.deleteTitle', { name: data.name }),
       body: t('lists.deleteBody'),
       confirmLabel: t('lists.deleteConfirm'),
-      onConfirm: async () => {
-        try {
-          await api.deleteList(id);
-          pageCache.delete(id);
-          toast(t('lists.deleted'), 'ok');
-          navigate('/');
-        } catch (err) {
-          toast(err.message || t('lists.failed'), 'bad');
-          throw err;
-        }
+      onConfirm: () => {
+        pageCache.delete(id);
+        deferred({
+          msg: t('lists.deleted'),
+          run: (a) => a.deleteList(id),
+          selector: `[data-list-id="${id}"]`,
+          stayOn: '/',
+        });
+        navigate('/');
       },
     });
   });

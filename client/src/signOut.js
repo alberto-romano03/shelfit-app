@@ -8,12 +8,14 @@
 // API copies). The full navigation to /login drops every in-memory cache too,
 // and the next person starts from the profile picker with nothing of theirs.
 
+import { settleDeferred } from './undoable.js';
 import { api } from './api.js';
 import { withBase } from './basePath.js';
 import { forgetCurrentUser, userPrefix } from './userScope.js';
 import { currentPushEndpoint } from './push.js';
 
 export async function signOut({ everywhere = false } = {}) {
+  settleDeferred(); // a delete still waiting goes out while this session can send it
   // Whose data to forget, read now: the logout response clears the uid cookie.
   const prefix = userPrefix();
   // Signing out everywhere stops notifications on every device server-side.

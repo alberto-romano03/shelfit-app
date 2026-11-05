@@ -14,7 +14,7 @@ import { t } from './i18n.js';
 export function offerShelve(res, { id, api = defaultApi, onShelved } = {}) {
   if (!res || !res.caught_up || !res.series_ended || res.item_status !== 'watching') return;
 
-  confirmModal({
+  return confirmModal({
     title: t('finish.title'),
     body: t('finish.body', { title: res.title || '' }),
     confirmLabel: t('finish.shelve'),

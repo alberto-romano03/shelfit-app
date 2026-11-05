@@ -5318,6 +5318,41 @@ button.srow:active {
 .toast.toast-out {
   animation: toast-out var(--dur-medium) var(--ease-in) forwards;
 }
+/* With a way back: the button reaches the pill's full height, so it is a real target, and
+   the line along the bottom is the time left. */
+.toast--undo {
+  overflow: hidden;
+  padding-right: 6px;
+  pointer-events: auto;
+}
+.toast-undo {
+  flex: none;
+  align-self: stretch;
+  min-height: 44px;
+  margin-block: -11px;
+  padding-inline: 12px;
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.toast-drain {
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  animation: toast-drain linear forwards;
+}
+@keyframes toast-drain {
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-drain {
+    animation: none;
+  }
+}
 /* Its usual place is exactly where a bottom dialog rises to, and a toast would sit on
    the dialog's text: an error from the dialog itself, or the toast of the step before. */
 body:has(.modal-backdrop) .toast {

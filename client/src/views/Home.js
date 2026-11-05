@@ -607,7 +607,11 @@ export default async function Home(container) {
   );
   function paintLists(lists) {
     const row = el('div', { class: 'hscroll list-card-row' });
-    lists.forEach((l) => row.append(buildListCard(l)));
+    lists.forEach((l) => {
+      const card = buildListCard(l);
+      card.dataset.listId = l.id; // so a list being deleted can be hidden (undoable.js)
+      row.append(card);
+    });
     if (!lists.length) {
       row.append(
         el(
