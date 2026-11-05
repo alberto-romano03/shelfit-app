@@ -3634,7 +3634,7 @@ body.modal-open {
    lines of text would run into the curve. */
 textarea.text-field {
   border-radius: var(--r-md);
-  padding: 12px;
+  padding: 13px 14px;
 }
 .text-field[type='date'] {
   color-scheme: dark;
@@ -7676,10 +7676,14 @@ button.lw-card.lw-new:disabled:active {
 
 /* --- Inputs: one consistent, generous spacing + focus system everywhere. --- */
 .text-field,
-textarea.notes,
 .search-input {
   padding: 13px var(--gutter);
   border-radius: var(--r-pill);
+  font-size: 16px;
+}
+textarea.notes {
+  padding: 13px 14px;
+  border-radius: var(--r-md);
   font-size: 16px;
 }
 /* Label → field gap and inter-field rhythm are uniform across every form. */
