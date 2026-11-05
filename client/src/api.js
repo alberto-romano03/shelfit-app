@@ -196,6 +196,8 @@ function buildApi(signal) {
       api.del(`/api/progress/${item_id}/${season}/${episode}`),
     episodeNotes: (item_id, season, episode, notes) =>
       api.patch(`/api/progress/${item_id}/${season}/${episode}`, { notes }),
+    undoMarks: (item_id, episodes, current_season) =>
+      api.post('/api/progress/undo-marks', { item_id, episodes, current_season }),
     markSeason: (item_id, season) =>
       api.post('/api/progress/season', { item_id, season }),
     unmarkSeason: (item_id, season) =>

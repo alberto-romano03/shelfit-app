@@ -267,6 +267,7 @@ export default async function progressRoutes(fastify) {
       ok: true,
       marked: gap.length,
       marked_episodes: gap,
+      previous_current_season: item.current_season ?? null,
       caught_up: isCaughtUp(item, metaCache),
       ...finishInfo(item, metaCache),
     };
@@ -404,6 +405,13 @@ export default async function progressRoutes(fastify) {
       reply.code(404);
       return { error: 'season metadata not cached' };
     }
+    // Only these can be undone: an episode already watched keeps its count and date.
+    const watchedBefore = new Set(
+      watchedKeysStmt.all(item.id).map((r) => `${r.season}:${r.episode}`)
+    );
+    const marked_episodes = sMeta.episodes
+      .filter((ep) => !watchedBefore.has(`${seasonNum}:${ep.episode_number}`))
+      .map((ep) => ({ season: seasonNum, episode: ep.episode_number }));
     const apply = db.transaction(() => {
       for (const ep of sMeta.episodes) {
         insertWatchedNoNotesStmt.run(item_id, seasonNum, ep.episode_number);
@@ -413,7 +421,42 @@ export default async function progressRoutes(fastify) {
     });
     apply();
     // isCaughtUp reuses the season meta already read above via the shared cache.
-    return { ok: true, caught_up: isCaughtUp(item, metaCache), ...finishInfo(item, metaCache) };
+    return {
+      ok: true,
+      marked_episodes,
+      previous_current_season: item.current_season ?? null,
+      caught_up: isCaughtUp(item, metaCache),
+      ...finishInfo(item, metaCache),
+    };
+  });
+
+  // POST /api/progress/undo-marks → the Undo after Watched all or a catch up: removes
+  // only the episodes that action reported marking, and puts current_season back.
+  // DELETE /api/progress/season can't do this: it would clear the whole season.
+  fastify.post('/api/progress/undo-marks', async (request, reply) => {
+    const { item_id, episodes, current_season } = request.body || {};
+    const positive = (n) => Number.isInteger(n) && n >= 1;
+    if (
+      !item_id ||
+      !Array.isArray(episodes) ||
+      episodes.length > 5000 ||
+      !episodes.every((e) => e && positive(e.season) && positive(e.episode)) ||
+      !(current_season == null || positive(current_season))
+    ) {
+      reply.code(400);
+      return { error: 'item_id and a list of episodes are required' };
+    }
+    if (!getItem(item_id, request.user.id)) {
+      reply.code(404);
+      return { error: 'item not found' };
+    }
+    const apply = db.transaction(() => {
+      for (const e of episodes) deleteEpisodeStmt.run(item_id, e.season, e.episode);
+      setCurrentSeasonStmt.run(current_season ?? null, item_id);
+      scheduleStatsRecompute(db);
+    });
+    apply();
+    return { ok: true };
   });
 
   // DELETE /api/progress/season → remove an entire season from watched.
