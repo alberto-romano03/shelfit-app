@@ -11,6 +11,23 @@
     { "src": "/shelfit/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "/shelfit/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
+  "shortcuts": [
+    {
+      "name": "Cerca",
+      "url": "/shelfit/search",
+      "icons": [{ "src": "/shelfit/icons/shortcuts/search.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Prossimamente",
+      "url": "/shelfit/upcoming",
+      "icons": [{ "src": "/shelfit/icons/shortcuts/upcoming.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Rate-O-Matic",
+      "url": "/shelfit/?open=rate",
+      "icons": [{ "src": "/shelfit/icons/shortcuts/rate.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ],
   "share_target": {
     "action": "/shelfit/share",
     "method": "GET",

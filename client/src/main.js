@@ -1,4 +1,5 @@
 import { mountHeaderTitle } from './headerTitle.js';
+import { openRateOMatic } from './rateOMatic.js';
 import './styles.css';
 import { initTheme } from './theme.js';
 import { initI18n, t, onLangChange } from './i18n.js';
@@ -210,6 +211,12 @@ function bootFromShare() {
   // popstate always has state; the target below is then pushed on top of it.
   history.replaceState({ path: '/' }, '', withBase('/'));
 
+  // The app icon's long-press shortcut: Rate-O-Matic has no page of its own.
+  if (open === 'rate') {
+    start();
+    openRateOMatic();
+    return true;
+  }
   if (open) {
     const m = /^(movie|show):(\d+)$/.exec(open);
     if (m) {
