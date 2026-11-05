@@ -3,9 +3,8 @@
 // shown at once: the front one (interactive) and the next one peeking out behind
 // at a casual angle. Each card IS its poster (full bleed, title on a bottom
 // scrim). One rating row sits fixed under the deck and always rates the front
-// card; dragging stamps the card with what letting go will do (save the rating,
-// or skip). Swiping the front card away commits it and the card behind comes
-// forward while a fresh one drops in behind.
+// card. Swiping the front card away commits it (saves the rating, or skips it) and
+// the card behind comes forward while a fresh one drops in behind.
 //
 // All swipe physics are native pointer events + CSS transforms — no libraries.
 
@@ -107,11 +106,10 @@ function runSession({ stage, close, footer, counter, rateHost }) {
   }
 
   // A card is the poster itself, full bleed, with the type, title and year on a
-  // bottom scrim, the drag stamp, and a veil that dims it while it waits behind.
+  // bottom scrim, and a veil that dims it while it waits behind.
   function buildCard(title) {
     const posterEl = poster(title.poster_url, title.title);
     posterEl.classList.add('rom-poster');
-    const stamp = el('div', { class: 'rom-stamp' });
     const card = el('div', { class: 'rom-card' }, [
       posterEl,
       el('div', { class: 'rom-scrim' }),
@@ -120,12 +118,10 @@ function runSession({ stage, close, footer, counter, rateHost }) {
         el('div', { class: 'rom-title', text: title.title }),
         title.year ? el('div', { class: 'rom-year', text: String(title.year) }) : null,
       ]),
-      stamp,
       el('div', { class: 'rom-veil' }),
     ]);
     const a = makeAngles();
     card._title = title;
-    card._stamp = stamp;
     card._rotFront = a.front;
     card._rotBack = a.back;
     return card;
@@ -153,24 +149,6 @@ function runSession({ stage, close, footer, counter, rateHost }) {
     });
     rateHost.replaceChildren(ctrl.element);
     counter.textContent = `${index + 1} / ${queue.length}`;
-  }
-
-  // A rated card says it will be saved, fading in with the drag distance. An unrated
-  // one shows nothing: letting it go just moves on.
-  function paintStamp(card, dx) {
-    const r = ctrl.getRating();
-    const stamp = card._stamp;
-    if (!r) {
-      stamp.style.opacity = '0';
-      return;
-    }
-    stamp.className = 'rom-stamp is-save';
-    stamp.replaceChildren(
-      el('span', { class: 'rom-stamp-star', html: starSvg(true) }),
-      el('span', { text: `${r} · ${t('rom.save')}` })
-    );
-    stamp.style.opacity = String(Math.min(1, Math.abs(dx) / 90));
-    stamp.style.transform = `translate(-50%, -50%) rotate(${dx > 0 ? -8 : 8}deg)`;
   }
 
   function mount() {
@@ -216,12 +194,10 @@ function runSession({ stage, close, footer, counter, rateHost }) {
       onMove: (dx, dy) => {
         const rot = card._rotFront + Math.max(-14, Math.min(14, dx * 0.05));
         card.style.transform = `translate(${dx}px, ${dy * 0.2}px) rotate(${rot}deg)`;
-        paintStamp(card, dx);
       },
       onRest: () => {
         card.style.transition = '';
         card.style.transform = `rotate(${card._rotFront}deg)`; // snap back to rest angle
-        card._stamp.style.opacity = '0';
       },
       onSwipe: (dir) => {
         haptic(); // a tick as the poster leaves the deck (Android; iOS has no swipe haptic)

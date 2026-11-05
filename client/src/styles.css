@@ -8284,40 +8284,6 @@ textarea.notes:focus,
   font-weight: 600;
   color: rgba(255, 255, 255, 0.75);
 }
-/* What letting go will do, stamped across the card while it is dragged: the
-   accent "★ n · Save", or a dark outlined "Skip". */
-.rom-stamp {
-  position: absolute;
-  left: 50%;
-  top: 34%;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: var(--r-pill);
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-.rom-stamp-star {
-  display: inline-flex;
-}
-.rom-stamp-star svg {
-  width: 18px;
-  height: 18px;
-}
-.rom-stamp.is-save {
-  background: color-mix(in srgb, var(--accent) 88%, transparent);
-  color: var(--on-accent);
-}
 /* The one rating row, fixed under the deck; height reserved for the stars plus
    the rating phrase, so choosing a rating never nudges the footer. */
 .rom-rate {
