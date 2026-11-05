@@ -76,6 +76,30 @@
   --press-wide: 0.985;
   --press-small: 0.9;
 
+  /* ===== Elevation, scrims and states ======================================
+     Elevation by what is lifted, not by what the neighbouring rule used:
+       xs    a mark sitting on artwork (literal black: art is dark in both themes)
+       sm    a poster on the page
+       md    the one large poster that heads a page
+       lg    things floating over the page: toasts, a card held in a deck
+       xl    a popup
+       sheet the upward shadow of anything rising from the bottom edge
+     Scrim: the dark backing for anything on artwork, so it reads on any poster. A
+     mark is small and needs the stronger one; a 44px button can sit on the softer
+     one and let the art through. --on-accent is the one ink on a gold fill: it is
+     the only choice that passes contrast on the accent in both themes. */
+  --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 2px 8px var(--shadow);
+  --shadow-md: 0 4px 16px var(--shadow);
+  --shadow-lg: 0 8px 28px var(--shadow);
+  --shadow-xl: 0 18px 50px var(--shadow);
+  --shadow-sheet: 0 -4px 30px var(--shadow);
+  --scrim: rgba(0, 0, 0, 0.7);
+  --scrim-soft: rgba(0, 0, 0, 0.4);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  --disabled: 0.4;
+  --on-accent: #000;
+
   /* ===== Radius scale ======================================================
      Five steps, so a component's corner is chosen by role rather than by
      whichever number the neighbouring rule happened to use:
@@ -362,7 +386,7 @@ select {
    NOT follow --text-primary here — in light mode that flips it dark and it
    disappears against the dark scrim (the bug this fixes). */
 .icon-btn--overlay {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--scrim-soft);
   color: #fff;
 }
 .icon-btn--overlay:active {
@@ -521,7 +545,7 @@ body.grid-virtual-active .gc-scroller {
   border-radius: var(--r-md);
   overflow: hidden;
   background: var(--surface-elevated);
-  box-shadow: 0 2px 8px var(--shadow);
+  box-shadow: var(--shadow-sm);
   transition: scale var(--dur-short) var(--ease-out);
 }
 .poster-card:active {
@@ -539,7 +563,7 @@ body.grid-virtual-active .gc-scroller {
   position: absolute;
   left: 6px;
   bottom: 6px;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--scrim);
   color: var(--stars);
   font-size: 11px;
   font-weight: 600;
@@ -700,7 +724,7 @@ body.grid-virtual-active .gc-scroller {
 /* Focus lands on the select, so the ring has to be drawn by the wrapper. */
 .selpill:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--focus-ring);
 }
 .selpill-key,
 .selpill-val,
@@ -824,7 +848,7 @@ body.grid-virtual-active .gc-scroller {
   font-variant-numeric: tabular-nums;
 }
 .letter-pick.is-disabled {
-  opacity: 0.28;
+  opacity: var(--disabled);
   pointer-events: none;
 }
 .letter-pick.is-active {
@@ -856,7 +880,7 @@ body.grid-virtual-active .gc-scroller {
 }
 .chip.active {
   background: var(--accent);
-  color: #000;
+  color: var(--on-accent);
   border-color: var(--accent);
   font-weight: 600;
 }
@@ -868,7 +892,7 @@ body.grid-virtual-active .gc-scroller {
 /* --- Offline read-only affordances (Plan-to-Watch detail + Up Next) --- */
 /* Write controls that can't persist offline: muted + inert, tooltip explains. */
 .offline-locked {
-  opacity: 0.5;
+  opacity: var(--disabled);
   pointer-events: none;
   cursor: default;
 }
@@ -1104,7 +1128,7 @@ body.grid-virtual-active .gc-scroller {
   aspect-ratio: 2/3;
   border-radius: var(--r-md);
   overflow: hidden;
-  box-shadow: 0 4px 16px var(--shadow);
+  box-shadow: var(--shadow-md);
   background: var(--surface-elevated);
   transition: box-shadow var(--dur-medium) var(--ease-state), border-radius var(--dur-medium) var(--ease-state);
 }
@@ -2142,12 +2166,8 @@ textarea.note-sheet-input:focus {
   max-width: calc(100% - 12px);
   overflow: hidden;
   text-overflow: ellipsis;
-  /* Less transparent + a blur behind the pill for extra legibility over the
-     still (on top of the scrim below). */
-  background: color-mix(in srgb, var(--accent) 100%, rgba(0, 0, 0, 0.45));
-  color: #fff;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  background: var(--accent);
+  color: var(--on-accent);
 }
 /* Watch Next: a compact circular season-progress ring — a conic-gradient fill
    with a punched-out centre showing watched/total. Fits the horizontal layout
@@ -2371,7 +2391,7 @@ textarea.note-sheet-input:focus {
   border-width: 2.5px;
   opacity: 1;
   /* The nearest stop gently pulses to read as "next up". */
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--focus-ring);
   animation: railPulse 2.4s ease-in-out infinite;
 }
 @keyframes railPulse {
@@ -2499,7 +2519,7 @@ textarea.note-sheet-input:focus {
 }
 .fc-field:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--focus-ring);
 }
 .fc-ico {
   flex: 0 0 auto;
@@ -2611,7 +2631,7 @@ textarea.note-sheet-input:focus {
   border-color: var(--accent);
   /* Dark ink on the accent fill, the same as a primary button and an active
      segmented chip. */
-  color: #000;
+  color: var(--on-accent);
 }
 
 /* Scope row. It appears only once there is something to scope: while the page
@@ -2801,7 +2821,7 @@ textarea.note-sheet-input:focus {
   background: var(--surface-elevated);
 }
 .ai-arrow[disabled] {
-  opacity: 0.3;
+  opacity: var(--disabled);
   cursor: default;
 }
 .ai-rail {
@@ -2872,7 +2892,7 @@ textarea.note-sheet-input:focus {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.62);
+  background: var(--scrim);
   color: var(--success);
 }
 .ai-mark svg {
@@ -3343,7 +3363,7 @@ body.modal-open {
   background: var(--surface);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
-  box-shadow: 0 -4px 30px var(--shadow);
+  box-shadow: var(--shadow-sheet);
   animation: slideUp var(--dur-medium) var(--ease-out);
 }
 /* With a drag handle the handle wrap owns the top space; the modal's own top
@@ -3566,7 +3586,7 @@ body.modal-open {
 }
 .btn-primary {
   background: var(--accent);
-  color: #000;
+  color: var(--on-accent);
 }
 .btn-secondary {
   background: var(--surface-elevated);
@@ -3583,7 +3603,7 @@ body.modal-open {
   color: #fff;
 }
 .btn:disabled {
-  opacity: 0.4;
+  opacity: var(--disabled);
 }
 .btn svg {
   width: 18px;
@@ -3740,7 +3760,7 @@ body.modal-open {
 }
 .pe-name-wrap:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--focus-ring);
 }
 .pe-name {
   flex: 1 1 auto;
@@ -3991,7 +4011,7 @@ button.srow:active {
 }
 .srow:disabled,
 .srow.is-disabled {
-  opacity: 0.45;
+  opacity: var(--disabled);
   cursor: default;
 }
 .srow.is-disabled .switch .slider {
@@ -4151,7 +4171,7 @@ button.srow:active {
   background: color-mix(in srgb, var(--danger) 22%, transparent);
 }
 .icon-act:disabled {
-  opacity: 0.45;
+  opacity: var(--disabled);
   cursor: default;
 }
 
@@ -4959,7 +4979,7 @@ button.srow:active {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
-  box-shadow: 0 8px 28px var(--shadow);
+  box-shadow: var(--shadow-lg);
   z-index: 300;
   opacity: 0;
   pointer-events: none;
@@ -5102,7 +5122,7 @@ button.srow:active {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
-  box-shadow: 0 8px 28px var(--shadow);
+  box-shadow: var(--shadow-lg);
   animation: toast-in var(--dur-medium) var(--ease-out);
 }
 /* Enter and exit are mirrors — same travel, easing reversed. The toast used to
@@ -5222,11 +5242,11 @@ button.srow:active {
   padding: 0 5px;
   border-radius: var(--r-sm);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-xs);
   z-index: 2;
 }
 .watched-badge svg {
@@ -5255,7 +5275,7 @@ button.srow:active {
 .cp-poster.poster-card {
   flex: none;
   width: 110px;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-md);
 }
 .cp-head-text {
   flex: 1 1 auto;
@@ -5332,8 +5352,8 @@ button.srow:active {
   display: grid;
   place-items: center;
   background: var(--accent);
-  color: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-xs);
 }
 .cp-status .btn-lucide {
   width: 14px;
@@ -5547,7 +5567,7 @@ img.mood-emoji {
 .mood-btn.active {
   background: var(--mood);
   border-color: var(--mood);
-  color: #1a1a1a;
+  color: var(--on-accent);
   transform: scale(1.05);
   box-shadow: 0 8px 18px color-mix(in srgb, var(--mood) 45%, transparent);
 }
@@ -5574,7 +5594,7 @@ img.mood-emoji {
   padding: 3px 10px;
   border-radius: var(--r-pill);
   background: var(--accent);
-  color: #111;
+  color: var(--on-accent);
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
@@ -5611,7 +5631,7 @@ img.mood-emoji {
   border-radius: 50%;
   background: #fff;
   border: 3px solid var(--accent);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-xs);
   transform: translate(-50%, -50%);
   transition: scale var(--dur-short) var(--ease-out);
 }
@@ -5735,12 +5755,12 @@ img.mood-emoji {
 .era-btn.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 6px 18px rgba(229, 160, 13, 0.4);
+  color: var(--on-accent);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .era-btn.active .era-name,
 .era-btn.active .era-range {
-  color: #fff;
+  color: var(--on-accent);
 }
 
 /* Tap feedback — brief press. Defined after .active so it wins while pressed. */
@@ -5754,7 +5774,7 @@ img.mood-emoji {
 
 /* ===================== Cover action buttons ===================== */
 .cover-btn {
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--scrim-soft);
   color: #fff;
   backdrop-filter: blur(4px);
 }
@@ -6357,7 +6377,7 @@ img.mood-emoji {
 .genre-chip.gf-classic {
   font-size: 12px;
 }
-.genre-chip.active { background: var(--accent); border-color: var(--accent); color: #111; }
+.genre-chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .gf-horror { font-family: 'Times New Roman', Georgia, serif; font-weight: 700; letter-spacing: 0.5px; }
 .gf-classic { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; }
 .gf-western { font-family: 'Rockwell', 'Courier New', Georgia, serif; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
@@ -6464,7 +6484,7 @@ img.mood-emoji {
   border-radius: var(--r-md);
   overflow: hidden;
   background: var(--surface-elevated);
-  box-shadow: 0 4px 16px var(--shadow);
+  box-shadow: var(--shadow-md);
 }
 .pick-poster img {
   width: 100%;
@@ -6840,7 +6860,7 @@ button.lw-card:active {
   height: 100px;
   border-radius: var(--r-sm);
   object-fit: cover;
-  box-shadow: 3px 0 10px rgba(0, 0, 0, 0.5);
+  box-shadow: 3px 0 8px rgba(0, 0, 0, 0.5);
 }
 .lw-case.c0 { left: 0; z-index: 3; }
 .lw-case.c1 { left: 28px; top: 5px; width: 59px; height: 90px; z-index: 2; filter: brightness(0.78); }
@@ -6937,7 +6957,7 @@ button.lw-card:active {
   transition: opacity var(--dur-short) var(--ease-state), scale var(--dur-short) var(--ease-out);
 }
 .lw-card.lw-new:disabled {
-  opacity: 0.4;
+  opacity: var(--disabled);
   cursor: default;
 }
 button.lw-card.lw-new:disabled:active {
@@ -6965,7 +6985,7 @@ button.lw-card.lw-new:disabled:active {
   place-items: center;
   background: var(--danger);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   /* Always in the row; it pops in (and out) with edit mode instead of being
      added and removed, so nothing reloads or jumps. */
@@ -7183,7 +7203,7 @@ button.lw-card.lw-new:disabled:active {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--scrim);
   color: #fff;
 }
 .list-flag--cine {
@@ -7645,7 +7665,7 @@ textarea.notes:focus,
 .search-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--focus-ring);
 }
 
 /* ===================== Monthly Rental Receipt ===================== */
@@ -7733,7 +7753,7 @@ textarea.notes:focus,
   transform: rotate(180deg);
 }
 .rcpt-mp-nav:disabled {
-  opacity: 0.3;
+  opacity: var(--disabled);
   pointer-events: none;
 }
 .rcpt-mp-grid {
@@ -7756,10 +7776,10 @@ textarea.notes:focus,
 }
 .rcpt-mp-m.is-active {
   background: var(--accent);
-  color: #000;
+  color: var(--on-accent);
 }
 .rcpt-mp-m.is-disabled {
-  opacity: 0.28;
+  opacity: var(--disabled);
   pointer-events: none;
 }
 /* Minimal home entry point. */
@@ -8138,7 +8158,7 @@ textarea.notes:focus,
   border-radius: var(--r-lg);
   overflow: hidden;
   background: var(--surface-elevated);
-  box-shadow: 0 10px 30px var(--shadow);
+  box-shadow: var(--shadow-lg);
   transform-origin: center;
   transition: transform var(--dur-medium) var(--ease-glide), opacity var(--dur-medium) var(--ease-state);
   touch-action: none; /* we own the horizontal drag gesture */
@@ -8239,7 +8259,7 @@ textarea.notes:focus,
 }
 .rom-stamp.is-save {
   background: color-mix(in srgb, var(--accent) 88%, transparent);
-  color: #000;
+  color: var(--on-accent);
 }
 .rom-stamp.is-skip {
   background: rgba(0, 0, 0, 0.6);
@@ -8644,7 +8664,7 @@ textarea.notes:focus,
   max-width: 60%;
   border-radius: var(--r-md);
   overflow: hidden;
-  box-shadow: 0 10px 26px var(--shadow);
+  box-shadow: var(--shadow-lg);
 }
 .ksync-meta {
   text-align: center;
@@ -8680,7 +8700,7 @@ textarea.notes:focus,
   height: 22px;
 }
 .ksync-arrow:disabled {
-  opacity: 0.3;
+  opacity: var(--disabled);
   cursor: default;
 }
 .ksync-progress {
@@ -8831,7 +8851,7 @@ textarea.notes:focus,
   max-width: 380px;
   border-radius: var(--r-xl);
   padding: 22px 18px 18px;
-  box-shadow: 0 18px 50px var(--shadow);
+  box-shadow: var(--shadow-xl);
   animation: popIn var(--dur-medium) var(--ease-out);
 }
 .modal.modal--popup.sheet-closing {
@@ -9717,7 +9737,7 @@ textarea.lend-message-input:focus {
 /* An option that can't be picked right now (offline, the grid serves only Plan
    to Watch): still in the track, dimmed. */
 .segbar-opt:disabled {
-  opacity: 0.35;
+  opacity: var(--disabled);
   cursor: default;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -9841,7 +9861,7 @@ textarea.lend-message-input:focus {
   cursor: pointer;
 }
 .cine-arrow svg { width: 22px; height: 22px; }
-.cine-arrow:disabled { opacity: 0.3; cursor: default; }
+.cine-arrow:disabled { opacity: var(--disabled); cursor: default; }
 /* Arrows are desktop-only; on touch the swipe gesture handles navigation. */
 @media (hover: none) and (pointer: coarse) {
   .cine-arrow { display: none; }
@@ -10497,7 +10517,7 @@ textarea.lend-message-input:focus {
   padding: var(--np-pad);
   background: var(--surface-elevated);
   border-radius: calc(var(--r-sm) + var(--np-pad));
-  box-shadow: 0 8px 28px var(--shadow);
+  box-shadow: var(--shadow-lg);
   /* Vertical equivalent of the server toast: slide down from above. */
   transform: translateY(calc(-100% - 120px));
   opacity: 0;
@@ -10882,7 +10902,7 @@ textarea.lend-message-input:focus {
   border-radius: var(--r-md);
   overflow: hidden;
   background: var(--surface-elevated);
-  box-shadow: 0 4px 16px var(--shadow);
+  box-shadow: var(--shadow-md);
 }
 .person-photo img {
   display: block;
@@ -11008,7 +11028,7 @@ textarea.lend-message-input:focus {
   border-radius: var(--r-md);
   overflow: hidden;
   background: var(--surface-elevated);
-  box-shadow: 0 2px 8px var(--shadow);
+  box-shadow: var(--shadow-sm);
 }
 .person-role-art img {
   display: block;
@@ -11145,7 +11165,7 @@ textarea.lend-message-input:focus {
   max-height: 92vh;
   background: var(--surface);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
-  box-shadow: 0 -4px 30px var(--shadow);
+  box-shadow: var(--shadow-sheet);
   display: flex;
   flex-direction: column;
   padding: 6px 0 calc(18px + env(safe-area-inset-bottom));
