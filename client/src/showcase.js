@@ -12,6 +12,7 @@
 // slideUp/slideDown + backdrop fade animations, and lockScroll/unlockScroll — so
 // it enters, leaves and traps scroll exactly like every other popup.
 
+import { trackSheet } from './sheetStack.js';
 import { el, lockScroll, unlockScroll } from './ui.js';
 import { t } from './i18n.js';
 
@@ -239,10 +240,12 @@ export function openShowcase() {
   }
   document.addEventListener('keydown', onKey);
 
+  let untrack = () => {};
   let closed = false, removed = false;
   function close() {
     if (closed) return;
     closed = true;
+    untrack();
     document.removeEventListener('keydown', onKey);
     sheet.classList.add('sheet-closing');
     backdrop.classList.add('backdrop-closing');
@@ -258,6 +261,7 @@ export function openShowcase() {
   }
 
   lockScroll();
+  untrack = trackSheet(close);
   document.body.append(backdrop);
   update();
   openInstance = { close };

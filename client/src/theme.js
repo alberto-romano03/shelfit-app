@@ -32,8 +32,21 @@ export function applyTheme(theme) {
   const root = document.documentElement;
   if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme);
   else root.removeAttribute('data-theme'); // system → let the media query decide
+  paintChrome();
+}
+
+// The status bar, which a sheet's scrim can't reach. The dimmed values are the page
+// colours under the same rgba(0, 0, 0, 0.6) as .modal-backdrop.
+let chromeDim = false;
+function paintChrome() {
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', resolved(theme) === 'light' ? '#f5f5f5' : '#0a0a0a');
+  if (!meta) return;
+  const light = resolved(currentTheme()) === 'light';
+  meta.setAttribute('content', chromeDim ? (light ? '#626262' : '#040404') : light ? '#f5f5f5' : '#0a0a0a');
+}
+export function setChromeDim(on) {
+  chromeDim = !!on;
+  paintChrome();
 }
 
 export function setTheme(theme) {

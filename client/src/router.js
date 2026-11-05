@@ -4,6 +4,7 @@
 import { withBase, stripBase } from './basePath.js';
 import { clear, stateBlock } from './ui.js';
 import { t } from './i18n.js';
+import { closeTopSheetOnPop } from './sheetStack.js';
 
 let routes = [];
 let container = null;
@@ -79,6 +80,7 @@ export function initRouter(opts) {
   routes = opts.routes.map((r) => ({ ...r, ...compile(r.path) }));
 
   window.addEventListener('popstate', (event) => {
+    if (closeTopSheetOnPop()) return; // Back closes the sheet; the page stays put.
     // state.path is stored root-relative; location.pathname carries the base.
     const path = (event.state && event.state.path) || stripBase(location.pathname);
     // Going back/forward gets the same quick cross-fade (e.g. closing a detail).

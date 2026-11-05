@@ -5,6 +5,7 @@
 // (shared gesture) navigate; a fixed confirm button commits every reviewed
 // status at once. Closing without confirming discards the discoveries.
 
+import { trackSheet } from './sheetStack.js';
 import { api } from './api.js';
 import { navigate } from './router.js';
 import { el, icons, poster, toast, lockScroll, unlockScroll, setLabel, lucideIcon } from './ui.js';
@@ -88,9 +89,11 @@ export function openKodiReview(discoveries) {
   });
 
   let closing = false;
+  let untrack = () => {};
   function close() {
     if (closing) return;
     closing = true;
+    untrack();
     backdrop.classList.add('ksync-closing');
     setTimeout(() => {
       backdrop.remove();
@@ -229,6 +232,7 @@ export function openKodiReview(discoveries) {
   confirmBtn.addEventListener('click', commit);
 
   lockScroll();
+  untrack = trackSheet(close);
   document.body.append(backdrop);
   mount();
 }

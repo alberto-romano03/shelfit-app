@@ -3,6 +3,7 @@
 import { imageCache } from './imageCache.js';
 import { withBase } from './basePath.js';
 import { t } from './i18n.js';
+import { trackSheet } from './sheetStack.js';
 
 // --- DOM builder ----------------------------------------------------------
 export function el(tag, props = {}, children = []) {
@@ -1215,9 +1216,11 @@ export function openModal(buildContent, opts = {}) {
   });
   let closed = false;
   let removed = false;
+  let untrack = () => {};
   function close() {
     if (closed) return;
     closed = true;
+    untrack();
     modal.classList.add('sheet-closing');
     backdrop.classList.add('backdrop-closing');
     const done = () => {
@@ -1238,6 +1241,7 @@ export function openModal(buildContent, opts = {}) {
   buildContent(modal, close);
   lockScroll();
   document.body.append(backdrop);
+  if (!closed) untrack = trackSheet(close);
   return { close, modal };
 }
 
@@ -1247,8 +1251,8 @@ export function openModal(buildContent, opts = {}) {
 // The panel follows the finger 1:1 and the dim lightens with it. Letting go past
 // the threshold, or with a downward flick, leaves from where the panel is (the
 // exit keyframes have no `from`, so they start at this inline transform); anything
-// less settles back. Only downward travel counts: there is nothing above the sheet
-// to reveal.
+// less settles back. Upward it gives a little and resists, the way a native sheet does;
+// it can never close that way.
 function dragHandle(close, panel, backdrop) {
   const wrap = el('div', { class: 'sheet-handle-wrap' }, [
     el('div', { class: 'sheet-handle' }),
@@ -1264,7 +1268,9 @@ function dragHandle(close, panel, backdrop) {
   function paintDrag(dy) {
     panel.style.transform = `translateY(${dy}px)`;
     panel.style.setProperty('--sheet-drag', `${dy}px`);
-    backdrop.style.opacity = String(1 - Math.min(dy / panel.offsetHeight, 1) * 0.6);
+    backdrop.style.opacity = String(1 - Math.min(Math.max(dy, 0) / panel.offsetHeight, 1) * 0.6);
+    // A sheet lifted off the bottom edge would show a gap: its own colour fills it.
+    panel.style.boxShadow = dy < 0 ? `0 ${Math.ceil(-dy)}px 0 var(--surface), var(--shadow-sheet)` : '';
   }
   function settle() {
     panel.style.transition = 'transform var(--dur-short) var(--ease-out)';
@@ -1277,6 +1283,7 @@ function dragHandle(close, panel, backdrop) {
       () => {
         panel.style.transition = '';
         backdrop.style.transition = '';
+        panel.style.boxShadow = '';
       },
       { once: true }
     );
@@ -1298,8 +1305,9 @@ function dragHandle(close, panel, backdrop) {
   });
   wrap.addEventListener('pointermove', (e) => {
     if (startY === null) return;
-    const dy = Math.max(0, e.clientY - startY);
-    if (Math.abs(e.clientY - startY) > 4) dragged = true;
+    const raw = e.clientY - startY;
+    const dy = raw >= 0 ? raw : -Math.pow(-raw, 0.62);
+    if (Math.abs(raw) > 4) dragged = true;
     if (e.timeStamp > lastT) speed = (e.clientY - lastY) / (e.timeStamp - lastT);
     lastY = e.clientY;
     lastT = e.timeStamp;
@@ -1449,9 +1457,11 @@ export function openSheet(buildContent, opts = {}) {
   // Dismiss with a slide-down (mirror of the slide-up entrance), then remove.
   let closing = false;
   let removed = false;
+  let untrack = () => {};
   function close() {
     if (closing) return;
     closing = true;
+    untrack();
     sheet.classList.add('sheet-closing');
     backdrop.classList.add('backdrop-closing');
     const done = () => {
@@ -1469,6 +1479,7 @@ export function openSheet(buildContent, opts = {}) {
   buildContent(sheet, close);
   lockScroll();
   document.body.append(backdrop);
+  if (!closing) untrack = trackSheet(close);
   return { close, sheet };
 }
 
