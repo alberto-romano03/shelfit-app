@@ -378,8 +378,8 @@ select {
   background: var(--surface-elevated);
 }
 .icon-btn svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 /* Round buttons floating over imagery (hero backdrop / person photo) or that must
    stand out in BOTH themes: a fixed dark scrim with a WHITE glyph. The icon must
@@ -793,8 +793,8 @@ body.grid-virtual-active .gc-scroller {
   cursor: pointer;
 }
 .selpill-clear svg {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
 }
 /* Alphabetical letter picker — secondary nav strip shown only for the Title A–Z
    sort. Plain text labels, horizontally scrollable, aligned to the same content
@@ -1836,8 +1836,8 @@ body.season-active .ep-scroller {
   flex: none;
 }
 .season-series-chev svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 .season-series-link:active {
   color: var(--text-primary);
@@ -3518,8 +3518,8 @@ body.modal-open {
   scale: var(--press-small);
 }
 .rewatch-step-btn svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 /* Overflow-clipped well so a value change slides vertically (up = increment,
    down = decrement). Height/min-width give the absolute numbers room. Distinct
@@ -3907,8 +3907,8 @@ body.modal-open {
   color: var(--text-secondary);
 }
 .pe-none-badge svg {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
 }
 /* Upload: the first round tile, an outlined circle with the image-up glyph;
    dimmed while a photo uploads. */
@@ -4018,8 +4018,8 @@ button.srow:active {
   cursor: default;
 }
 .srow-ico {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
   background-color: var(--text-secondary);
   -webkit-mask-repeat: no-repeat;
@@ -4072,8 +4072,8 @@ button.srow:active {
   font-variant-numeric: tabular-nums;
 }
 .srow-chev {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   opacity: 0.6;
   background-color: currentColor;
   -webkit-mask-repeat: no-repeat;
@@ -4089,8 +4089,8 @@ button.srow:active {
 }
 /* Busy: a verb row reports where it lives instead of in a separate block. */
 .srow-spin {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   background-color: currentColor;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
@@ -5250,8 +5250,8 @@ button.srow:active {
   z-index: 2;
 }
 .watched-badge svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 .poster-card.locked img {
   filter: grayscale(1) brightness(0.6);
@@ -6281,7 +6281,7 @@ img.mood-emoji {
   color: var(--text-secondary);
 }
 .cal-icon { display: inline-flex; color: var(--text-secondary); }
-.cal-icon svg { width: 15px; height: 15px; }
+.cal-icon svg { width: 16px; height: 16px; }
 /* Movie rewatch counter (completed movies). */
 .rewatch-wrap {
   display: flex;
@@ -6701,7 +6701,7 @@ img.mood-emoji {
   background: var(--surface-elevated);
   color: var(--text-secondary);
 }
-.list-card-art.is-empty svg { width: 26px; height: 26px; }
+.list-card-art.is-empty svg { width: 24px; height: 24px; }
 .list-card-text {
   min-width: 0; /* lets the name clamp instead of widening the card */
   display: grid;
@@ -6880,8 +6880,8 @@ button.lw-card:active {
   color: var(--text-secondary);
 }
 .lw-empty svg {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
 }
 .lw-text {
   flex: 1 1 auto;
@@ -6949,8 +6949,8 @@ button.lw-card:active {
   color: var(--accent);
 }
 .lw-new-plus svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 /* Edit mode: still there (the rows keep their place), just switched off. */
 .lw-card.lw-new {
@@ -6995,8 +6995,8 @@ button.lw-card.lw-new:disabled:active {
   transition: opacity var(--dur-short) var(--ease-out), transform var(--dur-short) var(--ease-out);
 }
 .lw-remove svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 .is-editing .lw-remove {
   opacity: 1;
@@ -8696,8 +8696,8 @@ textarea.notes:focus,
   cursor: pointer;
 }
 .ksync-arrow svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 .ksync-arrow:disabled {
   opacity: var(--disabled);
