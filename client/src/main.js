@@ -1,3 +1,4 @@
+import { mountHeaderTitle } from './headerTitle.js';
 import './styles.css';
 import { initTheme } from './theme.js';
 import { initI18n, t, onLangChange } from './i18n.js';
@@ -87,6 +88,7 @@ const searchBtn = el('button', {
 });
 const headerActions = el('div', { class: 'header-actions' }, [settingsBtn, searchBtn]);
 const header = el('header', { class: 'app-header' }, [brand, headerActions]);
+mountHeaderTitle(header);
 
 // --- Idle CD-logo animation: after 120s of inactivity the logo is "sucked"
 // into the glowing line and slides back. Purely decorative; resets on any

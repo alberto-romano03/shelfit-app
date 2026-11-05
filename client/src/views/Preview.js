@@ -3,6 +3,7 @@
 // detail; the only action is an explicit "Add to library" (nothing is added by
 // opening it). Redirects to the real detail when the title is already present.
 
+import { followTitle } from '../headerTitle.js';
 import { createApi, isAbortError } from '../api.js';
 import { navigate, onCleanup } from '../router.js';
 import { isServerReachable, markDegraded } from '../network.js';
@@ -125,6 +126,7 @@ export default async function Preview(container, params) {
     el('div', { class: 'detail-meta', text: metaBits.join(' · ') }),
     el('div', { class: 'preview-note', text: t('preview.notInLibrary') }),
   ]);
+  onCleanup(followTitle(titles.querySelector('h2'), d.title_it));
 
   const head = el('div', { class: 'detail-head' }, [posterWrap, titles]);
 

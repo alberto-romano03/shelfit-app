@@ -3,6 +3,7 @@
 // rating, notes, series progress/seasons, a "Liner Notes" bento, and Kodi play.
 // Edits persist immediately; built views are retained (LRU) for instant return.
 
+import { followTitle } from '../headerTitle.js';
 import { api, createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup } from '../router.js';
 import { isServerReachable, markDegraded, reportServerSuspect } from '../network.js';
@@ -635,6 +636,7 @@ export default async function Detail(container, params) {
       ? el('div', { class: 'detail-updated', text: t('detail.dataUpdated', { date: formatDate(d.cached_at) }) })
       : null,
   ]);
+  onCleanup(followTitle(titles.querySelector('h2'), d.title_it));
 
   const head = el('div', { class: 'detail-head' }, [posterWrap, titles]);
 

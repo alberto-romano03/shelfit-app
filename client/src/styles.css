@@ -365,6 +365,54 @@ select {
   display: flex;
   gap: 4px;
 }
+/* The page's title, once it has scrolled away: it takes the logo's place. The right
+   edge clears the two 44px actions. */
+.header-title {
+  position: absolute;
+  left: var(--gutter);
+  right: calc(var(--gutter) + 100px);
+  top: calc(10px + env(safe-area-inset-top));
+  height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 600;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity var(--dur-short) var(--ease-state), transform var(--dur-short) var(--ease-out);
+}
+.header-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-header .brand {
+  transition: opacity var(--dur-short) var(--ease-state), transform var(--dur-short) var(--ease-out);
+}
+.app-header.has-title .brand {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+.app-header.has-title .header-title {
+  opacity: 1;
+  transform: none;
+}
+/* Now Playing needs the same stretch of the header, and it comes first: while something
+   is playing, the logo and its label stay. */
+.app-header.has-title:has(.np-indicator.active) .brand {
+  opacity: 1;
+  transform: none;
+}
+.app-header.has-title:has(.np-indicator.active) .header-title {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-title,
+  .app-header.has-title .brand {
+    transform: none;
+  }
+}
 .icon-btn {
   width: 44px;
   height: 44px;
