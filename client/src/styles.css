@@ -8313,6 +8313,9 @@ textarea.notes:focus,
   align-items: center;
   justify-content: center;
   padding: 4px 0;
+  /* The deck's height from the first frame: the sheet now opens before its cards
+     have arrived, and must not jump when they do. */
+  min-height: calc(min(48vh, 390px) + 8px);
 }
 
 /* Loading / message note (shared by loading + error). */
@@ -8453,7 +8456,7 @@ textarea.notes:focus,
 /* The one rating row, fixed under the deck; height reserved for the stars plus
    the rating phrase, so choosing a rating never nudges the footer. */
 .rom-rate {
-  min-height: 64px;
+  min-height: 93px; /* the stars and their phrase, held while the deck loads */
   margin-top: 6px;
 }
 .rom-rate .rating-wrap {
