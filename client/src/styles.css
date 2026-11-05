@@ -8348,6 +8348,13 @@ textarea.notes:focus,
   touch-action: none; /* we own the horizontal drag gesture */
   will-change: transform, opacity;
 }
+/* A mouse drag on the artwork must move the card, not start the browser's own image
+   drag, which cancels the pointer. */
+.rom-card img,
+.ksync-card img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
 .rom-card .rom-poster {
   position: absolute;
   inset: 0;

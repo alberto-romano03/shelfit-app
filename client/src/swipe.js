@@ -62,7 +62,10 @@ export function attachSwipe(el, opts = {}) {
     window.removeEventListener('pointercancel', up);
     const dx = e.clientX - startX;
     if (dragging) suppressClick = true;
-    if (dragging && Math.abs(dx) > threshold) {
+    // A cancelled pointer is not a release: the browser took the gesture away, and
+    // the event's coordinates are 0, which read as a long drag and committed the
+    // card. It settles back instead.
+    if (dragging && e.type !== 'pointercancel' && Math.abs(dx) > threshold) {
       if (onSwipe) onSwipe(dx >= 0 ? 1 : -1);
     } else if (onRest) {
       onRest();

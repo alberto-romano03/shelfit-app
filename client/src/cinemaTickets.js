@@ -330,11 +330,11 @@ export function openCinemaTickets() {
     // Eased transitions (set inline so they never fight the drag's transition:none).
     // Spring-ish back for a released-but-not-committed drag; ease-in for the
     // outgoing ticket, gentle ease-out for the incoming one.
-    const T_BACK = 'transform 0.4s cubic-bezier(0.34, 1.4, 0.5, 1), opacity 0.3s ease';
-    const T_OUT = 'transform 0.24s cubic-bezier(0.4, 0, 1, 1), opacity 0.24s ease';
-    const T_IN = 'transform 0.38s cubic-bezier(0.16, 0.9, 0.4, 1), opacity 0.32s ease';
+    const T_BACK = 'transform var(--dur-medium) var(--ease-glide), opacity var(--dur-short) var(--ease-state)';
+    const T_OUT = 'transform var(--dur-short) var(--ease-in), opacity var(--dur-short) var(--ease-in)';
+    const T_IN = 'transform var(--dur-medium) var(--ease-glide), opacity var(--dur-medium) var(--ease-state)';
     // A miniature growing into the full ticket (ease-out: settling into place).
-    const T_FLY = 'transform 0.42s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.3s ease';
+    const T_FLY = 'transform var(--dur-medium) var(--ease-out), opacity var(--dur-short) var(--ease-state)';
     let animating = false;
 
     const atEdge = (delta) => index + delta < 0 || index + delta >= tickets.length;
@@ -435,8 +435,10 @@ export function openCinemaTickets() {
         window.setTimeout(() => {
           incoming.style.transition = '';
           animating = false;
-        }, 360);
-      }, 140);
+        }, 300); // > --dur-medium
+        // Not before the outgoing ticket has finished leaving: it used to be removed
+        // part way through its exit, which read as a jump.
+      }, 190); // > --dur-short
     }
 
     // Optimistic save of a date/time edit. renderTicket already updated the field
@@ -612,7 +614,7 @@ export function openCinemaTickets() {
       ticket.style.opacity = '';
       window.setTimeout(() => {
         ticket.style.transition = '';
-      }, 450);
+      }, 320); // > --dur-medium
     }
 
     // Shared app loader: the rotating disc + a random loading phrase.
