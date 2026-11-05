@@ -64,9 +64,9 @@ export default async function Settings(container) {
     .catch(() => pget(PK.authStatus) || null);
   const isMaster = (s) => !!s && (!s.enabled || !s.user || s.user.role === 'master');
 
-  const header = el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' } }, [
+  const header = el('div', { class: 'lp-head' }, [
     el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
-    el('h2', { style: { margin: 0, fontSize: '20px' }, text: t('common.settings') }),
+    el('h2', { class: 'lp-title', text: t('common.settings') }),
   ]);
 
   // --- Cache Management (ON-DEMAND — nothing scans the cache automatically) ---
