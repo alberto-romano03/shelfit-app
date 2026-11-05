@@ -3376,8 +3376,12 @@ body.modal-open {
 .modal--handle {
   padding-top: 6px;
 }
-/* Enter: rise into place and fade up. Exit (below) is the mirror — same
-   duration, easing reversed — so a popup leaves the way it arrived. */
+/* Enter: rise into place and fade up. Exit (below) is the true mirror: same
+   duration, same travel, easing reversed, so a popup leaves the way it arrived.
+   It used to fall the panel's whole height while it faded, up to 760px in the same
+   time the entrance spends on 30px. Neither exit keyframe has a `from`: a panel
+   let go mid-drag starts from wherever the finger left it. The travel on exit is
+   relative to that, so the drag offset comes along (--sheet-drag). */
 @keyframes slideUp {
   from {
     transform: translateY(30px);
@@ -3394,7 +3398,7 @@ body.modal-open {
    (modals used to be removed from the DOM outright, with no exit at all). */
 @keyframes slideDown {
   to {
-    transform: translateY(100%);
+    transform: translateY(calc(var(--sheet-drag, 0px) + 30px));
     opacity: 0;
   }
 }
@@ -5135,7 +5139,7 @@ button.srow:active {
    fade in over 200ms and then vanish in a single frame when it was removed. */
 @keyframes toast-in {
   from {
-    transform: translateY(16px);
+    transform: translateY(12px);
     opacity: 0;
   }
 }
@@ -8946,7 +8950,7 @@ textarea.notes:focus,
 }
 @keyframes popOut {
   to {
-    transform: scale(0.94);
+    transform: scale(0.92);
     opacity: 0;
   }
 }

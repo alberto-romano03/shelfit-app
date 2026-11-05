@@ -1214,7 +1214,7 @@ export function openModal(buildContent, opts = {}) {
   // The grey dash: opt-in here, always present on a sheet. Every popup that
   // reads as a bottom sheet carries it, so the dismiss gesture is the same one
   // everywhere.
-  if (opts.handle) modal.append(dragHandle(close));
+  if (opts.handle) modal.append(dragHandle(close, modal, backdrop));
   buildContent(modal, close);
   lockScroll();
   document.body.append(backdrop);
@@ -1223,25 +1223,93 @@ export function openModal(buildContent, opts = {}) {
 
 // The bottom-sheet drag handle — tap it, or swipe it down, to dismiss. Shared by
 // openSheet and by any openModal that asks for one.
-function dragHandle(close) {
+//
+// The panel follows the finger 1:1 and the dim lightens with it. Letting go past
+// the threshold, or with a downward flick, leaves from where the panel is (the
+// exit keyframes have no `from`, so they start at this inline transform); anything
+// less settles back. Only downward travel counts: there is nothing above the sheet
+// to reveal.
+function dragHandle(close, panel, backdrop) {
   const wrap = el('div', { class: 'sheet-handle-wrap' }, [
     el('div', { class: 'sheet-handle' }),
   ]);
+  const DISMISS_PX = 60;
+  const FLICK_PX_PER_MS = 0.5;
   let startY = null;
+  let lastY = 0;
+  let lastT = 0;
+  let speed = 0;
+  let dragged = false;
+
+  function paintDrag(dy) {
+    panel.style.transform = `translateY(${dy}px)`;
+    panel.style.setProperty('--sheet-drag', `${dy}px`);
+    backdrop.style.opacity = String(1 - Math.min(dy / panel.offsetHeight, 1) * 0.6);
+  }
+  function settle() {
+    panel.style.transition = 'transform var(--dur-short) var(--ease-out)';
+    backdrop.style.transition = 'opacity var(--dur-short) var(--ease-out)';
+    panel.style.transform = '';
+    panel.style.removeProperty('--sheet-drag');
+    backdrop.style.opacity = '';
+    panel.addEventListener(
+      'transitionend',
+      () => {
+        panel.style.transition = '';
+        backdrop.style.transition = '';
+      },
+      { once: true }
+    );
+  }
+
   wrap.addEventListener('pointerdown', (e) => {
-    startY = e.clientY;
+    startY = lastY = e.clientY;
+    lastT = e.timeStamp;
+    speed = 0;
+    dragged = false;
+    panel.style.transition = 'none';
+    backdrop.style.transition = 'none';
+    panel.style.willChange = 'transform';
     try {
       wrap.setPointerCapture(e.pointerId);
     } catch {
       /* ignore */
     }
   });
-  wrap.addEventListener('pointerup', (e) => {
-    if (startY !== null && e.clientY - startY > 60) close();
-    startY = null;
+  wrap.addEventListener('pointermove', (e) => {
+    if (startY === null) return;
+    const dy = Math.max(0, e.clientY - startY);
+    if (Math.abs(e.clientY - startY) > 4) dragged = true;
+    if (e.timeStamp > lastT) speed = (e.clientY - lastY) / (e.timeStamp - lastT);
+    lastY = e.clientY;
+    lastT = e.timeStamp;
+    if (dragged) paintDrag(dy);
   });
+  function release(e, cancelled) {
+    if (startY === null) return;
+    const dy = e.clientY - startY;
+    startY = null;
+    panel.style.willChange = '';
+    if (!dragged) {
+      panel.style.transition = '';
+      backdrop.style.transition = '';
+      return;
+    }
+    if (!cancelled && (dy > DISMISS_PX || speed > FLICK_PX_PER_MS)) {
+      panel.style.transition = '';
+      backdrop.style.transition = '';
+      close();
+    } else {
+      settle();
+    }
+  }
+  wrap.addEventListener('pointerup', (e) => release(e, false));
+  wrap.addEventListener('pointercancel', (e) => release(e, true));
+  // A tap on the handle closes; the click that ends a drag has already been dealt
+  // with on pointerup.
   wrap.addEventListener('click', () => {
-    if (startY === null) close();
+    if (!dragged) close();
+    dragged = false;
   });
   return wrap;
 }
@@ -1376,7 +1444,7 @@ export function openSheet(buildContent, opts = {}) {
     setTimeout(done, 400); // fallback if animationend never fires (> --dur-medium)
   }
 
-  sheet.append(dragHandle(close));
+  sheet.append(dragHandle(close, sheet, backdrop));
 
   buildContent(sheet, close);
   lockScroll();
