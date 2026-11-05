@@ -9600,6 +9600,90 @@ textarea.lend-message-input:focus {
   --toggle-accent: #e63946; /* popcorn red */
   --toggle-tint: 16%;
 }
+/* These two change state: a slower fade than a press, so it reads as a change. */
+.owned-toggle,
+.cinema-toggle {
+  transition: background var(--dur-medium) var(--ease-state),
+    border-color var(--dur-medium) var(--ease-state),
+    color var(--dur-medium) var(--ease-state),
+    scale var(--dur-short) var(--ease-out);
+}
+/* The two labels share one cell and crossfade, so the button never changes width. */
+.toggle-label {
+  display: inline-grid;
+  justify-items: center;
+}
+.toggle-label span {
+  grid-area: 1 / 1;
+  transition: opacity var(--dur-short) var(--ease-state), transform var(--dur-short) var(--ease-out);
+}
+.toggle-label span:last-child {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.toggle-wide.active .toggle-label span:first-child {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.toggle-wide.active .toggle-label span:last-child {
+  opacity: 1;
+  transform: none;
+}
+/* One glint across the still disc, turning on only. */
+.disc-glint {
+  stroke-width: 2.4;
+  opacity: 0;
+}
+.toggle-play .disc-glint {
+  animation: disc-glint var(--dur-set) var(--ease-in-out);
+}
+@keyframes disc-glint {
+  0% {
+    opacity: 0;
+    transform: translate(-14px, 14px);
+  }
+  25%,
+  75% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(14px, -14px);
+  }
+}
+/* The stub flexes at its tear line. It waits for the ticket dialog to finish leaving,
+   since this button lights up behind it. */
+.toggle-play .stub-a,
+.toggle-play .stub-b {
+  transform-box: view-box;
+  transform-origin: 13px 12px;
+  animation: stub-a var(--dur-set) var(--ease-glide) var(--dur-medium);
+}
+.toggle-play .stub-b {
+  animation-name: stub-b;
+}
+@keyframes stub-a {
+  30% {
+    transform: translateX(-1.2px) rotate(-5deg);
+  }
+}
+@keyframes stub-b {
+  30% {
+    transform: translateX(1.6px) rotate(9deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toggle-label span,
+  .toggle-label span:last-child,
+  .toggle-wide.active .toggle-label span:first-child {
+    transform: none;
+  }
+  .toggle-play .disc-glint,
+  .toggle-play .stub-a,
+  .toggle-play .stub-b {
+    animation: none;
+  }
+}
 /* "View on TMDB" is a link, not a toggle, so it ships permanently `.active`
    with the TMDB brand blue. The logo keeps its own baked-in green→blue gradient
    regardless of the button's text colour. */

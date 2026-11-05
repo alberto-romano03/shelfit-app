@@ -675,15 +675,34 @@ export default async function Detail(container, params) {
   });
   const statusBtn = statusControl.element;
 
+  // Both toggles below are built once and only change state, so their colours fade
+  // and the one short motion plays when they turn on, never when the page opens.
+  function playToggle(btn) {
+    btn.classList.remove('toggle-play');
+    void btn.offsetWidth; // reflow, so turning on again replays it
+    btn.classList.add('toggle-play');
+  }
+
   // --- Physical ownership toggle (optimistic UI, saves immediately) ---
+  // Turning on, one glint of light crosses the disc, which itself stays still.
   const DISC_ICON =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/></svg>';
-  const ownedBtn = el('button', { class: 'toggle-wide owned-toggle' });
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><defs><clipPath id="disc-glint-clip"><circle cx="12" cy="12" r="9"/></clipPath></defs><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/><g clip-path="url(#disc-glint-clip)"><path class="disc-glint" d="M4 4l16 16"/></g></svg>';
+  const ownedOffLabel = el('span', { text: t('detail.markOwned') });
+  const ownedOnLabel = el('span', { text: t('detail.ownedOnDisc') });
+  const ownedBtn = el('button', { class: 'toggle-wide owned-toggle', html: DISC_ICON }, [
+    el('span', { class: 'toggle-label' }, [ownedOffLabel, ownedOnLabel]),
+  ]);
+  let ownedMounted = false;
   function renderOwned() {
     const on = !!d.owned;
+    const turnedOn = on && !ownedBtn.classList.contains('active');
     ownedBtn.classList.toggle('active', on);
     ownedBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    ownedBtn.innerHTML = `${DISC_ICON}<span>${on ? t('detail.ownedOnDisc') : t('detail.markOwned')}</span>`;
+    ownedOffLabel.setAttribute('aria-hidden', on ? 'true' : 'false');
+    ownedOnLabel.setAttribute('aria-hidden', on ? 'false' : 'true');
+    if (!on) ownedBtn.classList.remove('toggle-play');
+    if (turnedOn && ownedMounted) playToggle(ownedBtn);
+    ownedMounted = true;
     // Compound poster classes drive the CD reveal + DVD-box styling (see CSS).
     posterWrap.classList.toggle('owned', on);
     posterBox.classList.toggle('owned', on);
@@ -709,14 +728,21 @@ export default async function Detail(container, params) {
   // Turning it ON opens the "New ticket" popup and only lights up once the ticket
   // is added (Cancel leaves it off). Tapping it while ON opens the same popup as
   // "Edit ticket", prefilled, where the ticket can be saved or removed.
+  // Drawn in two halves, split at the tear line, so the stub can flex once on turning on.
   const TICKET_ICON =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg>';
-  const cinemaBtn = el('button', { class: 'toggle-wide cinema-toggle' });
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path class="stub-a" d="M13 5H4a2 2 0 0 0-2 2v2a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h9"/><path class="stub-b" d="M13 5h7a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2h-7"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg>';
+  const cinemaBtn = el('button', { class: 'toggle-wide cinema-toggle', html: TICKET_ICON }, [
+    el('span', { text: t('detail.seenInCinema') }),
+  ]);
+  let cinemaMounted = false;
   function renderCinema() {
     const on = !!d.watched_in_cinema;
+    const turnedOn = on && !cinemaBtn.classList.contains('active');
     cinemaBtn.classList.toggle('active', on);
     cinemaBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    cinemaBtn.innerHTML = `${TICKET_ICON}<span>${t('detail.seenInCinema')}</span>`;
+    if (!on) cinemaBtn.classList.remove('toggle-play');
+    if (turnedOn && cinemaMounted) playToggle(cinemaBtn);
+    cinemaMounted = true;
   }
   if (d.type === 'movie') {
     renderCinema();
