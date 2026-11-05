@@ -753,9 +753,11 @@ export default async function mediaRoutes(fastify) {
 
     if (!fields.length) return { ok: true };
 
-    // Bump updated_at only for changes that reflect activity — a favourite
-    // toggle must not move a movie's "watched on" date.
-    if (body.status !== undefined || body.rating !== undefined || body.notes !== undefined) {
+    // Bump updated_at only when the status really changes. A title with no explicit
+    // watch_date uses updated_at as its "watched on" date (the detail page, the
+    // monthly receipt, the library export), so a new rating, a note or a favourite
+    // must not move it, or an old film lands in this month's receipt.
+    if (body.status !== undefined && body.status !== row.status) {
       fields.push("updated_at = datetime('now')");
     }
 
