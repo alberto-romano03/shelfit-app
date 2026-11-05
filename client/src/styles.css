@@ -1072,6 +1072,27 @@ body.grid-virtual-active .gc-scroller {
   padding-bottom: 6px;
   -webkit-overflow-scrolling: touch;
 }
+/* Card rows run to the screen edge, the way the clerk's picks (.pk-rail) already
+   do: a card slides off at the true screen border instead of being cut against the
+   gutter, and the next one peeking past the margin says the row goes on. At rest
+   the first card still sits on the gutter. The closing gap is a real flex item, not
+   padding-right: several engines leave a scroller's trailing padding out of its
+   overflow area (see .segbar), which would park the last card on the screen edge. */
+.hscroll,
+.ai-rail,
+.coll-row {
+  --row-gap: 12px;
+  gap: var(--row-gap);
+  margin-inline: calc(var(--gutter) * -1);
+  padding-left: var(--gutter);
+  scroll-padding-inline: var(--gutter);
+}
+.hscroll::after,
+.ai-rail::after,
+.coll-row::after {
+  content: '';
+  flex: 0 0 calc(var(--gutter) - var(--row-gap));
+}
 .hscroll .watching-card {
   flex: 0 0 110px;
   width: 110px;
@@ -2921,9 +2942,9 @@ textarea.note-sheet-input:focus {
      at the content gutter. A card then slides off at the true screen border
      instead of being clipped early against the 16px gutter. scroll-padding lines
      the snap up with that gutter so a snapped card still sits inset. */
-  margin: 0 -16px 4px;
-  padding: 0 16px 8px;
-  scroll-padding-inline: 16px;
+  margin: 0 calc(var(--gutter) * -1) 4px;
+  padding: 0 var(--gutter) 8px;
+  scroll-padding-inline: var(--gutter);
   /* A paged carousel: mandatory snap to each card's LEFT edge, one card per
      swipe. Center align on a full-width card put the snap target far from where
      a fling ended, so the browser glided a long way to it, which felt slow;
@@ -9150,7 +9171,7 @@ textarea.lend-message-input:focus {
    from the slot, with a gentle idle "advancing paper" pulse. */
 .pos-printer {
   display: block;
-  width: min(420px, 94%);
+  width: min(420px, 100%);
   margin: 20px auto 0;
   padding: 0;
   background: none;
@@ -9779,7 +9800,7 @@ textarea.lend-message-input:focus {
 .the-desk { /* section wrapper; the .section-title supplies the top spacing */ }
 .desk-drawer {
   display: block;
-  width: min(420px, 94%);
+  width: min(420px, 100%);
   margin: 0 auto;
   padding: 0;
   border: none;
@@ -11098,7 +11119,7 @@ textarea.lend-message-input:focus {
   flex: none;
 }
 .person-timeline {
-  gap: 0;
+  --row-gap: 0px;
   padding-bottom: 8px;
 }
 .person-year {
