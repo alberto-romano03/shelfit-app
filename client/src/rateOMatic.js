@@ -155,16 +155,19 @@ function runSession({ stage, close, footer, counter, rateHost }) {
     counter.textContent = `${index + 1} / ${queue.length}`;
   }
 
-  // What letting go will do, stamped across the card as it is dragged: save the
-  // rating it carries, or skip. It fades in with the drag distance.
+  // A rated card says it will be saved, fading in with the drag distance. An unrated
+  // one shows nothing: letting it go just moves on.
   function paintStamp(card, dx) {
     const r = ctrl.getRating();
     const stamp = card._stamp;
-    stamp.className = 'rom-stamp ' + (r ? 'is-save' : 'is-skip');
+    if (!r) {
+      stamp.style.opacity = '0';
+      return;
+    }
+    stamp.className = 'rom-stamp is-save';
     stamp.replaceChildren(
-      ...(r
-        ? [el('span', { class: 'rom-stamp-star', html: starSvg(true) }), el('span', { text: `${r} · ${t('rom.save')}` })]
-        : [el('span', { text: t('rom.skip') })])
+      el('span', { class: 'rom-stamp-star', html: starSvg(true) }),
+      el('span', { text: `${r} · ${t('rom.save')}` })
     );
     stamp.style.opacity = String(Math.min(1, Math.abs(dx) / 90));
     stamp.style.transform = `translate(-50%, -50%) rotate(${dx > 0 ? -8 : 8}deg)`;
