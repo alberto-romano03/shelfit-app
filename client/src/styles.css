@@ -5354,8 +5354,10 @@ button.srow:active {
   }
 }
 /* Its usual place is exactly where a bottom dialog rises to, and a toast would sit on
-   the dialog's text: an error from the dialog itself, or the toast of the step before. */
-body:has(.modal-backdrop) .toast {
+   the dialog's text: an error from the dialog itself, or the toast of the step before.
+   Not a dialog on its way out: the toast confirming it would start up here, then drop to
+   the bottom when the dialog is gone. */
+body:has(.modal-backdrop:not(.backdrop-closing)) .toast {
   top: calc(env(safe-area-inset-top) + 12px);
   bottom: auto;
 }

@@ -794,7 +794,11 @@ function dismissToast(node) {
     node.remove();
     if (toastNode === node) toastNode = null;
   };
-  node.addEventListener('animationend', done, { once: true });
+  // Only its own exit: the undo toast's time line ends as the toast starts to leave, and
+  // that event bubbles here too, which would remove it with no exit at all.
+  node.addEventListener('animationend', (e) => {
+    if (e.target === node) done();
+  });
   setTimeout(done, TOAST_EXIT_MS);
 }
 
