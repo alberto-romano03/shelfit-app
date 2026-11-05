@@ -4,7 +4,7 @@
 // instantly from a durable cache, then revalidates each piece from the network.
 
 import { api, createApi, isAbortError } from '../api.js';
-import { navigate, onCleanup, openDetail } from '../router.js';
+import { navigate, onCleanup, openDetail, cameBack } from '../router.js';
 import { openDustItOff } from '../dustItOff.js';
 import { openReceipt } from '../receipt.js';
 import { openRateOMatic } from '../rateOMatic.js';
@@ -108,6 +108,9 @@ const PLANT_SVG =
   '<path fill="#d9aa94" d="M373.656,406.356c-0.486-0.079-0.918-0.291-1.421-0.291h-85.336c-4.873,0-8.828,3.955-8.828,8.828c0,4.882,3.955,8.828,8.828,8.828h83.862L373.656,406.356z"/>' +
   '<path fill="#d9aa94" d="M163.313,335.448H101.52c-0.503,0-0.945,0.203-1.421,0.291l2.895,17.364h60.319c4.873,0,8.828-3.946,8.828-8.828C172.141,339.394,168.186,335.448,163.313,335.448"/>' +
   '</svg>';
+
+// Where Home was left, for Back and Forward. A fresh open still starts at the top.
+let homeScrollY = 0;
 
 export default async function Home(container) {
   const ac = new AbortController();
@@ -429,7 +432,7 @@ export default async function Home(container) {
   // used to sit behind each title. Uncomment the .dvd-spine-anim line — and the
   // matching rule in styles.css — to bring it back.
   const spine = (labelText, animHtml, cls, onClick) => {
-    const s = el('button', { class: `dvd-spine ${cls}`, onClick: null }, [
+    const s = el('button', { class: `dvd-spine ${cls}` + (labelText.length > 18 ? ' dvd-spine--long' : ''), onClick: null }, [
       el('span', { class: 'dvd-spine-band', html: `${DISC3}<span class="dvd-spine-brand">shelfit</span>` }),
       // el('span', { class: 'dvd-spine-anim', html: animHtml }),
       el('span', { class: 'dvd-spine-label' }, [
@@ -438,14 +441,13 @@ export default async function Home(container) {
         el('span', { class: 'dvd-spine-label-text', text: labelText }),
       ]),
     ]);
-    // Play the ~200ms extraction, then open the function.
+    // The extraction plays while the function opens, never in front of it: the
+    // sheet used to wait 200ms for it.
     s.addEventListener('click', () => {
       if (s.classList.contains('extracting')) return;
       s.classList.add('extracting');
-      setTimeout(() => {
-        s.classList.remove('extracting');
-        onClick();
-      }, 200);
+      onClick();
+      setTimeout(() => s.classList.remove('extracting'), 200); // > --dur-short
     });
     return s;
   };
@@ -500,13 +502,11 @@ export default async function Home(container) {
     'aria-label': t('home.desk.openTickets'),
     html: '<span class="desk-drawer-face"><span class="desk-knob" aria-hidden="true"></span></span>',
     onClick: () => {
-      // CSS-only pull-open (translateY on the drawer face); open the modal once
-      // the brief slide finishes, then reset the drawer behind it.
+      // CSS-only pull-open (translateY on the drawer face), running as the modal
+      // comes up rather than ahead of it; the drawer then resets behind it.
       drawer.classList.add('opening');
-      setTimeout(() => {
-        drawer.classList.remove('opening');
-        openCinemaTickets();
-      }, 240);
+      openCinemaTickets();
+      setTimeout(() => drawer.classList.remove('opening'), 300); // > --dur-medium
     },
   });
   const theDesk = el('div', { class: 'the-desk' }, [
@@ -525,6 +525,13 @@ export default async function Home(container) {
   // (now nested under The Desk). To bring it back, add `receiptEntry,` to this list.
   const theWall = createTheWall();
   container.append(cover, profileRow, statsGrid, section, listsContainer, /* rediscover, dust, rate, */ shelf, /* receiptEntry, */ theDesk, theWall);
+  if (cameBack() && homeScrollY) {
+    const y = homeScrollY;
+    requestAnimationFrame(() => window.scrollTo(0, y));
+  }
+  cleanups.push(() => {
+    homeScrollY = window.scrollY;
+  });
 
   // First launch only: introduce the app with the feature showcase, exactly once.
   // The flag is set immediately (not on finish) so a reload mid-tour won't reopen

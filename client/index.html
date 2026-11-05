@@ -93,7 +93,7 @@
         align-items: center;
         justify-content: center;
         opacity: 1;
-        transition: opacity 0.35s ease;
+        transition: opacity 0.24s ease;
       }
       #splash.splash-hide {
         opacity: 0;
@@ -129,7 +129,7 @@
         z-index: 9990;
         background: var(--splash-bg);
         opacity: 1;
-        transition: opacity 0.3s ease;
+        transition: opacity 0.2s ease;
       }
       #app-flash.flash-hide {
         opacity: 0;
@@ -155,7 +155,7 @@
         width: 148px;
         height: 148px;
         will-change: transform;
-        animation: splash-logo 1.5s forwards;
+        animation: splash-logo 0.9s forwards;
       }
       /* The "DVD player" slot, flush under the mask so the disc enters it. */
       .splash-slot {
@@ -165,7 +165,7 @@
         background: linear-gradient(90deg, #2a2a2a, #e5a00d, #2a2a2a);
         transform: scaleX(0);
         opacity: 0;
-        animation: splash-slot 1.5s forwards;
+        animation: splash-slot 0.9s forwards;
       }
       /* shelfIt wordmark, matching the in-app header. */
       .splash-word {
@@ -177,7 +177,7 @@
         letter-spacing: -0.5px;
         color: #ffffff;
         opacity: 0;
-        animation: splash-word 1.5s forwards;
+        animation: splash-word 0.9s forwards;
       }
       .splash-word span {
         color: #e5a00d;
@@ -292,7 +292,7 @@
           f.classList.add('flash-hide');
           setTimeout(function () {
             if (f.parentNode) f.parentNode.removeChild(f);
-          }, 400);
+          }, 260);
         }
         function hide() {
           if (done) return;
@@ -304,7 +304,7 @@
           setTimeout(function () {
             if (s.parentNode) s.parentNode.removeChild(s);
             clearFlash();
-          }, 400);
+          }, 280);
         }
         var reduce =
           window.matchMedia &&
@@ -313,7 +313,7 @@
         if (!reduce && logo) {
           logo.addEventListener('animationend', hide);
         }
-        setTimeout(hide, reduce ? 800 : 2400);
+        setTimeout(hide, reduce ? 500 : 1500);
       })();
     </script>
     <script type="module" src="/src/main.js"></script>

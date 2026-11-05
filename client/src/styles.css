@@ -6447,9 +6447,23 @@ img.mood-emoji {
   border-radius: var(--r-md);
   background: transparent;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
-  transition: transform 0.15s ease, background-color var(--dur-short) var(--ease-state), border-color var(--dur-short) var(--ease-state);
+  transition: scale var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-state), border-color var(--dur-short) var(--ease-state);
+}
+.genre-chip:active,
+.rating-btn:active {
+  scale: var(--press);
+}
+/* The wide uppercase faces are what cut off first: "ADVENTURE" at 360px. */
+.genre-chip.gf-western,
+.genre-chip.gf-scifi,
+.genre-chip.gf-action {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+.genre-chip.gf-classic {
+  font-size: 12px;
 }
 .genre-chip.active { background: var(--accent); border-color: var(--accent); color: #111; }
 .gf-horror { font-family: 'Times New Roman', Georgia, serif; font-weight: 700; letter-spacing: 0.5px; }
@@ -6477,7 +6491,7 @@ img.mood-emoji {
   background: transparent;
   color: var(--text-primary);
   cursor: pointer;
-  transition: transform 0.15s ease, background-color var(--dur-short) var(--ease-state), border-color var(--dur-short) var(--ease-state);
+  transition: scale var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-state), border-color var(--dur-short) var(--ease-state);
 }
 .rating-btn-label { font-size: 14px; font-weight: 700; }
 .rating-btn .star-meter { font-size: 12px; letter-spacing: 1px; }
@@ -7618,6 +7632,12 @@ button.lw-card.lw-new:disabled:active {
   letter-spacing: 0.4px;
 }
 /* Dust It Off → vintage, dug-out-of-the-attic: a chunky old-poster slab serif. */
+/* Long titles ("Torna sullo scaffale") ran the full height of the case and were
+   cut at the shelf. */
+.dvd-spine--long .dvd-spine-label {
+  font-size: 12px;
+  letter-spacing: 0;
+}
 .spine-dust .dvd-spine-label {
   font-family: 'Rockwell', 'Rockwell Nova', 'Courier New', Georgia, serif;
   font-weight: 700;
