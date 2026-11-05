@@ -130,6 +130,9 @@ const tabButtons = TABS.map((tab) => {
     onClick: () => {
       resetGridSection(tab.path);
       if (tab.path === '/upcoming') resetUpcoming();
+      // Light the tab on the tap's own frame: the router's onChange only runs once
+      // the page change has captured its snapshot.
+      tabButtons.forEach((other) => other.classList.toggle('active', other === btn));
       navigate(tab.path);
     },
   });

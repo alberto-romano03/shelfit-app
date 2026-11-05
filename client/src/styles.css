@@ -50,7 +50,7 @@
   --dur-instant: 90ms;
   --dur-short: 180ms;
   --dur-medium: 280ms;
-  --dur-long: 300ms;
+  --dur-long: 240ms;
   --dur-set: 600ms;
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
   --ease-in: cubic-bezier(0.55, 0, 0.68, 0.2);
@@ -434,6 +434,7 @@ body.grid-virtual-active .gc-scroller {
      the gap above is a truer separator than the label's own half-leading. */
   line-height: 1.1;
   min-height: 44px;
+  transition: color var(--dur-short) var(--ease-state);
 }
 .tabbar button.active {
   color: var(--accent);
@@ -5546,6 +5547,27 @@ html[data-vt='grid']::view-transition-new(grid-status) {
   from {
     opacity: 0;
   }
+}
+/* The page dissolves; the chrome around it does not. Left in the root snapshot, the
+   tab bar faded with the page, so the old gold tab stayed lit under the new one for
+   most of every page change. Held out and shown live, like the status bar above, a
+   tab answers on its own and the header stays solid. Not while a popup is open: a
+   named element paints above the root, and so above the popup's dim. */
+html[data-vt]:not(:has(.modal-backdrop)) .tabbar {
+  view-transition-name: app-tabbar;
+}
+html[data-vt]:not(:has(.modal-backdrop)) .app-header {
+  view-transition-name: app-header;
+}
+html[data-vt]::view-transition-group(app-tabbar),
+html[data-vt]::view-transition-group(app-header),
+html[data-vt]::view-transition-new(app-tabbar),
+html[data-vt]::view-transition-new(app-header) {
+  animation: none;
+}
+html[data-vt]::view-transition-old(app-tabbar),
+html[data-vt]::view-transition-old(app-header) {
+  display: none;
 }
 
 /* ============ Dust It Off — playful filter controls ============ */

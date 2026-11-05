@@ -447,6 +447,10 @@ export async function gridView(container, type) {
   async function warmAndPersistPlan() {
     try {
       const data = await api.planToWatch();
+      // The offline copy is compressed and read back on the main thread. That work
+      // belongs after the page change: done straight away it landed in the middle
+      // of the fade and froze it, for over half a second on a slower phone.
+      await afterTransition();
       const titles = data.titles || [];
       // Persist BOTH types' lists — one online visit to EITHER grid makes the
       // OTHER grid's Plan to Watch available offline too.
@@ -465,6 +469,8 @@ export async function gridView(container, type) {
       let budget = 30; // max detail fetches per grid mount
       for (const t of titles) {
         if (budget <= 0) break;
+        // One title per task, so a long list never holds a frame.
+        await new Promise((resolve) => setTimeout(resolve));
         if (getPlanDetail(t.id)) continue; // already cached
         budget--;
         try {
