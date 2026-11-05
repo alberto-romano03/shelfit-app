@@ -10113,37 +10113,56 @@ textarea.lend-message-input:focus {
 .modal .cine-ticket-host {
   padding: 14px 0 4px;
 }
-/* "Use release date": the standard .chip with a glyph, centred under the ticket.
-   .active (the chip's own state) while the ticket shows the release date. */
-.cine-new-shortcut {
+/* The title with the round remove button at its end. */
+.cine-new-head {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 16px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
 }
-/* Edit ticket: Remove sits beside the shortcut in the danger tint (as
-   .menu-item-danger); .armed (waiting for the confirming second tap) fills it. */
-.cine-new-shortcut .chip-danger {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
-  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+.cine-new-modal .cine-ticket-host {
+  padding: 18px 0 14px;
 }
-.cine-new-shortcut .chip-danger.armed {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: #fff;
-  font-weight: 600;
+.cine-new-head h3 {
+  margin: 0;
 }
-.cine-new-shortcut .chip {
+/* Waiting for the confirming second tap: the circle opens into a pill that says so. */
+.cine-new-head .icon-act.armed {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  cursor: pointer;
+  width: auto;
+  padding-inline: 14px;
+  border-radius: var(--r-pill);
+  background: var(--danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
 }
-.cine-new-shortcut .chip .btn-lucide {
-  width: 15px;
-  height: 15px;
+/* Release date, rule and buttons stay in reach when a long title makes the ticket
+   taller than the sheet: the ticket scrolls behind them. This block carries the sheet's
+   bottom padding, since a sticky child stops short of its scroller's padding. */
+.cine-new-modal {
+  max-height: 94vh;
+  padding-bottom: 0;
+}
+.cine-new-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-inline: calc(var(--gutter) * -1);
+  padding: 6px var(--gutter) calc(20px + env(safe-area-inset-bottom));
+  background: var(--surface);
+}
+.cine-release-btn {
+  width: 100%;
+}
+.cine-new-foot .status-sep {
+  margin: 8px 0 10px;
+}
+.cine-new-foot .modal-actions {
+  margin-top: 0;
 }
 
 /* ===================== Cinema ticket (renderTicket) ===================== */

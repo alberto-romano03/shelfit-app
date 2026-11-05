@@ -513,7 +513,7 @@ const it = {
   'ticket.useRelease': 'Usa data di uscita',
   'ticket.add': 'Aggiungi',
   'ticket.editTitle': 'Modifica biglietto',
-  'ticket.removeConfirm': 'Tocca di nuovo per rimuovere',
+  'ticket.removeAsk': 'Rimuovi?',
   'ticket.empty': 'Ancora nessun biglietto: segna un film come visto al cinema per aggiungerlo qui.',
   'ticket.loadError': 'Impossibile caricare i tuoi biglietti.',
 
@@ -1542,7 +1542,7 @@ const en = {
   'ticket.useRelease': 'Use release date',
   'ticket.add': 'Add ticket',
   'ticket.editTitle': 'Edit ticket',
-  'ticket.removeConfirm': 'Tap again to remove',
+  'ticket.removeAsk': 'Remove?',
   'ticket.empty': 'No tickets yet: mark a movie as watched in cinema to add it here.',
   'ticket.loadError': 'Couldn’t load your tickets.',
 

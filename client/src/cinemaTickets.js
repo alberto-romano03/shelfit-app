@@ -15,6 +15,7 @@ import {
   toast,
   spinner,
   lucideIcon,
+  iconAction,
   segmentedControl,
   selectPill,
 } from './ui.js';
@@ -99,8 +100,8 @@ const NEW_TICKET_TIME = '20:30';
 // until Add: `onConfirm({ cinema_date, cinema_time, cinema_name })` (async,
 // throws on failure, which keeps the popup open). Cancel adds nothing.
 // With `existing` (the movie is already a ticket) it becomes "Edit ticket": the
-// ticket is prefilled, Add becomes Save, and a Remove chip sits beside the
-// release shortcut. Remove asks for a second tap, then awaits `onRemove()`.
+// ticket is prefilled, Add becomes Save, and a round trash button sits top right.
+// It asks for a second tap, then awaits `onRemove()`.
 //   movie: { id, tmdbId, title, backdropPath, releaseDate }
 //   existing: { cinemaDate, cinemaTime, cinemaName }
 export function openNewTicketModal({ movie, existing = null, onConfirm, onRemove }) {
@@ -121,14 +122,14 @@ export function openNewTicketModal({ movie, existing = null, onConfirm, onRemove
 
     // Floating like in My Tickets (the host carries the bob animation).
     const host = el('div', { class: 'cine-ticket-host' });
-    let syncChip = () => {};
+    let syncRelease = () => {};
     function mountTicket() {
       host.replaceChildren(
         renderTicket(draft, {
           cinemas,
           onDateChange: (v) => {
             draft.cinemaDate = v;
-            syncChip();
+            syncRelease();
           },
           onTimeChange: (v) => {
             draft.cinemaTime = v;
@@ -153,64 +154,62 @@ export function openNewTicketModal({ movie, existing = null, onConfirm, onRemove
       })
       .catch(() => {});
 
-    // Release-date shortcut: writes into the ticket's own date field and fires
-    // its change, the same path as a manual pick, so the ticket re-renders it.
-    // Lit while the ticket shows the release date; absent when there is none.
-    const shortcuts = [];
+    // Release-date button: writes into the ticket's own date field and fires its
+    // change, the same path as a manual pick, so the ticket re-renders it. Disabled
+    // while the ticket already shows that date; absent when the movie has none.
+    let releaseBtn = null;
     if (draft.releaseDate) {
-      const chip = el('button', { class: 'chip', type: 'button' }, [
-        lucideIcon('clapperboard', 'btn-lucide'),
+      releaseBtn = el('button', { class: 'btn btn-secondary cine-release-btn', type: 'button' }, [
+        lucideIcon('calendar', 'btn-lucide'),
         el('span', { text: `${t('ticket.useRelease')} · ${formatTicketDate(draft.releaseDate)}` }),
       ]);
-      syncChip = () =>
-        chip.classList.toggle('active', (draft.cinemaDate || draft.releaseDate) === draft.releaseDate);
-      chip.addEventListener('click', () => {
+      syncRelease = () => {
+        releaseBtn.disabled = (draft.cinemaDate || draft.releaseDate) === draft.releaseDate;
+      };
+      releaseBtn.addEventListener('click', () => {
         const input = host.querySelector('.cine-field-date .cine-input');
         if (!input) return;
         input.value = draft.releaseDate;
         input.dispatchEvent(new Event('change'));
       });
-      syncChip();
-      shortcuts.push(chip);
+      syncRelease();
     }
 
-    // Remove (edit mode only): the first tap arms it for a few seconds, the
-    // second removes the ticket and closes.
+    // Remove (edit mode only): the first tap arms it for a few seconds and it says
+    // so, the second removes the ticket and closes.
+    let removeBtn = null;
     if (existing && onRemove) {
-      const label = el('span', { text: t('common.remove') });
-      const removeChip = el('button', { class: 'chip chip-danger', type: 'button' }, [
-        lucideIcon('trash-2', 'btn-lucide'),
-        label,
-      ]);
+      const ask = el('span', { text: t('ticket.removeAsk') });
       let armTimer = 0;
       const disarm = () => {
         window.clearTimeout(armTimer);
         armTimer = 0;
-        removeChip.classList.remove('armed');
-        label.textContent = t('common.remove');
+        removeBtn.classList.remove('armed');
+        ask.remove();
       };
-      removeChip.addEventListener('click', async () => {
-        if (!armTimer) {
-          removeChip.classList.add('armed');
-          label.textContent = t('ticket.removeConfirm');
-          armTimer = window.setTimeout(disarm, 3000);
-          return;
-        }
-        disarm();
-        removeChip.disabled = true;
-        try {
-          await onRemove();
-          close();
-        } catch (err) {
-          removeChip.disabled = false;
-          toast((err && err.message) || t('ticket.couldNotSave'), 'bad');
-        }
+      removeBtn = iconAction({
+        icon: 'trash-2',
+        label: t('common.remove'),
+        danger: true,
+        onClick: async () => {
+          if (!armTimer) {
+            removeBtn.classList.add('armed');
+            removeBtn.append(ask);
+            armTimer = window.setTimeout(disarm, 3000);
+            return;
+          }
+          disarm();
+          removeBtn.disabled = true;
+          try {
+            await onRemove();
+            close();
+          } catch (err) {
+            removeBtn.disabled = false;
+            toast((err && err.message) || t('ticket.couldNotSave'), 'bad');
+          }
+        },
       });
-      shortcuts.push(removeChip);
     }
-    // An array so a movie with neither chip appends nothing (native append would
-    // turn a null into the text "null").
-    const shortcut = shortcuts.length ? [el('div', { class: 'cine-new-shortcut' }, shortcuts)] : [];
 
     const addBtn = el('button', { class: 'btn btn-primary' }, [
       lucideIcon(existing ? 'check' : 'ticket', 'btn-lucide'),
@@ -232,19 +231,24 @@ export function openNewTicketModal({ movie, existing = null, onConfirm, onRemove
     });
 
     modal.append(
-      el('h3', { text: existing ? t('ticket.editTitle') : t('ticket.newTitle') }),
+      el('div', { class: 'cine-new-head' }, [
+        el('h3', { text: existing ? t('ticket.editTitle') : t('ticket.newTitle') }),
+        removeBtn,
+      ]),
       host,
-      ...shortcut,
-      el('hr', { class: 'status-sep' }),
-      el('div', { class: 'modal-actions' }, [
-        el('button', { class: 'btn btn-secondary', onClick: close }, [
-          lucideIcon('x', 'btn-lucide'),
-          el('span', { text: t('common.cancel') }),
+      el('div', { class: 'cine-new-foot' }, [
+        releaseBtn,
+        el('hr', { class: 'status-sep' }),
+        el('div', { class: 'modal-actions' }, [
+          el('button', { class: 'btn btn-secondary', onClick: close }, [
+            lucideIcon('x', 'btn-lucide'),
+            el('span', { text: t('common.cancel') }),
+          ]),
+          addBtn,
         ]),
-        addBtn,
       ])
     );
-  });
+  }, { handle: true, className: 'cine-new-modal' });
 }
 
 const NEXT_ICON =
