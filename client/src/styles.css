@@ -9,6 +9,11 @@
   --stars: #e5a00d;
   --success: #4caf50;
   --danger: #e5484d;
+  --kodi-blue: #17b2e8;
+  /* State inks, for glyphs on a neutral surface: toasts and empty states. */
+  --ink-ok: #a5d6a7;
+  --ink-bad: #ef9a9a;
+  --ink-info: #e5c07b;
   --border: rgba(255, 255, 255, 0.08);
   --shadow: rgba(0, 0, 0, 0.5);
   /* Border around the POS printer's paper strip (.pos-paper). Dark theme: the
@@ -63,17 +68,19 @@
   --press-small: 0.9;
 
   /* ===== Radius scale ======================================================
-     Four steps, so a component's corner is chosen by role rather than by
+     Five steps, so a component's corner is chosen by role rather than by
      whichever number the neighbouring rule happened to use:
        sm   — small chrome: badges, thumbs, inline art
        md   — controls and cards: buttons, inputs, cells
        lg   — panels and large surfaces
+       xl   — sheets, popups and the tab bar: the surfaces that sit over the page
        pill — anything fully rounded (tracks, chips, switches)
      A handful of radii stay literal on purpose: the 2-3px mouldings on the DVD
      spines are physical detail, and 50% circles are circles. */
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
+  --r-xl: 20px;
   --r-pill: 999px;
   --frame-gold-label: #e0b43c; /* The Wall gold — frame + favourite toggle */
 
@@ -119,6 +126,9 @@
   --stars: #c8890a;
   --success: #3d9140;
   --danger: #d33;
+  --ink-ok: #2f7d32;
+  --ink-bad: #c0392b;
+  --ink-info: #a9760a;
   --border: rgba(0, 0, 0, 0.1);
   --shadow: rgba(0, 0, 0, 0.15);
   --pos-paper-edge: #c0bcb4;
@@ -151,6 +161,9 @@
     --stars: #c8890a;
     --success: #3d9140;
     --danger: #d33;
+    --ink-ok: #2f7d32;
+    --ink-bad: #c0392b;
+    --ink-info: #a9760a;
     --border: rgba(0, 0, 0, 0.1);
     --shadow: rgba(0, 0, 0, 0.15);
     --pos-paper-edge: #c0bcb4;
@@ -162,23 +175,6 @@
   }
   :root:not([data-theme='dark']) .text-field[type='date'] {
     color-scheme: light;
-  }
-  :root:not([data-theme='dark']) .empty--error .empty-art {
-    color: #c0392b;
-    background: color-mix(in srgb, #c0392b 12%, transparent);
-  }
-  :root:not([data-theme='dark']) .empty--offline .empty-art {
-    color: #a9760a;
-    background: color-mix(in srgb, #a9760a 12%, transparent);
-  }
-  :root:not([data-theme='dark']) .toast--ok .toast-ico {
-    background-color: #2f7d32;
-  }
-  :root:not([data-theme='dark']) .toast--bad .toast-ico {
-    background-color: #c0392b;
-  }
-  :root:not([data-theme='dark']) .toast--info .toast-ico {
-    background-color: #a9760a;
   }
 }
 
@@ -412,7 +408,7 @@ body.grid-virtual-active .gc-scroller {
      reads as a sheet the content slides under rather than a full-width ledge.
      overflow keeps the blur and the fill inside the rounded shape at the
      corners, where the border alone would leave a square edge behind them. */
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
   overflow: hidden;
   padding-bottom: env(safe-area-inset-bottom);
   height: calc(var(--nav-h) + env(safe-area-inset-bottom));
@@ -495,13 +491,13 @@ body.grid-virtual-active .gc-scroller {
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
   line-height: 1;
 }
 .poster-card {
   position: relative;
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   overflow: hidden;
   background: var(--surface-elevated);
   box-shadow: 0 2px 8px var(--shadow);
@@ -527,7 +523,7 @@ body.grid-virtual-active .gc-scroller {
   font-size: 11px;
   font-weight: 600;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   gap: 2px;
@@ -569,7 +565,7 @@ body.grid-virtual-active .gc-scroller {
   justify-content: center;
   background: var(--surface-elevated);
   color: var(--text-secondary);
-  font-size: 22px;
+  font-size: 20px;
   border: none;
   cursor: pointer;
 }
@@ -650,7 +646,7 @@ body.grid-virtual-active .gc-scroller {
   border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   overflow: hidden;
@@ -830,7 +826,7 @@ body.grid-virtual-active .gc-scroller {
     scale var(--dur-short) var(--ease-out);
   white-space: nowrap;
   padding: 7px 14px;
-  border-radius: 20px;
+  border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--text-secondary);
   border: 1px solid var(--border);
@@ -867,7 +863,7 @@ body.grid-virtual-active .gc-scroller {
   margin: 18px 0;
   text-align: center;
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
 }
 /* Up Next offline staleness note — a single muted line above the cached cards,
@@ -875,7 +871,7 @@ body.grid-virtual-active .gc-scroller {
 .offline-note {
   margin: 16px 0 12px;
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1012,7 +1008,7 @@ body.grid-virtual-active .gc-scroller {
   min-width: 0;
 }
 .stat-card .value {
-  font-size: 25px;
+  font-size: 24px;
   font-weight: 700;
   line-height: 1.05;
   /* Neutral value — the colour now lives on the leading glyph, not the number. */
@@ -1021,7 +1017,7 @@ body.grid-virtual-active .gc-scroller {
   white-space: nowrap;
 }
 .stat-card .label {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -1100,7 +1096,7 @@ body.grid-virtual-active .gc-scroller {
      which would turn the poster into a taller rectangle and crop it). */
   align-self: flex-start;
   aspect-ratio: 2/3;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   overflow: hidden;
   box-shadow: 0 4px 16px var(--shadow);
   background: var(--surface-elevated);
@@ -1123,7 +1119,7 @@ body.grid-virtual-active .gc-scroller {
   isolation: isolate;
   /* ---- Customizable DVD-case look (tweak these) ------------------------- */
   --dvd-case-thickness: 9px; /* how thick the plastic edge reads */
-  --dvd-case-radius: 19px; /* outer corner ≈ poster radius (10) + thickness */
+  --dvd-case-radius: 21px; /* outer corner ≈ poster radius (12) + thickness */
   --dvd-case-bg: linear-gradient(135deg, #4a4a50 0%, #16161a 38%, #000000 72%, #2a2a30 100%);
   --dvd-case-drop: 0 5px 16px rgba(0, 0, 0, 0.6); /* the case's floating shadow */
   --dvd-badge-bg: #0a0a0c; /* the shape sitting under the DVD logo */
@@ -1252,7 +1248,7 @@ body.grid-virtual-active .gc-scroller {
    plastic sheen along the top-left. Additive only — no size/ratio/radius change. */
 .detail-poster.owned {
   /* Sharp corners when owned — the two edge bars provide the framing instead of
-     the poster's own rounding (restored to 10px automatically when not owned). */
+     the poster's own rounding (restored automatically when not owned). */
   border-radius: 0;
   box-shadow:
     0 4px 16px var(--shadow),
@@ -1597,7 +1593,7 @@ textarea.notes {
   width: 100%;
   min-height: 80px;
   padding: 10px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface);
   color: var(--text-primary);
   border: 1px solid var(--border);
@@ -1606,7 +1602,7 @@ textarea.notes {
 
 .progress-bar {
   height: 8px;
-  border-radius: 4px;
+  border-radius: var(--r-pill);
   background: var(--surface-elevated);
   overflow: hidden;
   margin: 8px 0;
@@ -1619,7 +1615,7 @@ textarea.notes {
 /* Season accordion */
 .season-item {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   margin-bottom: 8px;
   overflow: hidden;
   background: var(--surface);
@@ -1660,7 +1656,7 @@ textarea.notes {
   width: 100px;
   flex-shrink: 0;
   aspect-ratio: 16/9;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   overflow: hidden;
   background: var(--surface-elevated);
 }
@@ -2005,7 +2001,7 @@ textarea.note-sheet-input:focus {
   top: 50%; /* start at the station's vertical centre (centred on the card) */
   height: calc(100% + 14px);
   width: 3px;
-  border-radius: 3px;
+  border-radius: var(--r-pill);
   background: color-mix(in srgb, var(--text-secondary) 30%, transparent);
   z-index: 0;
 }
@@ -2040,7 +2036,7 @@ textarea.note-sheet-input:focus {
   display: flex;
   align-items: stretch; /* image + right column both span the full card height */
   min-height: var(--tl-card-h);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   background: var(--surface);
   border: 1px solid var(--border);
   overflow: hidden; /* the card's rounded corners clip the flush preview image */
@@ -2062,8 +2058,8 @@ textarea.note-sheet-input:focus {
   /* Clip the left corners on the thumb itself (matching the card's inner radius)
      and give it its own layer, so the rounding is stable from the first paint —
      iOS won't reliably clip the fading child <img> via the card's overflow. */
-  border-top-left-radius: 13px;
-  border-bottom-left-radius: 13px;
+  border-top-left-radius: calc(var(--r-lg) - 1px);
+  border-bottom-left-radius: calc(var(--r-lg) - 1px);
   transform: translateZ(0);
   background: var(--surface-elevated);
 }
@@ -2076,8 +2072,8 @@ textarea.note-sheet-input:focus {
   /* Round the image's own left corners too, so the corner is correct from the
      very first paint and never flashes square for a frame while the fade/View-
      Transition composites (iOS applies the parent's clip a frame late). */
-  border-top-left-radius: 13px;
-  border-bottom-left-radius: 13px;
+  border-top-left-radius: calc(var(--r-lg) - 1px);
+  border-bottom-left-radius: calc(var(--r-lg) - 1px);
 }
 /* Everything right of the image — text + progress ring. Owns the top/bottom and
    right padding, so the text is never flush against the card edge even though
@@ -2100,9 +2096,9 @@ textarea.note-sheet-input:focus {
 }
 .tl-tag {
   align-self: flex-start;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   padding: 2px 7px;
   border-radius: var(--r-pill);
@@ -2126,7 +2122,7 @@ textarea.note-sheet-input:focus {
 /* Watch Next: the series name is the lead line and may wrap to two lines so long
    titles get room instead of being clipped on one line. */
 .tl-title-lg {
-  font-size: 15px;
+  font-size: 16px;
   white-space: normal;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -2242,7 +2238,7 @@ textarea.note-sheet-input:focus {
 /* ===================== On the Horizon railway ===================== */
 .section-heading {
   margin: 4px 0 8px;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
 }
 /* Row: [left arrow] [scroller] [right arrow]. Arrows are desktop-only. */
@@ -2321,7 +2317,7 @@ textarea.note-sheet-input:focus {
   top: 50%;
   height: 3px;
   transform: translateY(-50%);
-  border-radius: 3px;
+  border-radius: var(--r-pill);
   background: color-mix(in srgb, var(--text-secondary) 45%, transparent);
   -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 13px, transparent 13px 22px);
   mask-image: repeating-linear-gradient(90deg, #000 0 13px, transparent 13px 22px);
@@ -2372,7 +2368,7 @@ textarea.note-sheet-input:focus {
 }
 .rail-ep {
   margin-top: 2px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-secondary);
 }
 /* Outline-only accent circle centred on the line (the line intersects it). */
@@ -2965,7 +2961,7 @@ textarea.note-sheet-input:focus {
   flex-direction: column;
 }
 .pk-title {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.2;
   margin: 0 0 4px;
@@ -3201,7 +3197,7 @@ textarea.note-sheet-input:focus {
   min-width: 0;
 }
 .ht-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.25;
   overflow: hidden;
@@ -3233,9 +3229,9 @@ textarea.note-sheet-input:focus {
   border-radius: var(--r-pill);
   background: var(--surface-elevated);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 .ht-kind .lc {
@@ -3370,7 +3366,7 @@ body.modal-open {
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   background: var(--surface);
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
   padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
   box-shadow: 0 -4px 30px var(--shadow);
   animation: slideUp var(--dur-medium) var(--ease-out);
@@ -3624,7 +3620,7 @@ body.modal-open {
 .text-field {
   width: 100%;
   padding: 12px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-elevated);
   border: 1px solid var(--border);
   color: var(--text-primary);
@@ -3776,7 +3772,7 @@ body.modal-open {
   background: none;
   color: var(--text-primary);
   font: inherit;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
 }
 .pe-name-ico {
@@ -3889,7 +3885,7 @@ body.modal-open {
   border-radius: 50%;
   background: var(--surface-elevated);
   color: var(--accent);
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
 }
 /* "No cover": the header's default gradient (a fixed dark tile in both themes,
@@ -3962,7 +3958,7 @@ body.modal-open {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: 1.2px;
   color: var(--text-secondary);
 }
 .settings-ico {
@@ -4214,7 +4210,7 @@ button.srow:active {
    nothing is drawn — the panel used to render a hard-coded 28% arc around an
    infinity sign, which is the default state and told the user nothing. */
 .usage-desc {
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.45;
   margin: 0 2px 10px;
 }
@@ -4269,14 +4265,14 @@ button.srow:active {
 .usage-name {
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
 .usage-value {
   position: relative;
   margin-top: 5px;
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
@@ -4325,7 +4321,7 @@ button.srow:active {
   margin-bottom: 8px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.8px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
@@ -4344,7 +4340,7 @@ button.srow:active {
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -4440,12 +4436,12 @@ button.srow:active {
   gap: 10px;
   width: 100%;
   padding: 15px;
-  border-radius: 14px;
+  border-radius: var(--r-md);
   background: linear-gradient(135deg, var(--surface-elevated), var(--surface));
   border: 1px solid var(--border);
   color: var(--text-primary);
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   /* Taller: more presence + room for the animated background (width and
      border-radius unchanged). */
   min-height: 84px;
@@ -4662,7 +4658,7 @@ button.srow:active {
   justify-content: flex-end;
 }
 .cd-meta .cd-title {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
 }
 .cd-meta .cd-sub {
@@ -4739,7 +4735,7 @@ button.srow:active {
   margin: 0;
   max-width: 40ch;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-secondary);
   opacity: 0.75;
@@ -4796,12 +4792,12 @@ button.srow:active {
 
 /* Kinds. */
 .empty--error .empty-art {
-  color: #ef9a9a;
-  background: color-mix(in srgb, #ef9a9a 15%, transparent);
+  color: var(--ink-bad);
+  background: color-mix(in srgb, var(--ink-bad) 15%, transparent);
 }
 .empty--offline .empty-art {
-  color: #e5c07b;
-  background: color-mix(in srgb, #e5c07b 15%, transparent);
+  color: var(--ink-info);
+  background: color-mix(in srgb, var(--ink-info) 15%, transparent);
 }
 .empty--empty .empty-art {
   color: var(--text-secondary);
@@ -4809,14 +4805,6 @@ button.srow:active {
 }
 .empty--empty .empty-ico {
   opacity: 0.55;
-}
-[data-theme='light'] .empty--error .empty-art {
-  color: #c0392b;
-  background: color-mix(in srgb, #c0392b 12%, transparent);
-}
-[data-theme='light'] .empty--offline .empty-art {
-  color: #a9760a;
-  background: color-mix(in srgb, #a9760a 12%, transparent);
 }
 
 /* Tiers. */
@@ -4848,7 +4836,7 @@ button.srow:active {
   padding: 11px;
 }
 .empty--section .empty-title {
-  font-size: 15px;
+  font-size: 16px;
 }
 .empty--section .empty-detail {
   font-size: 13px;
@@ -4874,7 +4862,7 @@ button.srow:active {
   background: none;
 }
 .empty--inline .empty-title {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -4889,7 +4877,7 @@ button.srow:active {
   border: 0;
   background: none;
   color: var(--accent);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 700;
 }
 .empty--inline .empty-act-ico {
@@ -4941,7 +4929,7 @@ button.srow:active {
 }
 .skel-line {
   height: 12px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   display: block;
 }
 .skel-line.lg {
@@ -4951,7 +4939,7 @@ button.srow:active {
   height: 9px;
 }
 .skel-pill {
-  border-radius: 20px;
+  border-radius: var(--r-pill);
 }
 .loader-phrase {
   color: var(--text-secondary);
@@ -5044,8 +5032,8 @@ button.srow:active {
 }
 /* State colours: a soft pastel red (globe-off) while offline, a soft pastel green
    (eject) on recovery — the same two inks the transient toast uses. */
-.net-toast-disc--broken { opacity: 1; color: #ef9a9a; }
-.net-toast-disc--spark { opacity: 0; color: #a5d6a7; }
+.net-toast-disc--broken { opacity: 1; color: var(--ink-bad); }
+.net-toast-disc--spark { opacity: 0; color: var(--ink-ok); }
 .net-toast.online .net-toast-disc--broken { opacity: 0; }
 .net-toast.online .net-toast-disc--spark { opacity: 1; }
 
@@ -5190,22 +5178,13 @@ button.srow:active {
    recovered, plus a muted amber for notices. Light theme darkens all three so
    they still hold on the pale elevated surface. */
 .toast--ok .toast-ico {
-  background-color: #a5d6a7;
+  background-color: var(--ink-ok);
 }
 .toast--bad .toast-ico {
-  background-color: #ef9a9a;
+  background-color: var(--ink-bad);
 }
 .toast--info .toast-ico {
-  background-color: #e5c07b;
-}
-[data-theme='light'] .toast--ok .toast-ico {
-  background-color: #2f7d32;
-}
-[data-theme='light'] .toast--bad .toast-ico {
-  background-color: #c0392b;
-}
-[data-theme='light'] .toast--info .toast-ico {
-  background-color: #a9760a;
+  background-color: var(--ink-info);
 }
 /* Reduced motion: no travel, but still a fade at BOTH ends so the toast never
    appears or disappears in a single frame. */
@@ -5229,7 +5208,7 @@ button.srow:active {
 }
 .bar-progress {
   height: 10px;
-  border-radius: 5px;
+  border-radius: var(--r-pill);
   background: var(--surface-elevated);
   overflow: hidden;
 }
@@ -5345,7 +5324,7 @@ button.srow:active {
 }
 .cp-name {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 1.15;
   text-wrap: balance;
@@ -5372,7 +5351,7 @@ button.srow:active {
 }
 .cp-pips > i {
   flex: 1 1 0;
-  border-radius: 3px;
+  border-radius: var(--r-pill);
   background: var(--surface-elevated);
 }
 .cp-pips > i.on {
@@ -5381,7 +5360,7 @@ button.srow:active {
 .cp-bar {
   height: 5px;
   margin-top: 4px;
-  border-radius: 3px;
+  border-radius: var(--r-pill);
   background: var(--surface-elevated);
   overflow: hidden;
 }
@@ -5576,7 +5555,7 @@ html[data-vt='grid']::view-transition-new(grid-status) {
   min-height: 76px;
   padding: 10px 6px;
   border: 1.5px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--r-md);
   background: transparent;
   color: var(--text-primary);
   cursor: pointer;
@@ -5624,7 +5603,7 @@ img.mood-emoji {
   left: 100%;
   transform: translateX(-50%);
   padding: 3px 10px;
-  border-radius: 10px;
+  border-radius: var(--r-pill);
   background: var(--accent);
   color: #111;
   font-size: 12px;
@@ -5636,7 +5615,7 @@ img.mood-emoji {
   position: relative;
   height: 8px;
   margin: 8px 8px 0;
-  border-radius: 6px;
+  border-radius: var(--r-pill);
   background: var(--surface-elevated);
   cursor: pointer;
   touch-action: none;
@@ -5646,7 +5625,7 @@ img.mood-emoji {
   left: 0;
   top: 0;
   height: 100%;
-  border-radius: 6px;
+  border-radius: var(--r-pill);
   background: var(--accent);
   transition: width var(--dur-short) var(--ease-out);
 }
@@ -5757,7 +5736,7 @@ img.mood-emoji {
   min-height: 74px;
   padding: 12px 14px;
   border: 1.5px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--r-md);
   background: transparent;
   color: var(--text-primary);
   cursor: pointer;
@@ -5767,7 +5746,7 @@ img.mood-emoji {
     scale var(--dur-short) var(--ease-out);
 }
 .era-name {
-  font-size: 17px;
+  font-size: 16px;
 }
 .era-range {
   font-size: 11px;
@@ -5782,13 +5761,13 @@ img.mood-emoji {
 .era-90s00s .era-name {
   font-family: 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
   font-weight: 800;
-  letter-spacing: 1.5px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
 }
 .era-recent .era-name {
   font-family: 'Helvetica Neue', Arial, sans-serif;
   font-weight: 400;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.5px;
 }
 .era-latest .era-name {
   font-family: 'Century Gothic', 'Futura', system-ui, sans-serif;
@@ -5847,7 +5826,7 @@ img.mood-emoji {
 .sheet-handle {
   width: 40px;
   height: 5px;
-  border-radius: 3px;
+  border-radius: var(--r-pill);
   background: var(--surface-elevated);
 }
 .sheet-header {
@@ -5973,7 +5952,7 @@ img.mood-emoji {
   position: absolute;
   inset: 0;
   background: var(--surface-elevated);
-  border-radius: 26px;
+  border-radius: var(--r-pill);
   transition: background var(--dur-short) var(--ease-state);
   cursor: pointer;
 }
@@ -6145,10 +6124,10 @@ img.mood-emoji {
 }
 /* Destructive actions: muted-red icon + label only (no filled background). */
 .status-cell.danger .status-ico {
-  background-color: color-mix(in srgb, #e5484d 62%, var(--text-secondary));
+  background-color: color-mix(in srgb, var(--danger) 62%, var(--text-secondary));
 }
 .status-cell.danger .status-cell-label {
-  color: color-mix(in srgb, #e5484d 62%, var(--text-secondary));
+  color: color-mix(in srgb, var(--danger) 62%, var(--text-secondary));
 }
 .rating-wrap { text-align: center; margin-top: 16px; }
 .rating-wrap .field-label { text-align: center; }
@@ -6174,7 +6153,7 @@ img.mood-emoji {
     scale var(--dur-short) var(--ease-out);
 }
 .fav-btn svg { width: 20px; height: 20px; }
-.fav-btn.active { color: #e5484d; }
+.fav-btn.active { color: var(--danger); }
 .fav-btn:active { scale: var(--press-small); }
 /* Heartbeat "da-dum" when a title is added to favourites (triggered in
    Detail.js): two quick scale pulses (in sync with the double haptic) plus a
@@ -6196,7 +6175,7 @@ img.mood-emoji {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 2px solid #e5484d;
+  border: 2px solid var(--danger);
   pointer-events: none;
   animation: fav-ring 700ms ease-out forwards;
 }
@@ -6529,7 +6508,7 @@ img.mood-emoji {
   flex: 0 0 96px;
   width: 96px;
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   overflow: hidden;
   background: var(--surface-elevated);
   box-shadow: 0 4px 16px var(--shadow);
@@ -6733,7 +6712,7 @@ img.mood-emoji {
   top: 0;
   width: 60px;
   height: 92px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   object-fit: cover;
   box-shadow: 3px 0 8px rgba(0, 0, 0, 0.5);
 }
@@ -6745,7 +6724,7 @@ img.mood-emoji {
   width: 60px;
   display: grid;
   place-items: center;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: var(--surface-elevated);
   color: var(--text-secondary);
 }
@@ -6760,7 +6739,7 @@ img.mood-emoji {
 .list-card-name {
   color: var(--text-primary);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -6773,7 +6752,7 @@ img.mood-emoji {
   align-items: center;
   gap: 5px;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 .list-card-meta > span:last-child {
@@ -6906,7 +6885,7 @@ button.lw-card:active {
   top: 0;
   width: 66px;
   height: 100px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   object-fit: cover;
   box-shadow: 3px 0 10px rgba(0, 0, 0, 0.5);
 }
@@ -6921,7 +6900,7 @@ button.lw-card:active {
 .lw-empty {
   width: 66px;
   height: 100px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   display: grid;
   place-items: center;
   background: var(--surface-elevated);
@@ -6984,7 +6963,7 @@ button.lw-card:active {
   border: 1.5px dashed color-mix(in srgb, var(--text-primary) 22%, transparent);
   color: var(--text-secondary);
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
 }
 .lw-new-plus {
   flex: none;
@@ -7002,7 +6981,7 @@ button.lw-card:active {
 }
 /* Edit mode: still there (the rows keep their place), just switched off. */
 .lw-card.lw-new {
-  transition: opacity var(--dur-short) var(--ease-state);
+  transition: opacity var(--dur-short) var(--ease-state), scale var(--dur-short) var(--ease-out);
 }
 .lw-card.lw-new:disabled {
   opacity: 0.4;
@@ -7168,7 +7147,7 @@ button.lw-card.lw-new:disabled:active {
    --text-primary reads in both themes without a shadow. */
 .list-hero-name {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7778,7 +7757,7 @@ textarea.notes:focus,
   z-index: 5;
   width: 232px;
   padding: 10px;
-  border-radius: 14px;
+  border-radius: var(--r-md);
   background: var(--surface-elevated);
   border: 1px solid var(--border);
   box-shadow: 0 8px 26px var(--shadow);
@@ -7855,11 +7834,11 @@ textarea.notes:focus,
   width: 100%;
   margin-top: 18px;
   padding: 14px 16px;
-  border-radius: 14px;
+  border-radius: var(--r-md);
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -7889,7 +7868,7 @@ textarea.notes:focus,
 .rcpt-preview {
   position: relative;
   overflow: hidden;
-  border-radius: 18px;
+  border-radius: var(--r-xl);
   box-shadow: 0 10px 30px var(--shadow);
 }
 .rcpt-card {
@@ -8216,7 +8195,7 @@ textarea.notes:focus,
 .rom-count {
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -8307,13 +8286,13 @@ textarea.notes:focus,
   padding: 2px 8px;
   border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.18);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
 }
 .rom-title {
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 1.15;
   text-wrap: balance;
@@ -8341,7 +8320,7 @@ textarea.notes:focus,
   gap: 6px;
   padding: 8px 16px;
   border-radius: var(--r-pill);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -8490,10 +8469,10 @@ textarea.notes:focus,
   gap: 8px;
   width: 100%;
   padding: 12px 14px;
-  border: 1.5px solid color-mix(in srgb, #17b2e8 50%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--kodi-blue) 50%, transparent);
   border-radius: var(--r-pill);
-  background: color-mix(in srgb, #17b2e8 14%, transparent);
-  color: #17b2e8;
+  background: color-mix(in srgb, var(--kodi-blue) 14%, transparent);
+  color: var(--kodi-blue);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -8502,7 +8481,7 @@ textarea.notes:focus,
     scale var(--dur-short) var(--ease-out);
 }
 .kodi-play-btn:hover {
-  background: color-mix(in srgb, #17b2e8 18%, transparent);
+  background: color-mix(in srgb, var(--kodi-blue) 18%, transparent);
 }
 .kodi-play-btn:active {
   scale: var(--press-wide);
@@ -8520,7 +8499,7 @@ textarea.notes:focus,
   overflow: hidden;
   margin: 0;
   font-size: 13px;
-  color: #17b2e8;
+  color: var(--kodi-blue);
   transition: max-height var(--dur-medium) var(--ease-in-out),
     opacity var(--dur-medium) var(--ease-in-out),
     margin var(--dur-medium) var(--ease-in-out);
@@ -8578,7 +8557,7 @@ textarea.notes:focus,
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: border-color var(--dur-short) var(--ease-state),
@@ -8688,7 +8667,7 @@ textarea.notes:focus,
   justify-content: center;
   padding: 6px;
   border: 1.5px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface);
   cursor: pointer;
   transition: border-color var(--dur-short) var(--ease-state), background var(--dur-short) var(--ease-state);
@@ -8699,8 +8678,8 @@ textarea.notes:focus,
   object-fit: contain;
 }
 .kodi-icon-option.selected {
-  border-color: #17b2e8;
-  background: color-mix(in srgb, #17b2e8 14%, transparent);
+  border-color: var(--kodi-blue);
+  background: color-mix(in srgb, var(--kodi-blue) 14%, transparent);
 }
 .kodi-icon-none {
   font-size: 20px;
@@ -8729,7 +8708,7 @@ textarea.notes:focus,
   gap: 10px;
 }
 .ksync-heading {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
 }
 .ksync-summary {
@@ -8764,7 +8743,7 @@ textarea.notes:focus,
 .ksync-poster {
   width: 190px;
   max-width: 60%;
-  border-radius: 14px;
+  border-radius: var(--r-md);
   overflow: hidden;
   box-shadow: 0 10px 26px var(--shadow);
 }
@@ -8951,7 +8930,7 @@ textarea.notes:focus,
 }
 .modal.modal--popup {
   max-width: 380px;
-  border-radius: 22px;
+  border-radius: var(--r-xl);
   padding: 22px 18px 18px;
   box-shadow: 0 18px 50px var(--shadow);
   animation: popIn var(--dur-medium) var(--ease-out);
@@ -8997,7 +8976,7 @@ textarea.notes:focus,
   font-size: 18px;
   font-weight: 800;
   line-height: 1.25;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.01em;
 }
 /* The friend's note as the headline: their words in quotes, a long unbroken word
    wraps instead of widening the popup. */
@@ -9144,7 +9123,7 @@ textarea.lend-message-input:focus {
 }
 .magic-result-head {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 16px;
   margin-bottom: 6px;
 }
 .magic-result-note {
@@ -9197,7 +9176,7 @@ textarea.lend-message-input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-elevated);
   border: 1px solid var(--border);
   color: var(--accent);
@@ -9209,7 +9188,7 @@ textarea.lend-message-input:focus {
   height: 22px;
 }
 .a2hs-step-text {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.4;
 }
 .a2hs-note {
@@ -9358,7 +9337,7 @@ textarea.lend-message-input:focus {
 }
 .backup-summary-head {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 16px;
   margin-bottom: 12px;
 }
 .backup-stats {
@@ -9372,7 +9351,7 @@ textarea.lend-message-input:focus {
   align-items: center;
   text-align: center;
   padding: 10px 4px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface);
   border: 1px solid var(--border);
 }
@@ -10508,11 +10487,11 @@ textarea.lend-message-input:focus {
   border: none;
   background: none;
   cursor: pointer;
-  color: #17b2e8;
+  color: var(--kodi-blue);
   font-family: inherit;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.5px;
   line-height: 1;
   /* Space always reserved — no layout shift on appear/disappear. */
   visibility: hidden;
@@ -10539,11 +10518,11 @@ textarea.lend-message-input:focus {
   white-space: nowrap;
   background: linear-gradient(
     100deg,
-    #17b2e8 0%,
-    #17b2e8 40%,
-    color-mix(in srgb, #17b2e8 40%, var(--text-primary)) 50%,
-    #17b2e8 60%,
-    #17b2e8 100%
+    var(--kodi-blue) 0%,
+    var(--kodi-blue) 40%,
+    color-mix(in srgb, var(--kodi-blue) 40%, var(--text-primary)) 50%,
+    var(--kodi-blue) 60%,
+    var(--kodi-blue) 100%
   );
   background-size: 250% 100%;
   -webkit-background-clip: text;
@@ -10669,14 +10648,14 @@ textarea.lend-message-input:focus {
   min-width: 0;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
 .np-toast-source .btn-lucide {
   width: 14px;
   height: 14px;
-  color: #17b2e8;
+  color: var(--kodi-blue);
 }
 .np-toast-source-name {
   min-width: 0;
@@ -10883,7 +10862,7 @@ textarea.lend-message-input:focus {
   color: var(--text-secondary);
 }
 .wall-empty-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-secondary);
   line-height: 1.25;
 }
@@ -10906,7 +10885,7 @@ textarea.lend-message-input:focus {
   padding: 7px 6px;
   border: none;
   background: none;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   color: var(--text-primary);
   text-align: left;
   cursor: pointer;
@@ -10918,7 +10897,7 @@ textarea.lend-message-input:focus {
   width: 34px;
   height: 51px;
   flex: 0 0 34px;
-  border-radius: 5px;
+  border-radius: var(--r-sm);
   object-fit: cover;
   background: var(--surface-elevated);
 }
@@ -10993,7 +10972,7 @@ textarea.lend-message-input:focus {
   flex-shrink: 0;
   align-self: flex-start;
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   overflow: hidden;
   background: var(--surface-elevated);
   box-shadow: 0 4px 16px var(--shadow);
@@ -11097,7 +11076,7 @@ textarea.lend-message-input:focus {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: rgba(0, 0, 0, 0.7);
   color: #fff;
 }
@@ -11249,7 +11228,7 @@ textarea.lend-message-input:focus {
    A near-full-screen paged sheet. It reuses the shared .modal-backdrop and the
    slideUp / slideDown / backdrop-fade animations; everything else is namespaced
    `.sc-*` so the illustrations never collide with app CSS. Colours come from the
-   design tokens; the two brand literals (#7ed99a "watching", #17b2e7 Kodi) match
+   design tokens; the brand literal (#7ed99a "watching") and --kodi-blue match
    statusSelect.js and the Kodi accent used elsewhere.
    ============================================================================ */
 .showcase {
@@ -11258,7 +11237,7 @@ textarea.lend-message-input:focus {
   height: 92vh;
   max-height: 92vh;
   background: var(--surface);
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
   box-shadow: 0 -4px 30px var(--shadow);
   display: flex;
   flex-direction: column;
@@ -11325,7 +11304,7 @@ textarea.lend-message-input:focus {
   justify-content: center;
 }
 .sc-title {
-  font-size: 25px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.01em;
   margin: 0;
@@ -11333,7 +11312,7 @@ textarea.lend-message-input:focus {
   text-wrap: balance;
 }
 .sc-desc {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--text-secondary);
   margin: 0;
@@ -11862,9 +11841,9 @@ textarea.lend-message-input:focus {
   border-radius: var(--r-pill);
   font-weight: 600;
   font-size: 14px;
-  background: color-mix(in srgb, #17b2e7 15%, transparent);
-  border: 1.5px solid color-mix(in srgb, #17b2e7 55%, transparent);
-  color: color-mix(in srgb, #17b2e7 82%, var(--text-primary));
+  background: color-mix(in srgb, var(--kodi-blue) 15%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--kodi-blue) 55%, transparent);
+  color: color-mix(in srgb, var(--kodi-blue) 82%, var(--text-primary));
 }
 .sc-kodi-chip svg { width: 17px; height: 17px; }
 
@@ -11959,7 +11938,7 @@ textarea.lend-message-input:focus {
   color: var(--text-secondary);
 }
 .imgflow-title {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   min-width: 0;
   overflow: hidden;
@@ -12092,7 +12071,7 @@ textarea.lend-message-input:focus {
   background: var(--surface-elevated);
   font-size: 13px;
   font-weight: 600;
-  color: color-mix(in srgb, #e5484d 62%, var(--text-secondary));
+  color: color-mix(in srgb, var(--danger) 62%, var(--text-secondary));
 }
 .imgreset-ico {
   width: 17px;
