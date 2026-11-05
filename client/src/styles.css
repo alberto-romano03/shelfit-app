@@ -6034,14 +6034,29 @@ img.mood-emoji {
   left: 3px;
   top: 3px;
   background: #fff;
-  border-radius: 50%;
-  transition: transform var(--dur-short) var(--ease-out);
+  border-radius: var(--r-pill);
+  transition: transform var(--dur-short) var(--ease-out), width var(--dur-short) var(--ease-out);
 }
 .switch input:checked + .slider {
   background: var(--accent);
 }
 .switch input:checked + .slider::before {
   transform: translateX(20px);
+}
+/* Held down, the thumb stretches toward where it is going, then settles. */
+.switch:active .slider::before {
+  width: 26px;
+}
+.switch:active input:checked + .slider::before {
+  transform: translateX(14px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .switch:active .slider::before {
+    width: 20px;
+  }
+  .switch:active input:checked + .slider::before {
+    transform: translateX(20px);
+  }
 }
 
 /* ================= Loading — pulsing app logo ================= */
