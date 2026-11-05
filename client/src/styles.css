@@ -1673,6 +1673,21 @@ body.grid-virtual-active .gc-scroller {
   color: var(--text-secondary);
   opacity: 0.4;
 }
+.star-sweep {
+  animation: star-sweep var(--dur-short) var(--ease-out) both;
+  animation-delay: calc(var(--i) * 35ms);
+}
+@keyframes star-sweep {
+  from {
+    transform: scale(0.72);
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .star-sweep {
+    animation: none;
+  }
+}
 
 textarea.notes {
   width: 100%;

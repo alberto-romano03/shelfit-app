@@ -54,17 +54,23 @@ export function createRatingControls(opts = {}) {
     ratingPhrase.classList.add(`rp-${r}`);
   }
 
-  function renderStars(still) {
+  // `from`: the rating before this tap. The stars it adds fill left to right, ending
+  // under the finger.
+  function renderStars(still, from = 0) {
     starsWrap.innerHTML = '';
     for (let k = 1; k <= 5; k++) {
       const b = el('button', { html: starSvg(k <= (rating || 0)) });
+      if (!still && k <= (rating || 0) && k > from) {
+        b.firstElementChild.classList.add('star-sweep');
+        b.firstElementChild.style.setProperty('--i', String(k - from - 1));
+      }
       b.addEventListener('click', async () => {
         hapticStar(k); // Android vibrate; iOS ticks via the attachHaptic overlay
         // Paint first: the stars answer on the next frame, not after the server's
         // reply, and go back if the save fails.
         const previous = rating;
         rating = rating === k ? null : k;
-        renderStars();
+        renderStars(false, previous || 0);
         try {
           await onRate(rating);
           onChange({ rating, favorite });
