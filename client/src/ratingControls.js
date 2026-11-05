@@ -40,9 +40,11 @@ export function createRatingControls(opts = {}) {
   const ratingPhrase = el('div', { class: 'rating-phrase' });
 
   // Per-level phrase entrance: removing the level class + forcing a reflow before
-  // re-adding restarts the CSS animation, so changing the rating replays it.
-  function setRatingPhrase(r) {
+  // re-adding restarts the CSS animation, so changing the rating replays it. With
+  // `still` (the page just opened) it lands straight on its resting look.
+  function setRatingPhrase(r, still) {
     ratingPhrase.classList.remove('rp-1', 'rp-2', 'rp-3', 'rp-4', 'rp-5');
+    ratingPhrase.classList.toggle('rp-still', !!still);
     if (!r) {
       ratingPhrase.textContent = '';
       return;
@@ -52,28 +54,32 @@ export function createRatingControls(opts = {}) {
     ratingPhrase.classList.add(`rp-${r}`);
   }
 
-  function renderStars() {
+  function renderStars(still) {
     starsWrap.innerHTML = '';
     for (let k = 1; k <= 5; k++) {
       const b = el('button', { html: starSvg(k <= (rating || 0)) });
       b.addEventListener('click', async () => {
         hapticStar(k); // Android vibrate; iOS ticks via the attachHaptic overlay
-        const newRating = rating === k ? null : k;
+        // Paint first: the stars answer on the next frame, not after the server's
+        // reply, and go back if the save fails.
+        const previous = rating;
+        rating = rating === k ? null : k;
+        renderStars();
         try {
-          await onRate(newRating);
-          rating = newRating;
-          renderStars();
+          await onRate(rating);
           onChange({ rating, favorite });
         } catch (err) {
+          rating = previous;
+          renderStars(true);
           onError((err && err.message) || t('rating.couldNotSave'));
         }
       });
       attachHaptic(b); // iOS: real tap on the hidden switch ticks (click bubbles)
       starsWrap.append(b);
     }
-    setRatingPhrase(rating);
+    setRatingPhrase(rating, still);
   }
-  renderStars();
+  renderStars(true);
 
   const favBtn = el('button', {
     class: 'fav-btn',
@@ -99,13 +105,16 @@ export function createRatingControls(opts = {}) {
   favBtn.addEventListener('click', async () => {
     const next = !favorite;
     hapticFavorite(next); // medium pulse when adding, lighter when removing
+    // Same as the stars: answer now, undo if the save fails.
+    favorite = next;
+    renderFav();
+    if (next) wobbleFav(); // wobble only when adding to favourites
     try {
       await onFavorite(next);
-      favorite = next;
-      renderFav();
-      if (next) wobbleFav(); // wobble only when adding to favourites
       onChange({ rating, favorite });
     } catch (err) {
+      favorite = !next;
+      renderFav();
       onError((err && err.message) || t('rating.couldNotSave'));
     }
   });

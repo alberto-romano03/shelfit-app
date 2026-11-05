@@ -4912,24 +4912,42 @@ button.srow:active {
 }
 
 /* ---- Skeleton (ghost-frame) loading ---- */
+/* The highlight is its own layer, moved by transform, so the compositor can run a
+   screen full of placeholders without a repaint per frame. It sits below the
+   element's children (z-index -1 inside the isolated element), so an image fading
+   in on top of it is never crossed by the band. :where() keeps the position and
+   isolation at zero specificity: a grid cell is already absolutely positioned and
+   must stay that way. */
 @keyframes shimmer {
-  0% {
-    background-position: 200% 0;
+  from {
+    transform: translateX(-100%);
   }
-  100% {
-    background-position: -200% 0;
+  to {
+    transform: translateX(100%);
   }
 }
+:where(.skeleton) {
+  position: relative;
+  isolation: isolate;
+}
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--surface) 25%,
-    var(--surface-elevated) 50%,
-    var(--surface) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
+  overflow: hidden;
+  background: var(--surface);
   border-radius: var(--r-sm);
+}
+.skeleton::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(90deg, transparent, var(--surface-elevated), transparent);
+  animation: shimmer 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::before {
+    animation: none;
+    opacity: 0;
+  }
 }
 .skel-line {
   height: 12px;
@@ -6136,6 +6154,8 @@ img.mood-emoji {
 .rating-wrap { text-align: center; margin-top: 16px; }
 .rating-wrap .field-label { text-align: center; }
 .rating-wrap .stars { display: flex; justify-content: center; }
+.rating-wrap .stars button { transition: scale var(--dur-short) var(--ease-out); }
+.rating-wrap .stars button:active { scale: var(--press-small); }
 /* Stars + favourite heart share a centered row. */
 .rating-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
 /* Favourite: a red heart sitting in a grey circle (muted until active). */
@@ -6207,9 +6227,7 @@ img.mood-emoji {
   font-weight: 700;
   color: var(--accent);
   transform-origin: center;
-  will-change: transform, opacity;
 }
-
 /* ---- 1★ "Not for me": droops in, loses energy, sags dimmed. ---- */
 .rating-phrase.rp-1 {
   color: var(--text-secondary);
@@ -6281,9 +6299,10 @@ img.mood-emoji {
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: rp-burst 820ms var(--ease-play) both,
-    rp-rainbow 3s linear infinite,
-    rp-glow 2.2s ease-in-out 820ms infinite;
+  /* One pass of the colours, then at rest. It used to loop for as long as the page
+     was open, repainting and running a filter on every frame. */
+  filter: drop-shadow(0 0 4px rgba(255, 165, 70, 0.6));
+  animation: rp-burst 820ms var(--ease-play) both, rp-rainbow 3s linear both;
 }
 @keyframes rp-burst {
   0% { opacity: 0; transform: scale(0.3) rotate(-12deg); }
@@ -6295,11 +6314,13 @@ img.mood-emoji {
   from { background-position: 0% 50%; }
   to { background-position: 220% 50%; }
 }
-@keyframes rp-glow {
-  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 190, 80, 0.45)); }
-  50% { filter: drop-shadow(0 0 8px rgba(255, 140, 60, 0.85)); }
-}
 
+/* A phrase already on the page when it opens lands straight on its resting look:
+   the mood plays when the rating changes, not each time a title is opened. */
+.rating-phrase.rp-still {
+  animation-duration: 0s;
+  animation-delay: 0s;
+}
 /* Respect reduced-motion: land straight on the visible resting state. */
 @media (prefers-reduced-motion: reduce) {
   .rating-phrase.rp-1,
@@ -10532,6 +10553,10 @@ textarea.lend-message-input:focus {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+/* Only while it shows: the element keeps its place hidden in the header on every
+   page, and an animation left on it repaints for nothing. */
+.np-indicator.active .np-indicator-label {
   animation: np-sweep 16s ease-in-out infinite;
 }
 @keyframes np-sweep {
@@ -10545,6 +10570,8 @@ textarea.lend-message-input:focus {
   height: 13px;
   flex-shrink: 0;
   display: inline-flex;
+}
+.np-indicator.active .np-audio {
   animation: np-audio-pulse 4.8s ease-in-out infinite;
 }
 .np-indicator:active .np-audio,
@@ -10569,8 +10596,8 @@ textarea.lend-message-input:focus {
   50% { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .np-audio { animation: none; opacity: 1; }
-  .np-indicator-label { animation: none; }
+  .np-indicator.active .np-audio { animation: none; opacity: 1; }
+  .np-indicator.active .np-indicator-label { animation: none; }
 }
 
 /* --- Now Playing toast (slides down from above, settles below the header) ---
