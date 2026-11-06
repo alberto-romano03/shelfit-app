@@ -272,7 +272,15 @@ export default async function Lists(container) {
           onCreated: () => load(),
         }),
     },
-    [el('span', { class: 'lw-new-plus', html: icons.plus }), el('span', { text: t('lists.new') })]
+    [
+      el('div', { class: 'lw-art' }, [
+        el('div', { class: 'lw-case lw-new-case c0' }, [el('span', { class: 'lw-new-sign', html: icons.plus })]),
+        el('div', { class: 'lw-case lw-new-case c1' }),
+        el('div', { class: 'lw-case lw-new-case c2' }),
+      ]),
+      el('div', { class: 'lw-text' }, [el('div', { class: 'lw-name', text: t('lists.new') })]),
+      el('span', { class: 'lw-chev', html: icons.forward }),
+    ]
   );
 
   // The rows are built once per load and then left alone: edit mode and the

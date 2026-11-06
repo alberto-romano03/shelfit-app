@@ -118,6 +118,10 @@
   --r-lg: 16px;
   --r-xl: 20px;
   --r-pill: 999px;
+  --new-case-from: var(--surface-elevated);
+  --new-case-to: var(--surface);
+  --new-case-sheen: rgba(255, 255, 255, 0.08);
+  --new-case-shadow: rgba(0, 0, 0, 0.5);
   --frame-gold-label: #e0b43c; /* The Wall gold — frame + favourite toggle */
 
   /* Named palettes (dark / mid / light triads) — permanent design-system colors,
@@ -153,6 +157,11 @@
 }
 
 [data-theme='light'] {
+  /* The New list card's empty cases: on a white card the surface tones would vanish. */
+  --new-case-from: #f7f7f7;
+  --new-case-to: #c6c6c6;
+  --new-case-sheen: rgba(255, 255, 255, 0.6);
+  --new-case-shadow: rgba(0, 0, 0, 0.2);
   --bg: #f5f5f5;
   --surface: #ffffff;
   --surface-elevated: #eeeeee;
@@ -194,6 +203,11 @@
    scattered `[data-theme='light'] …` overrides elsewhere in this file. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) {
+    /* The New list card's empty cases: on a white card the surface tones would vanish. */
+    --new-case-from: #f7f7f7;
+    --new-case-to: #c6c6c6;
+    --new-case-sheen: rgba(255, 255, 255, 0.6);
+    --new-case-shadow: rgba(0, 0, 0, 0.2);
     --bg: #f5f5f5;
     --surface: #ffffff;
     --surface-elevated: #eeeeee;
@@ -7410,15 +7424,32 @@ button.lw-card:active {
   width: 18px;
   height: 18px;
 }
-/* "New list": a dashed row on top, quieter than a list. */
-.lw-card.lw-new {
-  min-height: 76px;
-  background: transparent;
-  border: 1.5px dashed color-mix(in srgb, var(--text-primary) 22%, transparent);
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 14px;
+/* "New list": drawn like a list, with three empty cases waiting for titles. The sheen is
+   the feature tour's poster recipe. */
+.lw-new-case {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(150deg, var(--new-case-from), var(--new-case-to));
+  box-shadow: 3px 0 8px var(--new-case-shadow);
 }
+.lw-new-case::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, var(--new-case-sheen), transparent 55%);
+}
+.lw-new-sign {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  color: var(--accent);
+}
+.lw-new-sign svg {
+  width: 30px;
+  height: 30px;
+}
+/* The small plus in a circle, on Home's New list card. */
 .lw-new-plus {
   flex: none;
   width: 44px;
@@ -7487,7 +7518,8 @@ button.lw-card.lw-new:disabled:active {
 /* The covers dim and the chevron fades (it keeps its space, so the text
    beside it never reflows). */
 .lw-wrap .lw-art,
-.lw-wrap .lw-chev {
+.lw-wrap .lw-chev,
+.lw-new .lw-chev {
   transition: opacity var(--dur-short) var(--ease-state);
 }
 .is-editing .lw-card {
@@ -7499,13 +7531,17 @@ button.lw-card.lw-new:disabled:active {
 .is-editing .lw-art {
   opacity: 0.55;
 }
+.is-editing .lw-new .lw-art {
+  opacity: 1; /* the whole card is already dimmed */
+}
 .is-editing .lw-chev {
   opacity: 0;
 }
 @media (prefers-reduced-motion: reduce) {
   .lw-remove,
   .lw-wrap .lw-art,
-  .lw-wrap .lw-chev {
+  .lw-wrap .lw-chev,
+  .lw-new .lw-chev {
     transition: none;
   }
 }
