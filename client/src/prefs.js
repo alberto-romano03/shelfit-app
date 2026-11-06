@@ -8,6 +8,7 @@ const PREFIX = 'shelfit:pref:';
 const DEFAULTS = {
   snow: true, // December snow effect on the home cover
   haptic: true, // vibration feedback on rating interactions
+  timeHints: true, // time left in a series, and when a film would end
   push: false, // push notifications (also gated by the server subscription)
 };
 

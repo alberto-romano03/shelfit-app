@@ -631,6 +631,7 @@ export default async function Settings(container) {
   appearanceSection.append(
     langRow,
     themeRow,
+    prefToggleRow('clock', t('settings.timeHints'), t('settings.timeHintsSub'), 'timeHints'),
     prefToggleRow('snowflake', t('settings.snow'), t('settings.snowSub'), 'snow'),
     prefToggleRow('vibrate', t('settings.haptic'), t('settings.hapticSub'), 'haptic')
   );

@@ -3,6 +3,7 @@
 // rating, notes, series progress/seasons, a "Liner Notes" bento, and Kodi play.
 // Edits persist immediately; built views are retained (LRU) for instant return.
 
+import { timeHintsOn, hoursAndMinutes, roughlyLeft, endsAt } from '../timeHints.js';
 import { markedToast, undoable, deferred } from '../undoable.js';
 import { followTitle } from '../headerTitle.js';
 import { api, createApi, isAbortError } from '../api.js';
@@ -624,7 +625,21 @@ export default async function Detail(container, params) {
       : avgRuntime(meta.episode_run_time)
         ? t('detail.runtimeMin', { n: avgRuntime(meta.episode_run_time) })
         : null;
-  if (duration) metaRows.push(metaRow('clock', duration));
+  const runtimeRow = duration ? metaRow('clock', duration) : null;
+  if (runtimeRow) metaRows.push(runtimeRow);
+  // A film you haven't seen says when it would end if you pressed play now.
+  function paintRuntime() {
+    if (!runtimeRow || d.type !== 'movie') return;
+    const unseen = timeHintsOn() && d.status !== 'completed';
+    runtimeRow.lastElementChild.textContent = unseen
+      ? t('detail.endsAt', { length: hoursAndMinutes(meta.runtime), time: endsAt(meta.runtime) })
+      : duration;
+  }
+  paintRuntime();
+  if (runtimeRow && d.type === 'movie') {
+    const clock = setInterval(paintRuntime, 30000);
+    onCleanup(() => clearInterval(clock));
+  }
   if (meta.genres && meta.genres.length) metaRows.push(metaRow('tag', meta.genres.join(', ')));
 
   const titles = el('div', { class: 'detail-titles' }, [
@@ -987,9 +1002,15 @@ export default async function Detail(container, params) {
   // --- Series progress + seasons ---
   if (d.type === 'show' && d.progress) {
     const p = d.progress;
+    const episodesLeft = p.total_episodes - p.watched_episodes;
+    const perEpisode = avgRuntime(meta.episode_run_time);
+    const progressLine =
+      timeHintsOn() && perEpisode && episodesLeft > 0
+        ? `${t('detail.progressCount', { watched: p.watched_episodes, total: p.total_episodes })} · ${roughlyLeft(episodesLeft * perEpisode)}`
+        : t('detail.progressWatched', { watched: p.watched_episodes, total: p.total_episodes, percent: p.percent });
     body.append(
       el('div', { class: 'section-title', text: t('detail.progress') }),
-      el('div', { class: 'muted', text: t('detail.progressWatched', { watched: p.watched_episodes, total: p.total_episodes, percent: p.percent }) }),
+      el('div', { class: 'muted', text: progressLine }),
       el('div', { class: 'progress-bar' }, [el('div', { style: { width: `${p.percent}%` } })])
     );
 
