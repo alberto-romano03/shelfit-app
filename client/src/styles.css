@@ -1220,6 +1220,28 @@ body.grid-virtual-active .gc-scroller {
   inset: 0;
   background: var(--hero-fade);
 }
+/* Depth: the backdrop moves at half the page's speed and fades as it goes, driven by the
+   browser from the scroll position. The page has to sit above it to slide over it. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .detail-hero:not(.skeleton),
+    .list-hero-img {
+      animation: hero-depth linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 480px;
+    }
+    .detail-hero:not(.skeleton) ~ * {
+      position: relative;
+      z-index: 1;
+    }
+  }
+}
+@keyframes hero-depth {
+  to {
+    transform: translateY(240px);
+    opacity: 0.35;
+  }
+}
 .detail-head {
   position: relative;
   display: flex;
