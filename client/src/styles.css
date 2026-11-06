@@ -6676,38 +6676,18 @@ img.mood-emoji {
     filter: none;
   }
 }
-.watch-date {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start; /* left-aligned, matching the fields around it */
-  gap: 6px;
-  margin: 10px 0 16px; /* breathing room above the status selector below */
-  font-size: 13px;
-  color: var(--text-secondary);
+/* The remote on a film's page. Every row brings its own space above, so the title adds none,
+   whichever row comes first. */
+.remote-title {
+  margin-bottom: 0;
 }
-.cal-icon { display: inline-flex; color: var(--text-secondary); }
-.cal-icon svg { width: 16px; height: 16px; }
-/* Movie rewatch counter (completed movies). */
-.rewatch-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: -8px 0 16px; /* tuck under the watch date, keep space before the status */
-  font-size: 13px;
+.rewatch-keys .toggle-wide {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-top: 0;
 }
-.rewatch-count {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-.rewatch-wrap .link-btn {
-  font-size: 13px;
-}
-/* Edit-date + Add-rewatch buttons sit together on the right, sharing one style. */
-.rewatch-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
+.rewatch-keys .toggle-wide span {
+  white-space: nowrap;
 }
 .notes-wrap { margin-top: 16px; }
 

@@ -705,8 +705,8 @@ export default async function Detail(container, params) {
         throw err; // keep the chooser open, leave the button unchanged
       }
       d.status = key;
-      updateCompletion();
-      renderRewatch(); // show/hide the movie rewatch control with completion
+      renderRewatch(); // show/hide the movie's date and rewatch keys with completion
+      paintRuntime();
       toast(t('detail.statusUpdated'), 'ok');
     },
   });
@@ -843,25 +843,13 @@ export default async function Detail(container, params) {
   const ratingTitle = el('div', { class: 'section-title', text: t('common.rating') });
   const ratingWrap = ratingControls.element;
 
-  // --- Watch date (movies) — calendar-icon prefixed field ---
-  const completionLine = el('div', { class: 'watch-date' });
-  function updateCompletion() {
-    if (d.type === 'movie' && d.status === 'completed') {
-      completionLine.innerHTML = '';
-      completionLine.append(
-        el('span', { class: 'cal-icon', html: icons.calendar }),
-        el('span', { text: t('detail.watchedOn', { date: formatDate(d.watch_date || d.updated_at) }) })
-      );
-      completionLine.style.display = '';
-    } else {
-      completionLine.innerHTML = '';
-      completionLine.style.display = 'none';
-    }
-  }
-  updateCompletion();
-
-  // --- Movie watch-date + rewatch controls (completed movies only) ---
-  const rewatchWrap = el('div', { class: 'rewatch-wrap' });
+  // --- Movie watch-date + rewatch keys (completed movies only) ---
+  // Each shows what it holds, and tapping changes it.
+  const DATE_KEY =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>';
+  const REWIND_KEY =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 12 18z"/><path d="M22 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 22 18z"/></svg>';
+  const rewatchWrap = el('div', { class: 'detail-actions-row rewatch-keys' });
   function renderRewatch() {
     rewatchWrap.innerHTML = '';
     if (d.type !== 'movie' || d.status !== 'completed') {
@@ -872,8 +860,17 @@ export default async function Detail(container, params) {
     const times = (d.rewatch_count || 0) + 1;
 
     // Edit the first-watch date retroactively (so the movie lands in the right
-    // monthly receipt); optimistically updates the "Watched on" line.
-    const editDateBtn = el('button', { class: 'link-btn', text: t('detail.editDate') });
+    // monthly receipt); optimistically updates the date on its key.
+    const watchedOn = formatDate(d.watch_date || d.updated_at);
+    const editDateBtn = el(
+      'button',
+      {
+        class: 'toggle-wide',
+        html: DATE_KEY,
+        'aria-label': `${t('detail.watchedOn', { date: watchedOn })}. ${t('detail.editDate')}`,
+      },
+      [el('span', { text: watchedOn })]
+    );
     editDateBtn.addEventListener('click', () => {
       openDateModal({
         title: t('detail.editWatchDate'),
@@ -882,13 +879,13 @@ export default async function Detail(container, params) {
         onConfirm: async (date) => {
           const prev = d.watch_date;
           d.watch_date = date; // optimistic
-          updateCompletion();
+          renderRewatch();
           try {
             await api.setWatchDate(id, date);
             toast(t('detail.watchDateUpdated'), 'ok');
           } catch (err) {
             d.watch_date = prev; // revert
-            updateCompletion();
+            renderRewatch();
             throw err;
           }
         },
@@ -900,7 +897,12 @@ export default async function Detail(container, params) {
     // as dated add/remove events (each keeps rewatch_count in lockstep), so the
     // familiar count mechanism still drives the number while every rewatch gets a
     // date for the receipt.
-    const addBtn = el('button', { class: 'link-btn', text: t('detail.addRewatch') });
+    const timesLabel = t('detail.watchedTimes', { n: times });
+    const addBtn = el(
+      'button',
+      { class: 'toggle-wide', html: REWIND_KEY, 'aria-label': `${timesLabel}. ${t('detail.addRewatch')}` },
+      [el('span', { text: timesLabel })]
+    );
     addBtn.addEventListener('click', () => {
       openWatchCountModal({
         title: t('detail.timesWatched'),
@@ -933,13 +935,7 @@ export default async function Detail(container, params) {
       });
     });
 
-    rewatchWrap.append(
-      el('span', {
-        class: 'rewatch-count',
-        text: t('detail.watchedTimes', { n: times }),
-      }),
-      el('div', { class: 'rewatch-actions' }, [editDateBtn, addBtn])
-    );
+    rewatchWrap.append(editDateBtn, addBtn);
   }
   renderRewatch();
 
@@ -1010,14 +1006,21 @@ export default async function Detail(container, params) {
     actionsRow.classList.add('has-kodi');
   }
 
-  // "Watched on…" sits right after the overview's Show more toggle and just
-  // before the action area; rating follows. For movies the status button lives
-  // inside the first action row (with Kodi), and a second row holds Owned +
-  // Cinema; for shows the status button stays full-width above the Kodi/Owned row.
+  // A film's controls are its remote, a section of their own after the synopsis: the status
+  // button in its row with Kodi, then the date and rewatch keys, then Owned + Cinema. A show
+  // keeps the status button full-width above the Kodi/Owned row.
   if (isMovie) {
-    body.append(completionLine, rewatchWrap, actionsRow, cinemaRow, kodiFeedback, ratingTitle, ratingWrap);
+    body.append(
+      el('div', { class: 'section-title remote-title', text: t('detail.remote') }),
+      actionsRow,
+      rewatchWrap,
+      cinemaRow,
+      kodiFeedback,
+      ratingTitle,
+      ratingWrap
+    );
   } else {
-    body.append(completionLine, rewatchWrap, statusBtn, actionsRow, kodiFeedback, ratingTitle, ratingWrap);
+    body.append(statusBtn, actionsRow, kodiFeedback, ratingTitle, ratingWrap);
   }
 
   // --- Series progress + seasons ---
