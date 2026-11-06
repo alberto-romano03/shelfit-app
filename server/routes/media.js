@@ -607,8 +607,18 @@ export default async function mediaRoutes(fastify) {
     const firstUnwatched = allEpisodes.findIndex((e) => !e.watched);
     const nextIndex = firstUnwatched >= 0 ? firstUnwatched : Math.max(0, allEpisodes.length - 1);
 
+    // For the page's count and time left. It only fetches a slice of the episodes, so these
+    // come from the whole season. An episode with no runtime counts as the season's average.
+    const runtimes = allEpisodes.map((e) => e.runtime).filter((n) => Number.isFinite(n) && n > 0);
+    const avgRuntime = runtimes.length ? runtimes.reduce((a, b) => a + b, 0) / runtimes.length : 0;
+    const unwatched = allEpisodes.filter((e) => !e.watched);
+
     const baseResp = {
       item_id: row.id,
+      watched_count: allEpisodes.length - unwatched.length,
+      minutes_left: Math.round(
+        unwatched.reduce((sum, e) => sum + (Number.isFinite(e.runtime) && e.runtime > 0 ? e.runtime : avgRuntime), 0)
+      ),
       // The series' title, for the season page's link back to the series.
       show_title: row.title_it || row.title_orig || null,
       season_number: seasonNumber,
