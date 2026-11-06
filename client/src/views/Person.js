@@ -14,7 +14,10 @@ import { api, createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup } from '../router.js';
 import {
   el,
-  spinner,
+  skelOverview,
+  skelShowMore,
+  skelText,
+  skelTitle,
   toast,
   openModal,
   icons,
@@ -132,13 +135,70 @@ function ageFrom(iso) {
   return age;
 }
 
+// The page's own frame, empty: hero, portrait and name, the stats, the biography, the career.
+function personSkeleton() {
+  const statCard = (lines) =>
+    el('div', { class: 'stat-card' }, [
+      el('div', { class: 'stat-ico skeleton' }),
+      el('div', { class: 'stat-txt' }, [
+        el('div', { class: 'value' }, [skelText('52px')]),
+        el('div', { class: 'label' }, lines === 2 ? [skelText('92px'), skelText('58px')] : [skelText('80px')]),
+      ]),
+    ]);
+  const credit = () =>
+    el('div', { class: 'person-credit' }, [
+      el('div', { class: 'poster-card skeleton' }),
+      el('div', { class: 'person-credit-title' }, [skelText('84%')]),
+      el('div', { class: 'person-credit-sub' }, [skelText('52%')]),
+    ]);
+  return [
+    el('div', { class: 'detail-hero person-hero skeleton' }, [
+      el('div', { class: 'person-hero-btn person-hero-btn--left' }, [
+        el('button', {
+          class: 'icon-btn icon-btn--overlay',
+          html: icons.back,
+          'aria-label': t('common.back'),
+          onClick: () => history.back(),
+        }),
+      ]),
+      el('div', { class: 'person-hero-btn person-hero-btn--right' }, [
+        el('div', { class: 'icon-btn icon-btn--overlay is-blank' }),
+      ]),
+    ]),
+    el('div', { class: 'detail-head person-head' }, [
+      el('div', { class: 'person-photo skeleton' }),
+      el('div', { class: 'person-head-text' }, [
+        el('div', { class: 'person-eyebrow' }, [skelText('74px')]),
+        el('h2', { class: 'person-name' }, [skelText('72%')]),
+        el('div', { class: 'person-meta-row' }, [skelText('62%')]),
+        el('div', { class: 'person-meta-row' }, [skelText('78%')]),
+      ]),
+    ]),
+    skelTitle('38%'),
+    el('div', { class: 'stats-grid person-stats' }, [statCard(2), statCard(1), statCard(1), statCard(2)]),
+    skelTitle('26%'),
+    skelOverview(4),
+    skelShowMore(),
+    el('div', { class: 'person-career-head' }, [
+      el('div', { class: 'section-title', style: { flex: '1' } }, [skelText('72px')]),
+      el('div', { class: 'skeleton skel-pill', style: { width: '220px', height: '34px', flex: 'none' } }),
+    ]),
+    el('div', { class: 'hscroll person-timeline' }, [
+      el('div', { class: 'person-year' }, [
+        el('div', { class: 'person-year-mark' }),
+        el('div', { class: 'person-year-items' }, [credit(), credit(), credit(), credit()]),
+      ]),
+    ]),
+  ];
+}
+
 export async function Person(container, params) {
   const ac = new AbortController();
   const loadApi = createApi(ac.signal);
   onCleanup(() => ac.abort());
 
   const tmdbId = params.id;
-  container.append(spinner());
+  container.append(...personSkeleton());
 
   let person;
   try {

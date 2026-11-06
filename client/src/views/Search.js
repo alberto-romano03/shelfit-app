@@ -23,6 +23,7 @@ import {
   stateBlock,
   lucideIcon,
   icons,
+  skelText,
   segmentedControl,
   typewriterPlaceholder,
 } from '../ui.js';
@@ -519,14 +520,15 @@ export default async function Search(container) {
   // over a title, a picks card with its reserved synopsis, the ranked row's
   // inset cells, the mood grid. Rows below these append under the fold when the
   // data lands, so nothing already on screen moves.
-  const skelLine = (w, cls = '', style = {}) =>
-    el('div', { class: `skeleton skel-line ${cls}`.trim(), style: { width: w, ...style } });
-
   function skelHead() {
     return el('div', { class: 'ai-head' }, [
       el('div', { class: 'ai-heads' }, [
-        skelLine('32%', 'sm', { margin: '2px 0 8px' }),
-        skelLine('54%', '', { height: '16px' }),
+        el('span', { class: 'ai-eyebrow' }, [skelText('34%')]),
+        el('h2', { class: 'ai-title' }, [skelText('56%')]),
+      ]),
+      el('div', { class: 'ai-arrows' }, [
+        el('button', { class: 'ai-arrow', disabled: true, 'aria-hidden': 'true' }),
+        el('button', { class: 'ai-arrow', disabled: true, 'aria-hidden': 'true' }),
       ]),
     ]);
   }
@@ -534,8 +536,8 @@ export default async function Search(container) {
   function skelCell(rank) {
     return el('div', { class: rank ? 'rk-cell' : 'ai-cell' }, [
       el('div', { class: 'poster-card skeleton' }),
-      el('div', { class: 'ai-name' }, [skelLine('86%')]),
-      el('div', { class: 'ai-sub' }, [skelLine('42%', 'sm', { height: '11px', margin: '2px 0' })]),
+      el('div', { class: 'ai-name' }, [skelText('86%')]),
+      el('div', { class: 'ai-sub' }, [skelText('42%')]),
     ]);
   }
 
@@ -553,12 +555,9 @@ export default async function Search(container) {
           el('div', { class: 'poster-card skeleton' }),
           // display:block overrides the line-clamped boxes so the bars stack.
           el('div', { class: 'pk-body' }, [
-            skelLine('82%', 'lg', { marginBottom: '6px' }),
-            skelLine('60%', 'lg', { marginBottom: '10px' }),
-            skelLine('44%', 'sm', { marginBottom: '10px' }),
-            skelLine('100%', '', { marginBottom: '7px' }),
-            skelLine('92%', '', { marginBottom: '7px' }),
-            skelLine('56%'),
+            el('div', { class: 'pk-title' }, [skelText('82%')]),
+            el('div', { class: 'pk-meta' }, [skelText('34%')]),
+            el('div', { class: 'pk-over', style: { display: 'block' } }, [skelText('100%'), skelText('94%'), skelText('86%')]),
           ]),
           el('div', { class: 'pk-actions' }, [
             el('div', { class: 'skeleton skel-pill', style: { height: '44px', flex: '1 1 auto' } }),
@@ -670,7 +669,7 @@ export default async function Search(container) {
       if (ac.signal.aborted) return;
       exploreCache = { at: Date.now(), data };
       exploreLoaded = true;
-      renderExplore(data);
+      crossfadeSwap(() => renderExplore(data));
     } catch (err) {
       if (isAbortError(err)) return;
       // A revalidation that fails leaves the copy already on screen alone — the

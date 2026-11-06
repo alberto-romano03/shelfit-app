@@ -13,13 +13,14 @@
 import { openPosterMenu } from './Detail.js';
 import { createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup, cameBack, afterTransition } from '../router.js';
+import { arrivingBy } from '../pageMotion.js';
 import {
   el,
   icons,
   poster,
   cachedImg,
   skelGrid,
-  skelLine,
+  skelListRow,
   crossfadeSwap,
   segmentedBar,
   stateBlock,
@@ -282,7 +283,8 @@ export async function gridView(container, type) {
     // In virtual mode the shell becomes a flex column (see styles.css) so the
     // scroller stretches from the chrome down to the navbar. The view class scopes
     // the view's flex layout; the body class scopes the #app flex column. The
-    // simple grid (collections / offline) flows normally without these.
+    // simple grid (collections / offline) flows normally without these. The page keeps
+    // its own class on its way out, so it holds its shape while the next one arrives.
     container.classList.toggle('view-grid-virtual', useVirtual);
     document.body.classList.toggle('grid-virtual-active', useVirtual);
     setChromeAway(false);
@@ -433,10 +435,6 @@ export async function gridView(container, type) {
     window.removeEventListener('shelfit:server-change', onServerChange);
     virtual.el.removeEventListener('scroll', onGridScroll);
     chromeSize.disconnect();
-    container.style.removeProperty('--grid-chrome-h');
-    // The .view container and body persist across views — clear our layout classes
-    // so the next view doesn't inherit the grid's flex layout.
-    container.classList.remove('view-grid-virtual');
     document.body.classList.remove('grid-virtual-active');
     gridState[type] = { status: state.status, genre: state.genre, sort: state.sort, coll: state.coll };
     statusHandoff = { type, geometry: statusBar.geometry(), away: chromeAway };
@@ -675,19 +673,7 @@ export async function gridView(container, type) {
 
   // Rows of shimmer shaped like the cards below (the My Lists skeleton).
   function collectionsSkeleton() {
-    return el(
-      'div',
-      { class: 'cset-rows' },
-      Array.from({ length: 3 }, () =>
-        el('div', { class: 'lw-card lw-skel' }, [
-          el('div', { class: 'lw-art' }, [el('div', { class: 'lw-case c0 skeleton' })]),
-          el('div', { class: 'lw-text' }, [
-            skelLine({ width: '70%', height: '16px' }),
-            skelLine({ cls: 'sm', width: '45%' }),
-          ]),
-        ])
-      )
-    );
+    return el('div', { class: 'cset-rows' }, Array.from({ length: 4 }, () => skelListRow()));
   }
 
   function paintCollections() {
@@ -750,19 +736,13 @@ export async function gridView(container, type) {
 
   // --- Mount --------------------------------------------------------------
   lockChips(!isServerReachable());
-  // Arriving from the other grid (Movies <-> Series): the bar is held still
-  // through the page fade (styles.css, data-vt='grid') and its chip glides over
-  // from where the other page's chip was.
+  // Arriving from the other grid (Movies <-> Series): the bar is held still through
+  // the page change (pageMotion.js) and its chip glides over from where the other
+  // page's chip was. If that bar had slid out of sight there's nothing to glide from.
   const handoff = statusHandoff;
   statusHandoff = null;
-  if (handoff && handoff.type !== type && document.documentElement.dataset.vt === 'grid') {
-    if (handoff.away) {
-      // There was no bar to hold still: this one fades in with its page.
-      chipRow.classList.add('segbar--unlifted');
-      afterTransition().then(() => chipRow.classList.remove('segbar--unlifted'));
-    } else {
-      statusBar.glideFrom(handoff.geometry);
-    }
+  if (handoff && handoff.type !== type && !handoff.away && arrivingBy() === 'grid') {
+    statusBar.glideFrom(handoff.geometry);
   }
   syncChrome();
   renderGrid();

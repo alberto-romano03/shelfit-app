@@ -5,15 +5,35 @@ import { withBase, stripBase } from './basePath.js';
 import { clear, stateBlock } from './ui.js';
 import { t } from './i18n.js';
 import { closeTopSheetOnPop } from './sheetStack.js';
+import {
+  pagePhase,
+  resolveHop,
+  lockSize,
+  pin,
+  prepare,
+  prepareReturn,
+  holdForReady,
+  leaveAgain,
+  play,
+  settle,
+  cut,
+  ghostOf,
+  removeGhost,
+} from './pageMotion.js';
 
 let routes = [];
+// The page on screen. Every page gets its own <main>, so the old one can stay on screen,
+// unchanged, while the next one builds.
 let container = null;
 let onChange = null;
-// Optional (from, to) => kind: lets the app pick a different transition than
-// the plain fade for a particular hop (Movies <-> Series, see main.js).
+// (from, to, nav) => { kind, dir }: the move a hop gets (see main.js and pageMotion.js).
 let transitionFor = null;
 let currentPath = null; // the path on screen, for transitionFor
-let vtSeq = 0; // bumped per page transition; only the latest clears <html data-vt>
+let previousPath = ''; // the page before it, see cameFrom
+let historyIndex = 0; // tells Back from Forward
+// How long a page may take to be ready before it starts moving with its placeholder. Long
+// enough for most data to arrive first, short enough that a tap never feels ignored.
+const READY_BUDGET_MS = 100;
 // Teardown callbacks for the view currently being mounted. Registered
 // synchronously from a view's body (before its first await) so navigation can
 // abort in-flight requests even while the view is still loading.
@@ -30,13 +50,19 @@ let renderToken = 0;
 // when the user came back, so a fresh open still starts at the top.
 let lastNav = 'push';
 
+// Where this page was opened from. A skeleton can guess from it what is about to load
+// (a title opened from Series is a series).
+export function cameFrom() {
+  return previousPath;
+}
+
 export function cameBack() {
   return lastNav === 'pop';
 }
 
-// Settles once the page change in progress has finished fading (at once when
+// Settles once the page change in progress has finished moving (at once when
 // none is). A view that painted a saved copy waits on it before checking for
-// fresher data, so a refresh never rebuilds the page while it is fading in.
+// fresher data, so a refresh never rebuilds the page while it is moving.
 let settled = Promise.resolve();
 export function afterTransition() {
   return settled.then(() => new Promise((resolve) => setTimeout(resolve, 0)));
@@ -74,7 +100,6 @@ function compile(pattern) {
 }
 
 export function initRouter(opts) {
-  container = opts.container;
   onChange = opts.onChange || null;
   transitionFor = opts.transitionFor || null;
   routes = opts.routes.map((r) => ({ ...r, ...compile(r.path) }));
@@ -83,20 +108,13 @@ export function initRouter(opts) {
     if (closeTopSheetOnPop()) return; // Back closes the sheet; the page stays put.
     // state.path is stored root-relative; location.pathname carries the base.
     const path = (event.state && event.state.path) || stripBase(location.pathname);
-    // Going back/forward gets the same quick cross-fade (e.g. closing a detail).
+    const index = event.state && Number.isFinite(event.state.index) ? event.state.index : historyIndex - 1;
+    const nav = index < historyIndex ? 'pop' : 'push';
+    historyIndex = index;
     lastNav = 'pop';
-    render(path, { transition: 'fade' });
+    // iOS's swipe-back has already shown its own slide: don't play another on top of it.
+    render(path, { nav, transition: !event.hasUAVisualTransition });
   });
-}
-
-function prefersReduced() {
-  return (
-    window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-function supportsViewTransition() {
-  return typeof document.startViewTransition === 'function';
 }
 
 function match(path) {
@@ -111,28 +129,21 @@ function match(path) {
   return null;
 }
 
-// Core render: swap the container and mount the matched view. The view's
-// synchronous prefix (its skeleton) runs before this returns, which lets a View
-// Transition snapshot the skeleton immediately — real data streams in behind it,
-// so nothing is ever frozen waiting on the network.
-function performRender(path) {
+function newPage() {
+  const page = document.createElement('main');
+  page.className = 'view';
+  page.id = 'view';
+  return page;
+}
+
+// Mount the matched view into `page`. The view's synchronous prefix (its saved copy or
+// skeleton) runs before this returns; the promise settles once its first real paint is done.
+function mount(path, page, myToken) {
   const found = match(path) || match('/');
   if (!found) return Promise.resolve();
-
-  // Tear down the previous view (this aborts its in-flight requests).
-  runCleanups();
-
-  const myToken = ++renderToken;
-
-  // Reset scroll and clear the container for the new view.
-  container.innerHTML = '';
-  window.scrollTo(0, 0);
-
-  if (onChange) onChange(path);
-
   let viewPromise;
   try {
-    viewPromise = Promise.resolve(found.route.view(container, found.params));
+    viewPromise = Promise.resolve(found.route.view(page, found.params));
   } catch (err) {
     viewPromise = Promise.reject(err);
   }
@@ -148,8 +159,8 @@ function performRender(path) {
       if (err && err.name === 'AbortError') return;
       if (myToken !== renderToken) return;
       console.error(err);
-      clear(container);
-      container.append(
+      clear(page);
+      page.append(
         stateBlock({
           kind: 'error',
           title: t('router.loadFailed'),
@@ -160,72 +171,131 @@ function performRender(path) {
     });
 }
 
-// Render, optionally wrapped in a View Transition. `opts.transition` is a label
-// ('fade') exposed on <html data-vt> so the stylesheet can style it. Unsupported
-// browsers or reduced-motion just render instantly.
-export function render(path, opts = {}) {
-  const from = currentPath;
-  currentPath = path;
-  let kind = opts.transition;
-  if (kind && transitionFor) kind = transitionFor(from, path) || kind;
-  if (!kind || !supportsViewTransition() || prefersReduced()) {
-    if (typeof opts.onFinish === 'function') opts.onFinish();
-    return performRender(path);
-  }
-  const root = document.documentElement;
-  root.dataset.vt = kind;
-  const mine = ++vtSeq;
-  // The callback is synchronous as far as the API is concerned (we don't return
-  // the view's data promise), so the transition captures the skeleton, not the
-  // fully-loaded page — fast, no extra wait.
-  const transition = document.startViewTransition(() => {
-    performRender(path);
+// The next frame, or a moment later where frames aren't running (a hidden page).
+const nextFrame = () =>
+  new Promise((resolve) => {
+    requestAnimationFrame(resolve);
+    setTimeout(resolve, 100);
   });
-  const done = () => {
-    // Only the latest transition clears the marker: a quick second tap starts a
-    // new one before this one's `finished` settles.
-    if (vtSeq === mine) delete root.dataset.vt;
-    if (typeof opts.onFinish === 'function') opts.onFinish();
-  };
-  // `.ready` rejects when a transition is skipped/aborted (e.g. the document
-  // can't currently render one); swallow it so it isn't an unhandled rejection.
-  transition.ready.catch(() => {});
-  transition.finished.then(done, done);
-  settled = transition.finished.catch(() => {});
-  return transition.finished;
+
+// Ready: its first real paint is done, or the budget ran out.
+function whenReady(viewDone) {
+  return Promise.race([viewDone, new Promise((resolve) => setTimeout(resolve, READY_BUDGET_MS))]).then(nextFrame);
 }
 
-// `transition: false` opts out of the cross-fade (used for the silent
-// replace-in-place re-render on server recovery, which must not look like a
-// navigation). Everything else dissolves — back/forward (popstate) and detail
-// opens already did, so a bottom-nav tap was the one navigation that hard-cut.
-export function navigate(path, { replace = false, transition = true } = {}) {
+let finishHop = null; // settles `settled` for the hop in progress
+let onScreen = null; // while a new page waits to start moving: the page still showing
+
+function render(path, opts = {}) {
+  const from = currentPath;
+  previousPath = from || '';
+  currentPath = path;
+  const nav = opts.nav || 'push';
+  const hop = opts.transition && from !== null ? resolveHop(transitionFor ? transitionFor(from, path, nav) : null) : null;
+
+  const myToken = ++renderToken;
+  if (container && container.isConnected) lockSize(container);
+  // Tear down the previous view (this aborts its in-flight requests). It reads the
+  // scroll position it wants to keep, so this comes before anything moves.
+  runCleanups();
+  let leaving;
+  if (pagePhase() === 'waiting' && onScreen) {
+    // The page that was about to replace this one never appeared: drop it, and the page
+    // still showing is the one that leaves.
+    if (container !== onScreen) container.remove();
+    leaving = onScreen;
+    leaveAgain(leaving);
+  } else {
+    leaving = container && container.isConnected ? pin(container, from).el : null;
+  }
+  onScreen = null;
+  window.scrollTo(0, 0);
+  if (onChange) onChange(path);
+
+  if (finishHop) finishHop();
+  settled = new Promise((resolve) => {
+    finishHop = resolve;
+  });
+  const finished = () => {
+    if (myToken !== renderToken) return;
+    settle(container);
+    if (finishHop) finishHop();
+    finishHop = null;
+  };
+
+  // Heading back to a page that hasn't finished leaving: it turns around from where it is.
+  const returning = hop ? ghostOf(path) : null;
+  if (returning && returning !== leaving) {
+    prepareReturn(returning, leaving, hop);
+    container = returning;
+    play(returning, leaving, hop, () => {
+      if (myToken !== renderToken) return;
+      // Home. The real page builds underneath it, then takes over.
+      const page = newPage();
+      returning.before(page);
+      container = page;
+      holdForReady();
+      onScreen = returning;
+      const viewDone = mount(path, page, myToken);
+      whenReady(viewDone).then(nextFrame).then(() => {
+        if (myToken !== renderToken) return;
+        onScreen = null;
+        removeGhost(returning);
+        finished();
+      });
+    }, { fresh: false });
+    return;
+  }
+
+  const page = newPage();
+  if (leaving) leaving.before(page);
+  else document.querySelector('.tabbar').before(page);
+  container = page;
+
+  if (!hop) {
+    cut(leaving);
+    mount(path, page, myToken);
+    finished();
+    return;
+  }
+
+  prepare(page, leaving, hop);
+  onScreen = leaving;
+  const viewDone = mount(path, page, myToken);
+  whenReady(viewDone).then(() => {
+    if (myToken !== renderToken) return;
+    onScreen = null;
+    play(page, leaving, hop, finished);
+  });
+}
+
+// `transition: false` is for a silent re-render in place (a language change, the server
+// coming back), which must not look like a navigation. `kind: 'tab'` is a tab bar tap.
+export function navigate(path, { replace = false, transition = true, nav = 'push' } = {}) {
   // Accept either form (callers pass literals like '/series' or a full
   // location.pathname): normalize to root-relative for state + matching, and
   // write the base-prefixed URL into history.
   path = stripBase(path);
   lastNav = 'push';
-  const state = { path };
   const url = withBase(path);
   if (replace) {
-    history.replaceState(state, '', url);
+    history.replaceState({ path, index: historyIndex }, '', url);
   } else {
-    history.pushState(state, '', url);
+    historyIndex += 1;
+    history.pushState({ path, index: historyIndex }, '', url);
   }
-  render(path, transition ? { transition: 'fade' } : {});
+  render(path, { nav, transition });
 }
 
-// Open a title's detail page with a quick, snappy cross-fade (no morph).
+// Open a title's detail page.
 export function openDetail(path) {
-  path = stripBase(path);
-  lastNav = 'push';
-  history.pushState({ path }, '', withBase(path));
-  render(path, { transition: 'fade' });
+  navigate(path);
 }
 
 export function start() {
   const path = stripBase(location.pathname);
   // Seed the initial history entry with state so popstate always has data.
-  history.replaceState({ path }, '', location.pathname);
+  if (history.state && Number.isFinite(history.state.index)) historyIndex = history.state.index;
+  history.replaceState({ path, index: historyIndex }, '', location.pathname);
   render(path);
 }

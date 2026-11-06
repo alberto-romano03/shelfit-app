@@ -15,7 +15,11 @@ import {
   setBg,
   icons,
   skelGrid,
-  skelLine,
+  skelHero,
+  skelOverview,
+  skelShowMore,
+  skelText,
+  skelTitle,
   crossfadeSwap,
   clear,
   stateBlock,
@@ -88,19 +92,21 @@ function remember(id, data) {
 // name, years and ownership, then a grid of posters.
 function pageSkeleton() {
   return [
-    el('div', { class: 'detail-hero skeleton' }),
+    skelHero({ blankRight: false }),
     el('div', { class: 'cp-head' }, [
       el('div', { class: 'poster-card cp-poster skeleton' }),
       el('div', { class: 'cp-head-text' }, [
-        skelLine({ width: '70%', height: '22px' }),
-        skelLine({ cls: 'sm', width: '45%' }),
-        skelLine({ cls: 'sm', width: '55%' }),
+        el('h2', { class: 'cp-name' }, [skelText('72%')]),
+        el('div', { class: 'cp-years' }, [skelText('38%')]),
+        el('div', { class: 'cp-owned' }, [skelText('54%')]),
+        el('div', { class: 'cp-pips' }, [el('i'), el('i'), el('i')]),
       ]),
     ]),
     el('div', { class: 'cp-body' }, [
-      skelLine({ margin: '0 0 8px' }),
-      skelLine({ width: '92%', margin: '8px 0' }),
-      skelGrid(6),
+      skelOverview(5),
+      skelShowMore(),
+      skelTitle('20%'),
+      skelGrid(6, { cell: 'cp-cell', title: 'cp-title', sub: 'cp-year', titleLines: 2 }, 'cp-grid'),
     ]),
   ];
 }

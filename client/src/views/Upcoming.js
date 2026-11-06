@@ -10,6 +10,7 @@ import {
   icons,
   mountPoster,
   skelLine,
+  skelText,
   epLabel,
   formatDate,
   crossfadeSwap,
@@ -122,12 +123,15 @@ function skelCardItem() {
 // countdown line below — mirroring a real stop.
 function railStopSkeleton(marginLeft) {
   const stop = el('div', { class: 'railway-stop' }, [
-    el('div', { class: 'rail-name' }, [skelLine({ width: '58px', height: '11px' })]),
+    el('div', { class: 'rail-name' }, [el('span', { class: 'rail-name-text', style: { width: '64px' } }, [skelText('100%')])]),
     el('div', {
       class: 'skeleton',
       style: { width: '20px', height: '20px', borderRadius: '50%', flexShrink: '0' },
     }),
-    el('div', { class: 'rail-below' }, [skelLine({ width: '40px', height: '11px', margin: '0 auto' })]),
+    el('div', { class: 'rail-below' }, [
+      el('div', { class: 'rail-when' }, [skelText('40px')]),
+      el('div', { class: 'rail-ep' }, [skelText('34px')]),
+    ]),
   ]);
   stop.style.marginLeft = `${marginLeft}px`;
   return stop;
@@ -148,9 +152,9 @@ function upcomingSkeleton() {
   const timeline = el('div', { class: 'timeline' });
   for (let i = 0; i < 4; i++) timeline.append(skelCardItem());
   return el('div', { class: 'upcoming-view' }, [
-    skelLine({ width: '150px', height: '18px', margin: '4px 0 12px' }),
+    el('h2', { class: 'section-heading' }, [skelText('150px')]),
     railwaySkeleton(),
-    sectionDivider(t('upcoming.upNext')),
+    sectionDivider(t('upcoming.upNext'), true),
     timeline,
   ]);
 }
@@ -267,9 +271,9 @@ function railWhen(dateStr) {
 
 // Full-width divider with a small labelled pill — same language as the
 // Movies/Series grid dividers.
-function sectionDivider(label) {
+function sectionDivider(label, blank = false) {
   return el('div', { class: 'grid-divider' }, [
-    el('span', { class: 'grid-divider-label', text: label }),
+    el('span', { class: `grid-divider-label${blank ? ' is-blank' : ''}`, text: label }),
   ]);
 }
 

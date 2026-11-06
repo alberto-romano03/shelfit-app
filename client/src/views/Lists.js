@@ -12,7 +12,7 @@ import {
   el,
   icons,
   cachedImg,
-  skelLine,
+  skelListRow,
   toast,
   openModal,
   confirmModal,
@@ -21,6 +21,7 @@ import {
   lucideIcon,
   typewriterPlaceholder,
   clear,
+  crossfadeSwap,
 } from '../ui.js';
 import { imageCache } from '../imageCache.js';
 import { wireListCard } from './List.js';
@@ -175,16 +176,12 @@ export function openNewListSheet({ type = 'movie', onCreated } = {}) {
 }
 
 function skeletonRows() {
-  return el(
-    'div',
-    { class: 'lp-rows' },
-    Array.from({ length: 3 }, () =>
-      el('div', { class: 'lw-card lw-skel' }, [
-        el('div', { class: 'lw-art' }, [el('div', { class: 'lw-case c0 skeleton' })]),
-        el('div', { class: 'lw-text' }, [skelLine({ width: '70%', height: '16px' }), skelLine({ cls: 'sm', width: '45%' })]),
-      ])
-    )
-  );
+  return el('div', { class: 'lp-rows' }, [
+    skelListRow({ meta: false }), // the "New list" row: a name and nothing under it
+    skelListRow(),
+    skelListRow(),
+    skelListRow(),
+  ]);
 }
 
 export default async function Lists(container) {
@@ -360,7 +357,7 @@ export default async function Lists(container) {
       const data = await api.lists();
       lists = data.lists || [];
       imageCache.preload(lists.flatMap((l) => (l.preview || []).slice(0, 3).map((it) => it.poster_url)).filter(Boolean));
-      render();
+      crossfadeSwap(render);
     } catch (err) {
       if (isAbortError(err)) return;
       body.replaceChildren(

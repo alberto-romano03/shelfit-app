@@ -6,6 +6,7 @@
 import { openPosterMenu } from './Detail.js';
 import { api, createApi, isAbortError } from '../api.js';
 import { navigate, onCleanup, openDetail, cameBack } from '../router.js';
+import { whenStill } from '../pageMotion.js';
 import { openDustItOff } from '../dustItOff.js';
 import { openReceipt } from '../receipt.js';
 import { openRateOMatic } from '../rateOMatic.js';
@@ -40,6 +41,7 @@ import {
   openModal,
   toast,
   skelLine,
+  skelText,
   segmentedControl,
   fadeSwap,
   lucideIcon,
@@ -243,7 +245,7 @@ export default async function Home(container) {
   let avatar =
     cached.avatarData || cached.avatarUrl || cached.name !== undefined
       ? buildAvatar(cached.avatarData || null, cached.avatarUrl || null, cached.name || '')
-      : makeAvatarPlaceholder('');
+      : el('div', { class: 'avatar avatar-placeholder' });
 
   function paintName(name, badgeData, badgeUrl) {
     nameRow.replaceChildren(
@@ -351,15 +353,15 @@ export default async function Home(container) {
       : el('div', { class: 'muted', text: t('home.watching.empty') });
   } else {
     // First ever launch (nothing cached) → the ghost skeleton.
-    watchRow = el('div', { class: 'hscroll' });
+    watchRow = el('div', { class: 'hscroll is-skel' });
     for (let i = 0; i < 4; i++) {
       watchRow.append(
         // Two lines to match the loaded card (title + episode) so the swap holds
         // its height and nothing below it jumps.
         el('div', { class: 'watching-card' }, [
           el('div', { class: 'poster-card skeleton' }),
-          skelLine({ cls: 'sm', width: '90px', margin: '6px 0 0' }),
-          skelLine({ cls: 'sm', width: '60px', margin: '5px 0 0' }),
+          el('div', { class: 'wc-title' }, [skelText('86%')]),
+          el('div', { class: 'wc-ep' }, [skelText('54%')]),
         ])
       );
     }
@@ -654,13 +656,32 @@ export default async function Home(container) {
       }));
   const savedLists = pget(PK.homeLists);
   if (Array.isArray(savedLists)) paintLists(savedLists);
+  else {
+    // First ever launch: the row's frame, so the page below doesn't move when it lands.
+    const ghostCard = () =>
+      el('div', { class: 'list-card' }, [
+        el('div', { class: 'list-card-art' }, [
+          el('div', { class: 'list-card-case c2 skeleton' }),
+          el('div', { class: 'list-card-case c1 skeleton' }),
+          el('div', { class: 'list-card-case c0 skeleton' }),
+        ]),
+        el('div', { class: 'list-card-text' }, [
+          el('div', { class: 'list-card-name' }, [skelText('72%')]),
+          el('div', { class: 'list-card-meta' }, [skelText('54%')]),
+        ]),
+      ]);
+    listsContainer.replaceChildren(
+      el('div', { class: 'section-link' }, [el('span', { class: 'section-title skel-label', text: t('home.myLists') })]),
+      el('div', { class: 'hscroll list-card-row' }, [ghostCard(), ghostCard(), ghostCard()])
+    );
+  }
   api
     .lists()
     .then((data) => {
       const lists = compactLists(data.lists || []);
       imageCache.preload(lists.flatMap((l) => l.preview.map((it) => it.poster_url)));
       if (Array.isArray(savedLists) && JSON.stringify(lists) === JSON.stringify(savedLists)) return; // unchanged
-      paintLists(lists);
+      whenStill(() => paintLists(lists));
       pset(PK.homeLists, lists);
     })
     .catch((err) => {
@@ -810,15 +831,17 @@ export default async function Home(container) {
         return;
       }
       if (!items.length) {
-        watchRow.replaceWith(el('div', { class: 'muted', text: t('home.watching.empty') }));
+        whenStill(() => watchRow.replaceWith(el('div', { class: 'muted', text: t('home.watching.empty') })));
         persistWatching([]); // remember the empty state
         return;
       }
       // Proactively warm these above-the-fold posters.
       imageCache.preload(items.map((i) => i.poster_url).filter(Boolean));
       const row = el('div', { class: 'hscroll' }, items.map(watchingCard));
-      watchRow.replaceWith(row);
-      watchRow = row;
+      whenStill(() => {
+        watchRow.replaceWith(row);
+        watchRow = row;
+      });
       // Store the list + poster bytes so the next launch paints instantly.
       persistWatching(items);
     })

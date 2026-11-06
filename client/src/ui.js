@@ -1,5 +1,7 @@
 // Shared UI helpers: DOM builder, icons, formatting, modal, toast.
 
+import { pagePhase, whenStill, dissolveOver } from './pageMotion.js';
+import { dialogEnter, dialogLeave, dialogHold, dimOf } from './dialogMotion.js';
 import { imageCache } from './imageCache.js';
 import { withBase } from './basePath.js';
 import { t } from './i18n.js';
@@ -729,10 +731,87 @@ export function skelCard() {
   return el('div', { class: 'poster-card skeleton' });
 }
 
-export function skelGrid(n = 9) {
-  const g = el('div', { class: 'grid' });
-  for (let i = 0; i < n; i++) g.append(skelCard());
+// A line of text that hasn't arrived. It takes its height from whatever holds it: inside
+// an .overview or an h2 it stands exactly as tall as the real line, so nothing moves when
+// the words replace it.
+export function skelText(width = '100%') {
+  return el('span', { class: 'skel-text', style: { width } }, [el('i', { class: 'skeleton' }), '\u00a0']);
+}
+
+export function skelTitle(width = '40%') {
+  return el('div', { class: 'section-title' }, [skelText(width)]);
+}
+
+const OVERVIEW_WIDTHS = ['100%', '96%', '98%', '93%', '97%', '88%'];
+export function skelOverview(lines = 4) {
+  return el(
+    'div',
+    { class: 'overview' },
+    Array.from({ length: lines }, (_, i) => skelText(OVERVIEW_WIDTHS[i % OVERVIEW_WIDTHS.length]))
+  );
+}
+
+export function skelShowMore() {
+  return el('div', { class: 'show-more is-skel' }, [el('span', { class: 'show-more-pill skeleton' })]);
+}
+
+export function skelPill(height, style = {}) {
+  return el('div', { class: 'skeleton skel-pill', style: { flex: '1 1 0', height: `${height}px`, ...style } });
+}
+
+export function skelCircle(size) {
+  return el('div', {
+    class: 'skeleton',
+    style: { width: `${size}px`, height: `${size}px`, borderRadius: '50%', flex: 'none' },
+  });
+}
+
+// The hero of a title, person or collection page. Back works from the first frame; the
+// options button has nothing to offer yet, so only its round shape is there.
+export function skelHero({ cls = '', blankRight = true } = {}) {
+  const top = 'calc(8px + env(safe-area-inset-top))';
+  return el('div', { class: `detail-hero skeleton ${cls}`.trim() }, [
+    el('button', {
+      class: 'icon-btn icon-btn--overlay',
+      html: icons.back,
+      'aria-label': t('common.back'),
+      style: { position: 'absolute', top, left: '8px', zIndex: 3 },
+      onClick: () => history.back(),
+    }),
+    blankRight
+      ? el('div', { class: 'icon-btn icon-btn--overlay is-blank', style: { position: 'absolute', top, right: '8px', zIndex: 3 } })
+      : null,
+  ]);
+}
+
+// `cell` draws the poster's caption too: { cell, title, sub, titleLines }.
+export function skelGrid(n = 9, cell = null, cls = '') {
+  const g = el('div', { class: `grid ${cls}`.trim() });
+  for (let i = 0; i < n; i++) {
+    if (!cell) {
+      g.append(skelCard());
+      continue;
+    }
+    const title = el('div', { class: cell.title }, [skelText('86%')]);
+    if (cell.titleLines === 2) title.append(skelText('58%'));
+    g.append(el('div', { class: cell.cell }, [skelCard(), title, el('div', { class: cell.sub }, [skelText('42%')])]));
+  }
   return g;
+}
+
+// One row of My Lists or of the collections: three covers, a name, a count.
+export function skelListRow({ meta = true } = {}) {
+  return el('div', { class: 'lw-card lw-skel' }, [
+    el('div', { class: 'lw-art' }, [
+      el('div', { class: 'lw-case c2 skeleton' }),
+      el('div', { class: 'lw-case c1 skeleton' }),
+      el('div', { class: 'lw-case c0 skeleton' }),
+    ]),
+    el('div', { class: 'lw-text' }, [
+      el('div', { class: 'lw-name' }, [skelText(meta ? '70%' : '45%')]),
+      meta ? el('div', { class: 'lw-meta' }, [skelText('45%')]) : null,
+    ]),
+  ]);
 }
 
 export function placeholder(title) {
@@ -1323,14 +1402,10 @@ export function segmentedBar({
 }
 
 // --- Modal ----------------------------------------------------------------
-// Enter and exit are mirrored: the panel slides up + fades in, and on close it
-// slides back down + fades out while the backdrop fades with it. The node is
-// removed only once the exit animation has finished (with a timeout fallback in
-// case animationend never fires), so a modal never just vanishes.
+// It arrives and leaves by dialogMotion.js, and the node is removed only once it has gone.
 //
-// `closed` guards re-entry, so closing DURING the open animation is safe: the
-// exit class simply takes over from the entrance one and the removal happens
-// once — no double-remove, no stuck backdrop.
+// `closed` guards re-entry. Closing during the open reverses from where the panel is, and
+// the removal happens once: no double-remove, no stuck backdrop.
 // `opts.center` makes it a centered popup dialog (pops in, rounded all round)
 // instead of a bottom sheet; `opts.className` adds a class to the panel.
 export function openModal(buildContent, opts = {}) {
@@ -1353,8 +1428,6 @@ export function openModal(buildContent, opts = {}) {
     if (closed) return;
     closed = true;
     untrack();
-    modal.classList.add('sheet-closing');
-    backdrop.classList.add('backdrop-closing');
     const done = () => {
       if (removed) return;
       removed = true;
@@ -1363,8 +1436,7 @@ export function openModal(buildContent, opts = {}) {
       // `opts.onClose`: told once the popup is gone, however it was closed.
       if (opts.onClose) opts.onClose();
     };
-    modal.addEventListener('animationend', done, { once: true });
-    setTimeout(done, 400); // fallback if animationend never fires
+    dialogLeave(modal, backdrop, done, { popup: !!opts.center });
   }
   // The grey dash: opt-in here, always present on a sheet. Every popup that
   // reads as a bottom sheet carries it, so the dismiss gesture is the same one
@@ -1373,6 +1445,7 @@ export function openModal(buildContent, opts = {}) {
   buildContent(modal, close);
   lockScroll();
   document.body.append(backdrop);
+  dialogEnter(modal, backdrop, { popup: !!opts.center });
   if (!closed) untrack = trackSheet(close);
   return { close, modal };
 }
@@ -1381,9 +1454,8 @@ export function openModal(buildContent, opts = {}) {
 // openSheet and by any openModal that asks for one.
 //
 // The panel follows the finger 1:1 and the dim lightens with it. Letting go past
-// the threshold, or with a downward flick, leaves from where the panel is (the
-// exit keyframes have no `from`, so they start at this inline transform); anything
-// less settles back. Upward it gives a little and resists, the way a native sheet does;
+// the threshold, or with a downward flick, leaves from where the panel is (see
+// dialogMotion.js); anything less settles back. Upward it gives a little and resists, the way a native sheet does;
 // it can never close that way.
 function dragHandle(close, panel, backdrop) {
   const wrap = el('div', { class: 'sheet-handle-wrap' }, [
@@ -1400,21 +1472,21 @@ function dragHandle(close, panel, backdrop) {
   function paintDrag(dy) {
     panel.style.transform = `translateY(${dy}px)`;
     panel.style.setProperty('--sheet-drag', `${dy}px`);
-    backdrop.style.opacity = String(1 - Math.min(Math.max(dy, 0) / panel.offsetHeight, 1) * 0.6);
+    dimOf(backdrop).style.opacity = String(1 - Math.min(Math.max(dy, 0) / panel.offsetHeight, 1) * 0.6);
     // A sheet lifted off the bottom edge would show a gap: its own colour fills it.
     panel.style.boxShadow = dy < 0 ? `0 ${Math.ceil(-dy)}px 0 var(--surface), var(--shadow-sheet)` : '';
   }
   function settle() {
     panel.style.transition = 'transform var(--dur-short) var(--ease-out)';
-    backdrop.style.transition = 'opacity var(--dur-short) var(--ease-out)';
+    dimOf(backdrop).style.transition = 'opacity var(--dur-short) var(--ease-out)';
     panel.style.transform = '';
     panel.style.removeProperty('--sheet-drag');
-    backdrop.style.opacity = '';
+    dimOf(backdrop).style.opacity = '';
     panel.addEventListener(
       'transitionend',
       () => {
         panel.style.transition = '';
-        backdrop.style.transition = '';
+        dimOf(backdrop).style.transition = '';
         panel.style.boxShadow = '';
       },
       { once: true }
@@ -1426,8 +1498,9 @@ function dragHandle(close, panel, backdrop) {
     lastT = e.timeStamp;
     speed = 0;
     dragged = false;
+    dialogHold(panel, backdrop);
     panel.style.transition = 'none';
-    backdrop.style.transition = 'none';
+    dimOf(backdrop).style.transition = 'none';
     panel.style.willChange = 'transform';
     try {
       wrap.setPointerCapture(e.pointerId);
@@ -1452,12 +1525,12 @@ function dragHandle(close, panel, backdrop) {
     panel.style.willChange = '';
     if (!dragged) {
       panel.style.transition = '';
-      backdrop.style.transition = '';
+      dimOf(backdrop).style.transition = '';
       return;
     }
     if (!cancelled && (dy > DISMISS_PX || speed > FLICK_PX_PER_MS)) {
       panel.style.transition = '';
-      backdrop.style.transition = '';
+      dimOf(backdrop).style.transition = '';
       close();
     } else {
       settle();
@@ -1586,7 +1659,6 @@ export function openSheet(buildContent, opts = {}) {
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) close();
   });
-  // Dismiss with a slide-down (mirror of the slide-up entrance), then remove.
   let closing = false;
   let removed = false;
   let untrack = () => {};
@@ -1594,16 +1666,13 @@ export function openSheet(buildContent, opts = {}) {
     if (closing) return;
     closing = true;
     untrack();
-    sheet.classList.add('sheet-closing');
-    backdrop.classList.add('backdrop-closing');
     const done = () => {
       if (removed) return;
       removed = true;
       backdrop.remove();
       unlockScroll();
     };
-    sheet.addEventListener('animationend', done, { once: true });
-    setTimeout(done, 400); // fallback if animationend never fires (> --dur-medium)
+    dialogLeave(sheet, backdrop, done);
   }
 
   sheet.append(dragHandle(close, sheet, backdrop));
@@ -1611,6 +1680,7 @@ export function openSheet(buildContent, opts = {}) {
   buildContent(sheet, close);
   lockScroll();
   document.body.append(backdrop);
+  dialogEnter(sheet, backdrop);
   if (!closing) untrack = trackSheet(close);
   return { close, sheet };
 }
@@ -1746,10 +1816,11 @@ let stateWatch = null;
 export function watchState(node) {
   if (!stateWatch) {
     stateWatch = new ResizeObserver(fitStates);
-    const view = document.getElementById('view');
-    if (view) stateWatch.observe(view); // what sits above it can change size too
     window.addEventListener('resize', fitStates);
   }
+  // What sits above it can change size too.
+  const view = document.getElementById('view');
+  if (view) stateWatch.observe(view);
   stateWatch.observe(node);
 }
 const STATE_TIERS = ['page', 'section', 'inline'];
@@ -1797,36 +1868,13 @@ export function stateBlock(opts = {}) {
   return node;
 }
 
-// Crossfade a DOM mutation (typically swapping a view's skeleton for its real
-// content) using the View Transition API and the same 'fade' styling the router
-// uses for navigation. `mutate` MUST be synchronous and do the whole swap
-// (clear + append) so the transition snapshots skeleton→content with no frame of
-// emptiness. Falls back to an instant swap where VT is unsupported or motion is
-// reduced — identical end state, just no animation.
+// Swap a page's content (typically its skeleton for the real thing). `mutate` MUST be
+// synchronous and do the whole swap. It never lands in the middle of a page change: while
+// the new page is still waiting to move it's simply there when the page appears, and while
+// it's moving it waits for the move to end. On a page standing still, the old look dissolves.
 export function crossfadeSwap(mutate) {
-  const reduce =
-    window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (typeof document.startViewTransition !== 'function' || reduce) {
-    mutate();
-    return;
-  }
-  const root = document.documentElement;
-  // A transition is already running (usually the page change that mounted this
-  // view, its skeleton fading in). Its incoming side is live, so the change just
-  // shows up in it. Starting a second one would cut the first short: a jump to
-  // its end, then another fade.
-  if (root.dataset.vt) {
-    mutate();
-    return;
-  }
-  root.dataset.vt = 'fade';
-  const t = document.startViewTransition(() => mutate());
-  const done = () => {
-    if (root.dataset.vt === 'fade') delete root.dataset.vt;
-  };
-  // `.ready` rejects on a skipped/aborted transition; swallow it so it isn't an
-  // unhandled promise rejection.
-  t.ready.catch(() => {});
-  t.finished.then(done, done);
+  const phase = pagePhase();
+  if (phase === 'waiting') mutate();
+  else if (phase === 'moving') whenStill(() => crossfadeSwap(mutate));
+  else dissolveOver(document.getElementById('view'), mutate);
 }

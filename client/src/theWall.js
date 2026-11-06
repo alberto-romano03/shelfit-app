@@ -12,6 +12,7 @@
 
 import { api } from './api.js';
 import { openDetail, navigate } from './router.js';
+import { whenStill } from './pageMotion.js';
 import { el, toast } from './ui.js';
 import { withBase } from './basePath.js';
 import { openTitlePicker, openPersonPicker } from './pickers.js';
@@ -335,7 +336,7 @@ export function createTheWall() {
       if (!cached) paint({ movie: null, show: null, person: null });
       return;
     }
-    paint(fav, cached);
+    whenStill(() => paint(fav, cached));
     cacheWall(fav);
   }
 

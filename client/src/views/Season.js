@@ -19,7 +19,10 @@ import { navigate, openDetail, onCleanup } from '../router.js';
 import {
   el,
   icons,
+  skelCircle,
   skelLine,
+  skelPill,
+  skelText,
   toast,
   confirmModal,
   openSheet,
@@ -75,39 +78,29 @@ const scrollMemory = new Map();
 function seasonSkeleton() {
   const view = el('div', { class: 'season-view' });
 
-  // Header — the back button is chrome (available immediately); only the
-  // data-driven series link and title are shimmers.
+  // Header: the back button is chrome (available immediately); only the title is a shimmer.
   view.append(
     el('div', { class: 'season-head' }, [
       el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
-      el('div', { class: 'season-head-text' }, [
-        skelLine({ width: '96px', height: '11px', margin: '0 0 6px' }),
-        skelLine({ width: '150px', height: '20px', margin: '0' }),
-      ]),
-    ])
+      el('div', { class: 'season-head-text' }, [skelLine({ width: '170px', height: '20px', margin: '2px 0' })]),
+    ]),
+    el('div', { class: 'season-progress' }, [
+      el('div', { class: 'season-progress-text' }, [skelText('130px')]),
+      el('div', { class: 'season-progress-bar' }),
+    ]),
+    el('div', { class: 'season-actions' }, [skelPill(48), skelPill(48)]),
+    el('hr', { class: 'status-sep season-sep' })
   );
 
-  // Action buttons row — two equal-width shimmer blocks matching .season-actions.
-  view.append(
-    el('div', { class: 'season-actions' }, [
-      el('div', { class: 'skeleton', style: { flex: '1', height: '48px', borderRadius: '12px' } }),
-      el('div', { class: 'skeleton', style: { flex: '1', height: '48px', borderRadius: '12px' } }),
-    ])
-  );
-
-  // Separator, identical to the real list.
-  view.append(el('hr', { class: 'status-sep season-sep' }));
-
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     view.append(
       el('div', { class: 'episode' }, [
-        el('div', { style: { display: 'flex', gap: '10px', flex: '1', minWidth: '0' } }, [
-          el('div', { class: 'thumb skeleton' }),
-          el('div', { class: 'ep-main' }, [
-            skelLine({ width: '70%' }),
-            skelLine({ cls: 'sm', width: '40%', margin: '6px 0 0' }),
-          ]),
+        el('div', { class: 'thumb skeleton' }),
+        el('div', { class: 'ep-main' }, [
+          el('div', { class: 'ep-title' }, [skelText('78%')]),
+          el('div', { class: 'ep-sub' }, [skelText('46%')]),
         ]),
+        el('div', { class: 'ep-right' }, [skelCircle(30)]),
       ])
     );
   }
@@ -743,17 +736,17 @@ export default async function Season(container, params) {
   }
 
   // --- Mount --------------------------------------------------------------
-  // Setup runs INSIDE the swap callback (not in a later rAF): crossfadeSwap
-  // applies the DOM change asynchronously via startViewTransition, so measuring
-  // afterwards would race the append. Running it here guarantees the scroller is
-  // connected and laid out (getBoundingClientRect forces sync layout) before we
-  // size and render.
+  // Setup runs INSIDE the swap callback (not in a later rAF): crossfadeSwap may
+  // hold the DOM change until the page stops moving, so measuring afterwards could
+  // race the append. Running it here guarantees the scroller is connected and laid
+  // out (getBoundingClientRect forces sync layout) before we size and render.
   crossfadeSwap(() => {
     container.innerHTML = '';
     container.append(seasonView);
     // Turn #app into a flex column so the scroller fills down to the navbar (see
     // body.season-active rules); must be on before setupVirtual measures heights.
     document.body.classList.add('season-active');
+    container.classList.add('view-season');
     setupVirtual();
   });
 }

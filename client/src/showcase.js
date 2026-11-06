@@ -9,11 +9,12 @@
 // it is inlined here per the icon rule in ui.js. No images, no libraries.
 //
 // The sheet reuses the app's modal chrome: the shared .modal-backdrop, the
-// slideUp/slideDown + backdrop fade animations, and lockScroll/unlockScroll — so
+// dialog motion (dialogMotion.js), and lockScroll/unlockScroll — so
 // it enters, leaves and traps scroll exactly like every other popup.
 
 import { trackSheet } from './sheetStack.js';
 import { el, lockScroll, unlockScroll } from './ui.js';
+import { dialogEnter, dialogLeave } from './dialogMotion.js';
 import { t } from './i18n.js';
 
 // --- Inline SVGs for the illustrations -------------------------------------
@@ -247,8 +248,6 @@ export function openShowcase() {
     closed = true;
     untrack();
     document.removeEventListener('keydown', onKey);
-    sheet.classList.add('sheet-closing');
-    backdrop.classList.add('backdrop-closing');
     const done = () => {
       if (removed) return;
       removed = true;
@@ -256,13 +255,13 @@ export function openShowcase() {
       unlockScroll();
       openInstance = null;
     };
-    sheet.addEventListener('animationend', done, { once: true });
-    setTimeout(done, 400); // fallback if animationend never fires
+    dialogLeave(sheet, backdrop, done);
   }
 
   lockScroll();
   untrack = trackSheet(close);
   document.body.append(backdrop);
+  dialogEnter(sheet, backdrop);
   update();
   openInstance = { close };
   return openInstance;

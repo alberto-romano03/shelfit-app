@@ -548,7 +548,7 @@ body.grid-virtual-active #app {
   height: 100dvh;
   min-height: 0;
 }
-body.grid-virtual-active .view.view-grid-virtual {
+.view.view-grid-virtual {
   flex: 1 1 auto;
   min-height: 0;
   /* REQUIRED: a flex item with margin:0 auto (inherited from .view) otherwise
@@ -568,7 +568,7 @@ body.grid-virtual-active .view.view-grid-virtual {
 }
 /* The filters float over the grid and slide up out of the way (grid.js). Only a transform
    moves, so no poster is laid out again; the grid keeps its size and scroll position. */
-body.grid-virtual-active .view.view-grid-virtual > .grid-chrome {
+.view.view-grid-virtual > .grid-chrome {
   position: absolute;
   z-index: 1;
   top: 0;
@@ -579,19 +579,19 @@ body.grid-virtual-active .view.view-grid-virtual > .grid-chrome {
   will-change: transform;
   transition: transform var(--dur-medium) var(--ease-out), visibility 0s;
 }
-body.grid-virtual-active .view.view-grid-virtual > .grid-chrome.is-away {
+.view.view-grid-virtual > .grid-chrome.is-away {
   transform: translateY(-100%);
   /* Out of the keyboard's reach once it has gone. */
   visibility: hidden;
   transition: transform var(--dur-medium) var(--ease-in-out), visibility 0s linear var(--dur-medium);
 }
 @media (prefers-reduced-motion: reduce) {
-  body.grid-virtual-active .view.view-grid-virtual > .grid-chrome,
-  body.grid-virtual-active .view.view-grid-virtual > .grid-chrome.is-away {
+  .view.view-grid-virtual > .grid-chrome,
+  .view.view-grid-virtual > .grid-chrome.is-away {
     transition: none;
   }
 }
-body.grid-virtual-active .gc-scroller {
+.view-grid-virtual .gc-scroller {
   flex: 1 1 auto;
   min-height: 0;
   /* The list starts under the filters and scrolls on beneath them. */
@@ -608,9 +608,7 @@ body.grid-virtual-active .gc-scroller {
   right: 0;
   z-index: 30;
   display: flex;
-  /* Solid, not a see-through blur: the bar is held out of the page fade, and only rejoins
-     the page as the fade ends, so a blur over what's behind it (Home's posters) would
-     change at that moment. At 96% it was barely see-through anyway. */
+  /* Solid: pages slide under it, and a see-through blur over them is work on every frame. */
   background: var(--surface);
   border-top: 1px solid var(--border);
   /* Rounded at the top only — it still sits flush on the bottom edge, so it
@@ -2148,7 +2146,7 @@ body.season-active #app {
   height: 100dvh;
   min-height: 0;
 }
-body.season-active #view.view {
+.view.view-season {
   flex: 1 1 auto;
   min-height: 0;
   /* margin:0 auto (from .view) would otherwise shrink this flex item to its
@@ -2159,15 +2157,15 @@ body.season-active #view.view {
   /* Reserve the fixed navbar's height so the flex scroller ends at the nav's top. */
   padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
 }
-body.season-active .season-view {
+.view-season .season-view {
   flex: 1 1 auto;
   min-height: 0;
 }
 /* Header, actions and separator keep their natural height; only the scroller grows. */
-body.season-active .season-view > :not(.ep-scroller) {
+.view-season .season-view > :not(.ep-scroller) {
   flex: none;
 }
-body.season-active .ep-scroller {
+.view-season .ep-scroller {
   flex: 1 1 auto;
   min-height: 0;
   /* Flex owns the height now — override the inline pixel height the JS still sets. */
@@ -3734,16 +3732,21 @@ body.modal-open {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: flex-end;
   justify-content: center;
   /* Contain any scroll to the popup — no chaining to the page behind. */
   overscroll-behavior: contain;
   touch-action: none;
-  /* Fade IN as well as out: the dim used to appear in a single frame while the
-     panel slid up under it, which read as a flash. Now both ends match. */
-  animation: backdropIn var(--dur-medium) var(--ease-out);
+}
+/* The dim, a layer of its own behind the panel, so it can fade without taking the panel
+   with it (dialogMotion.js). Taps go through to the backdrop, which closes the dialog. */
+.modal-dim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
 }
 .modal {
   width: 100%;
@@ -3757,66 +3760,11 @@ body.modal-open {
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   padding: 20px var(--gutter) calc(20px + env(safe-area-inset-bottom));
   box-shadow: var(--shadow-sheet);
-  animation: slideUp var(--dur-medium) var(--ease-out);
 }
 /* With a drag handle the handle wrap owns the top space; the modal's own top
    padding would otherwise stack on it and push the title down. */
 .modal--handle {
   padding-top: 6px;
-}
-/* Enter: rise into place and fade up. Exit (below) is the true mirror: same
-   duration, same travel, easing reversed, so a popup leaves the way it arrived.
-   It used to fall the panel's whole height while it faded, up to 760px in the same
-   time the entrance spends on 30px. Neither exit keyframe has a `from`: a panel
-   let go mid-drag starts from wherever the finger left it. The travel on exit is
-   relative to that, so the drag offset comes along (--sheet-drag). */
-@keyframes slideUp {
-  from {
-    transform: translateY(30px);
-    opacity: 0;
-  }
-}
-@keyframes backdropIn {
-  from {
-    opacity: 0;
-  }
-}
-/* Dismissal: slide the panel back down and fade the backdrop with it, then the
-   JS removes the node on animationend. Shared by EVERY openModal and openSheet
-   (modals used to be removed from the DOM outright, with no exit at all). */
-@keyframes slideDown {
-  to {
-    transform: translateY(calc(var(--sheet-drag, 0px) + 30px));
-    opacity: 0;
-  }
-}
-@keyframes backdropFade {
-  to {
-    opacity: 0;
-  }
-}
-.modal.sheet-closing {
-  animation: slideDown var(--dur-medium) var(--ease-in) forwards;
-}
-.modal-backdrop.backdrop-closing {
-  animation: backdropFade var(--dur-medium) var(--ease-in) forwards;
-}
-/* Reduced motion: no travel, but still a fade in both directions so nothing
-   ever appears or disappears in a single frame. */
-@media (prefers-reduced-motion: reduce) {
-  .modal,
-  .modal.sheet-closing,
-  .modal-backdrop,
-  .modal-backdrop.backdrop-closing {
-    animation-duration: var(--dur-short);
-    animation-timing-function: linear;
-  }
-  .modal {
-    animation-name: backdropIn; /* opacity only — no translate */
-  }
-  .modal.sheet-closing {
-    animation-name: backdropFade;
-  }
 }
 /* --- Split modal: a scrolling body under a pinned footer -------------------
    .modal is itself the scroller, so a long form pushes its own Save/Cancel
@@ -5387,7 +5335,7 @@ button.srow:active {
 }
 .skeleton {
   overflow: hidden;
-  background: var(--surface);
+  background: var(--skel-fill, var(--surface));
   border-radius: var(--r-sm);
 }
 .skeleton::before {
@@ -5395,7 +5343,7 @@ button.srow:active {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(90deg, transparent, var(--surface-elevated), transparent);
+  background: linear-gradient(90deg, transparent, var(--skel-sheen, var(--surface-elevated)), transparent);
   animation: shimmer 1.4s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -5417,6 +5365,95 @@ button.srow:active {
 }
 .skel-pill {
   border-radius: var(--r-pill);
+}
+/* On a card or a hero, which are already the plain skeleton colour, a block goes a step
+   lighter so it can be seen. */
+.stat-card,
+.lw-skel,
+.tl-card,
+.pk-card,
+.list-card,
+.detail-titles,
+.cp-head-text,
+.person-head-text,
+.list-hero-title {
+  --skel-fill: var(--surface-elevated);
+  --skel-sheen: color-mix(in srgb, var(--surface-elevated) 88%, var(--text-primary));
+}
+/* A line of text not there yet: a no-break space gives it the real line's height, and the
+   block sits inside that height the way the letters will. */
+.skel-text {
+  display: block;
+  position: relative;
+  max-width: 100%;
+  user-select: none;
+}
+.skel-text > .skeleton {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0.78em;
+  transform: translateY(-50%);
+}
+/* Words we already know, while what they name is loading: they keep their exact width
+   and take the block's place. */
+.skel-label,
+.section-title:has(+ .hscroll.is-skel),
+.stat-card:has(.value > .skeleton) .label {
+  position: relative;
+  width: fit-content;
+  color: transparent;
+  user-select: none;
+}
+.skel-label::after,
+.section-title:has(+ .hscroll.is-skel)::after,
+.stat-card:has(.value > .skeleton) .label::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0.78em;
+  transform: translateY(-50%);
+  border-radius: var(--r-sm);
+  background: var(--skel-fill, var(--surface));
+}
+/* Its icon, the same size, without the drawing. */
+.stat-card:has(.value > .skeleton) .stat-ico {
+  -webkit-mask: none !important;
+  mask: none !important;
+  border-radius: var(--r-sm);
+  background: var(--skel-fill);
+}
+/* A round button that has nothing to do yet: only its shape. */
+.icon-btn.is-blank,
+.is-blank .icon-btn {
+  pointer-events: none;
+}
+.is-blank .icon-btn > * {
+  visibility: hidden;
+}
+.grid-divider-label.is-blank {
+  color: transparent;
+}
+/* The hero runs edge to edge, loading or not. */
+.detail-hero.skeleton {
+  border-radius: 0;
+}
+.show-more.is-skel {
+  cursor: default;
+}
+.show-more.is-skel .show-more-pill {
+  width: 104px;
+  height: 25px;
+  padding: 0;
+}
+.skel-star {
+  width: 28px;
+  height: 30px;
+  margin: 5px 8px;
+  border-radius: var(--r-sm);
 }
 .loader-phrase {
   color: var(--text-secondary);
@@ -5972,67 +6009,67 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .toast {
   margin-top: 1px;
 }
 
-/* ===================== Page transitions (cross-fade) ===================== */
-/* Simple, fast dissolve between pages (e.g. shelf <-> detail): the incoming
-   page fades in over the outgoing snapshot. No movement, no morph, no dip. */
-@media (prefers-reduced-motion: no-preference) {
-  html[data-vt='fade']::view-transition-old(root),
-  html[data-vt='grid']::view-transition-old(root) {
-    animation: none;
-  }
-  html[data-vt='fade']::view-transition-new(root),
-  html[data-vt='grid']::view-transition-new(root) {
-    animation: vt-fade-in var(--dur-long) var(--ease-out) both;
-  }
+/* ===================== Page changes (pageMotion.js) ===================== */
+/* The page on its way out, pinned where it stands, so it can't reflow. As specific as the
+   pages' own layout rules, which it must beat (.view.view-grid-virtual sets a position). */
+main.view.page-ghost {
+  position: fixed;
+  margin: 0;
+  max-width: none;
+  pointer-events: none;
 }
-/* Movies <-> Series ('grid'): the status bar sits in the same place on both
-   pages, so it is lifted out of the fade and shown live and solid: no snapshot
-   of the old bar, no cross-fade of two bars, no size morph. Its chip glides from
-   the old page's option to the new one (segmentedBar's glideFrom), drawn above
-   the incoming page. */
+/* While a page moves it's a sheet in its own right. Under a slide it needs its own ground
+   and full height, or the other page shows through it and below it. */
+.page-moving {
+  position: relative;
+}
+.page-solid {
+  background: var(--bg);
+  min-height: calc(100dvh - var(--header-h));
+}
+.page-ghost.page-solid {
+  min-height: 0;
+}
+.page-top {
+  box-shadow: -10px 0 28px rgba(0, 0, 0, 0.45);
+}
+.page-moving,
+.page-ghost {
+  will-change: transform, opacity;
+}
+/* A page held off to the side must not make the document wider. */
+html.page-hop,
+html.page-hop #app {
+  overflow-x: clip;
+}
+/* Between the two pages of a slide, over the one behind. Header and tab bar stay above. */
+.page-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+/* A page's old look, dissolving over its new content. */
+.page-veil {
+  position: fixed;
+  z-index: 5;
+  margin: 0;
+  max-width: none;
+  background: var(--bg);
+  pointer-events: none;
+}
+.page-veil,
+.page-veil * {
+  animation: none !important;
+  transition: none !important;
+}
 /* On a window wider than the options, the status bar sits centred over the
    grid rather than hugging its left edge (auto margins also centre a flex
    item across the column). */
 .segbar.grid-status {
   margin-inline: auto;
-}
-html[data-vt='grid'] .segbar.grid-status:not(.segbar--unlifted) {
-  view-transition-name: grid-status;
-}
-html[data-vt='grid']::view-transition-group(grid-status) {
-  animation: none;
-}
-html[data-vt='grid']::view-transition-old(grid-status) {
-  display: none;
-}
-html[data-vt='grid']::view-transition-new(grid-status) {
-  animation: none;
-}
-@keyframes vt-fade-in {
-  from {
-    opacity: 0;
-  }
-}
-/* The page dissolves; the chrome around it does not. Left in the root snapshot, the
-   tab bar faded with the page, so the old gold tab stayed lit under the new one for
-   most of every page change. Held out and shown live, like the status bar above, a
-   tab answers on its own and the header stays solid. Not while a popup is open: a
-   named element paints above the root, and so above the popup's dim. */
-html[data-vt]:not(:has(.modal-backdrop)) .tabbar {
-  view-transition-name: app-tabbar;
-}
-html[data-vt]:not(:has(.modal-backdrop)) .app-header {
-  view-transition-name: app-header;
-}
-html[data-vt]::view-transition-group(app-tabbar),
-html[data-vt]::view-transition-group(app-header),
-html[data-vt]::view-transition-new(app-tabbar),
-html[data-vt]::view-transition-new(app-header) {
-  animation: none;
-}
-html[data-vt]::view-transition-old(app-tabbar),
-html[data-vt]::view-transition-old(app-header) {
-  display: none;
 }
 
 /* ============ Dust It Off — playful filter controls ============ */
@@ -6475,6 +6512,7 @@ img.mood-emoji {
 
 /* ================= Poster aspect / max width ================= */
 .grid .poster-card {
+  width: 100%;
   max-width: 160px;
   margin-left: auto;
   margin-right: auto;
@@ -9214,17 +9252,6 @@ textarea.notes:focus,
 .ksync-confirm {
   width: 100%;
 }
-/* Exit animation (mirrors the slide-up entrance). */
-.modal-backdrop.ksync-closing {
-  opacity: 0;
-  transition: opacity var(--dur-medium) var(--ease-in);
-}
-.ksync-closing .ksync-modal {
-  transform: translateY(30px);
-  opacity: 0;
-  transition: transform var(--dur-medium) var(--ease-in), opacity var(--dur-medium) var(--ease-in);
-}
-
 /* --- Seasonal snow (December only, home cover) ---------------------------- */
 /* Sits above the cover image but below the profile row (z-index:2) and the
    button overlay (z-index:3). pointer-events:none → never intercepts a tap.
@@ -9349,32 +9376,7 @@ textarea.notes:focus,
   border-radius: var(--r-xl);
   padding: 20px var(--gutter) var(--gutter);
   box-shadow: var(--shadow-xl);
-  animation: popIn var(--dur-medium) var(--ease-out);
 }
-.modal.modal--popup.sheet-closing {
-  animation: popOut var(--dur-medium) var(--ease-in) forwards;
-}
-@keyframes popIn {
-  from {
-    transform: scale(0.92);
-    opacity: 0;
-  }
-}
-@keyframes popOut {
-  to {
-    transform: scale(0.92);
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .modal.modal--popup {
-    animation: backdropIn var(--dur-short) linear;
-  }
-  .modal.modal--popup.sheet-closing {
-    animation: backdropFade var(--dur-short) linear forwards;
-  }
-}
-
 /* --- "Alberto wants to lend you this DVD" (incoming suggestion) ------------
    A friend's DVD handed over: a warm accent glow behind the panel, the poster in
    the owned look (blue edge bars), the disc sliding out from behind it and
@@ -11746,7 +11748,7 @@ textarea.lend-message-input:focus {
 /* ============================================================================
    First-launch showcase (see client/src/showcase.js)
    A near-full-screen paged sheet. It reuses the shared .modal-backdrop and the
-   slideUp / slideDown / backdrop-fade animations; everything else is namespaced
+   dialog motion (dialogMotion.js); everything else is namespaced
    `.sc-*` so the illustrations never collide with app CSS. Colours come from the
    design tokens; the brand literal (#7ed99a "watching") and --kodi-blue match
    statusSelect.js and the Kodi accent used elsewhere.
@@ -11763,10 +11765,6 @@ textarea.lend-message-input:focus {
   flex-direction: column;
   padding: 6px 0 calc(18px + env(safe-area-inset-bottom));
   overflow: hidden;
-  animation: slideUp var(--dur-medium) var(--ease-out);
-}
-.showcase.sheet-closing {
-  animation: slideDown var(--dur-medium) var(--ease-in) forwards;
 }
 
 .sc-header {
@@ -12373,12 +12371,6 @@ textarea.lend-message-input:focus {
 @keyframes sc-kbob { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .showcase,
-  .showcase.sheet-closing {
-    animation-name: backdropIn;
-    animation-duration: var(--dur-short);
-    animation-timing-function: linear;
-  }
   .sc-track,
   .sc-page .sc-viz-wrap,
   .sc-page .sc-title,

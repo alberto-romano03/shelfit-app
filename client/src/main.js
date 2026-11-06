@@ -117,7 +117,6 @@ brandLogo.addEventListener('animationend', () => {
 armLogoIdle();
 
 // --- View container -------------------------------------------------------
-const viewContainer = el('main', { class: 'view', id: 'view' });
 
 // --- Bottom tab bar -------------------------------------------------------
 const TABS = [
@@ -139,10 +138,7 @@ const tabButtons = TABS.map((tab) => {
     onClick: () => {
       resetGridSection(tab.path);
       if (tab.path === '/upcoming') resetUpcoming();
-      // Light the tab on the tap's own frame: the router's onChange only runs once
-      // the page change has captured its snapshot.
-      tabButtons.forEach((other) => other.classList.toggle('active', other === btn));
-      navigate(tab.path);
+      navigate(tab.path, { nav: 'tab' });
     },
   });
   btn.append(label);
@@ -155,16 +151,25 @@ const tabbar = el('nav', { class: 'tabbar' }, tabButtons);
 // navAnim.js). Driven from the router's onChange below.
 const navAnim = initNavAnimations(tabButtons);
 
-app.append(header, viewContainer, tabbar);
+app.append(header, tabbar);
 
 // --- Router ---------------------------------------------------------------
 const GRID_PATHS = new Set(['/movies', '/series']);
+const TAB_PATHS = TABS.map((tab) => tab.path);
 initRouter({
-  container: viewContainer,
-  // Movies <-> Series: the status bar stays put while the page fades and its
-  // chip glides to the other page's filter (views/grid.js).
-  transitionFor: (from, to) =>
-    from !== to && GRID_PATHS.has(from) && GRID_PATHS.has(to) ? 'grid' : null,
+  // Tabs sit side by side, so they shift along the bar's order. Everything else is deeper or
+  // back up. Movies <-> Series keeps the status bar still while its chip glides to the other
+  // page's filter (views/grid.js). The same page again just dissolves into its new self.
+  transitionFor: (from, to, nav) => {
+    if (from === to) return { kind: 'swap' };
+    const a = TAB_PATHS.indexOf(from);
+    const b = TAB_PATHS.indexOf(to);
+    if (nav === 'tab' || (a >= 0 && b >= 0)) {
+      return { kind: GRID_PATHS.has(from) && GRID_PATHS.has(to) ? 'grid' : 'tab', dir: b >= a ? 1 : -1 };
+    }
+    if (nav === 'pop' || b >= 0) return { kind: 'pop' }; // back, or up to a tab (a deleted list)
+    return { kind: 'push' };
+  },
   routes: [
     { path: '/', view: Home },
     { path: '/series', view: Series },

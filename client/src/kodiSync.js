@@ -9,6 +9,7 @@ import { trackSheet } from './sheetStack.js';
 import { api } from './api.js';
 import { navigate } from './router.js';
 import { el, icons, poster, toast, lockScroll, unlockScroll, setLabel, lucideIcon } from './ui.js';
+import { dialogEnter, dialogLeave } from './dialogMotion.js';
 import { attachSwipe } from './swipe.js';
 import { createStatusSelect } from './statusSelect.js';
 import { t } from './i18n.js';
@@ -94,12 +95,11 @@ export function openKodiReview(discoveries) {
     if (closing) return;
     closing = true;
     untrack();
-    backdrop.classList.add('ksync-closing');
-    setTimeout(() => {
+    dialogLeave(modal, backdrop, () => {
       backdrop.remove();
       unlockScroll();
       reviewOpen = false;
-    }, 320); // > --dur-medium so the exit finishes before the node goes
+    });
   }
 
   const nMovies = items.filter((i) => i.type === 'movie').length;
@@ -234,5 +234,6 @@ export function openKodiReview(discoveries) {
   lockScroll();
   untrack = trackSheet(close);
   document.body.append(backdrop);
+  dialogEnter(modal, backdrop);
   mount();
 }

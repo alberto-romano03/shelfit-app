@@ -21,7 +21,8 @@ import {
   icons,
   poster,
   skelGrid,
-  skelLine,
+  skelText,
+  skelTitle,
   toast,
   confirmModal,
   openModal,
@@ -169,21 +170,26 @@ export default async function List(container, params) {
   // copy or the card's hint.
   const heroImg = el('img', { class: 'list-hero-img', alt: '' });
   heroImg.addEventListener('load', () => heroImg.classList.add('is-in'));
-  const eyebrow = el('div', { class: 'list-eyebrow' }, [skelLine({ width: '90px', height: '11px', margin: '0' })]);
-  const title = el('h2', { class: 'list-hero-name' }, [skelLine({ width: '180px', height: '24px', margin: '0' })]);
+  const eyebrow = el('div', { class: 'list-eyebrow' }, [skelText('90px')]);
+  const title = el('h2', { class: 'list-hero-name' }, [skelText('180px')]);
   const editBtn = overlayBtn(icons.pencil, t('lists.rename'));
   const delBtn = overlayBtn(icons.trash2, t('lists.delete'));
+  // Nothing to rename or delete until the list is here: only the two round shapes.
+  const heroActions = el('div', { class: 'list-hero-actions is-blank' }, [editBtn, delBtn]);
   const hero = el('div', { class: 'detail-hero list-hero' }, [
     heroImg,
     el('div', { class: 'list-hero-back' }, [overlayBtn(icons.back, t('common.back'), () => history.back())]),
-    el('div', { class: 'list-hero-actions' }, [editBtn, delBtn]),
+    heroActions,
     el('div', { class: 'list-hero-title' }, [eyebrow, title]),
   ]);
-  const summary = el('div', { class: 'list-summary' }, [skelLine({ width: '160px', margin: '0' })]);
+  const summary = el('div', { class: 'list-summary' }, [skelText('160px')]);
   // The shimmer holds as many posters as the list has (up to three rows), so
   // nothing jumps when they arrive.
   const skeletonCount = hint ? Math.min(Math.max(hint.count || 0, 1), 9) : 9;
-  const body = el('div', {}, [skelGrid(skeletonCount)]);
+  const body = el('div', {}, [
+    skelTitle('30%'),
+    skelGrid(skeletonCount, { cell: 'list-cell', title: 'list-cell-title', sub: 'list-cell-sub' }),
+  ]);
   container.append(hero, summary, body);
 
   function paintEyebrow(type) {
@@ -196,10 +202,10 @@ export default async function List(container, params) {
   const stat = (icon, text) =>
     el('span', { class: 'list-stat' }, [icon ? lucideIcon(icon, 'list-stat-ico') : null, el('span', { text })]);
 
-  // Everything that comes from the list itself. `fade`: crossfade the grid in
-  // (first load); a saved copy or an in-place refresh swaps it directly.
-  function paint(d, { fade = false } = {}) {
+  // Everything that comes from the list itself.
+  function paint(d) {
     data = d;
+    heroActions.classList.remove('is-blank');
     const items = d.items || [];
     const isMovie = d.type === 'movie';
     // The hero only changes when its artwork does (a refresh keeps it still).
@@ -225,8 +231,7 @@ export default async function List(container, params) {
           el('div', { class: 'grid' }, items.map(buildCell)),
         ]
       : [stateBlock({ icon: 'library-big', title: t('lists.empty'), detail: t('lists.emptyDetail') })];
-    if (fade) crossfadeSwap(() => body.replaceChildren(...content));
-    else body.replaceChildren(...content);
+    body.replaceChildren(...content);
   }
 
   editBtn.addEventListener('click', () => {
@@ -346,5 +351,5 @@ export default async function List(container, params) {
   pending.delete(id);
   if (ac.signal.aborted) return; // left while it loaded
   remember(id, fresh);
-  paint(fresh, { fade: true });
+  crossfadeSwap(() => paint(fresh));
 }

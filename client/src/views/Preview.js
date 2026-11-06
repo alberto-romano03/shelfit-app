@@ -15,7 +15,11 @@ import {
   icons,
   mountPoster,
   setBg,
-  skelLine,
+  skelHero,
+  skelOverview,
+  skelPill,
+  skelShowMore,
+  skelText,
   toast,
   crossfadeSwap,
   clear,
@@ -30,19 +34,19 @@ import { t } from '../i18n.js';
 function previewSkeleton() {
   const frag = document.createDocumentFragment();
   frag.append(
-    el('div', { class: 'detail-hero skeleton' }),
+    skelHero(),
     el('div', { class: 'detail-head' }, [
       el('div', { class: 'detail-poster-wrap' }, [el('div', { class: 'detail-poster skeleton' })]),
-      el('div', { class: 'detail-titles' }, [
-        skelLine({ width: '75%', height: '22px', margin: '0 0 8px' }),
-        skelLine({ width: '50%', height: '14px' }),
-        skelLine({ width: '40%', height: '13px', margin: '12px 0 0' }),
+      el('div', { class: 'detail-titles', style: { flex: '1' } }, [
+        el('h2', {}, [skelText('78%')]),
+        el('div', { class: 'detail-meta' }, [el('div', {}, [skelText('92%'), skelText('44%')])]),
+        el('div', { class: 'preview-note' }, [skelText('52%')]),
       ]),
     ]),
     el('div', { style: { marginTop: '20px' } }, [
-      skelLine({ margin: '0 0 8px' }),
-      skelLine({ width: '92%', margin: '8px 0' }),
-      skelLine({ width: '96%', margin: '8px 0' }),
+      skelOverview(4),
+      skelShowMore(),
+      el('div', { class: 'preview-actions' }, [skelPill(48)]),
     ])
   );
   return frag;

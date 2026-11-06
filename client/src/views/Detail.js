@@ -9,7 +9,7 @@ import { posterHue, savedPosterHue, tilesForHue } from '../posterColour.js';
 import { markedToast, undoable, deferred } from '../undoable.js';
 import { followTitle } from '../headerTitle.js';
 import { api, createApi, isAbortError } from '../api.js';
-import { navigate, openDetail, onCleanup } from '../router.js';
+import { navigate, openDetail, onCleanup, cameFrom } from '../router.js';
 import { isServerReachable, markDegraded, reportServerSuspect } from '../network.js';
 import { savePlanDetail, getPlanDetail, formatSyncTime } from '../offlineCache.js';
 import { createRatingControls } from '../ratingControls.js';
@@ -30,7 +30,13 @@ import {
   cachedImg,
   mountPoster,
   setBg,
-  skelLine,
+  skelCircle,
+  skelHero,
+  skelOverview,
+  skelPill,
+  skelShowMore,
+  skelText,
+  skelTitle,
   toast,
   openModal,
   openWatchCountModal,
@@ -442,23 +448,58 @@ function buildOfflineBento(d, meta) {
 }
 
 function detailSkeleton() {
+  const row = (kids, cls = '') => el('div', { class: `detail-actions-row ${cls}`.trim() }, kids);
+  const rating = () =>
+    el('div', { class: 'rating-wrap' }, [
+      el('div', { class: 'rating-row' }, [
+        el('div', { class: 'stars' }, Array.from({ length: 5 }, () => el('div', { class: 'skeleton skel-star' }))),
+        skelCircle(40),
+      ]),
+      el('div', { style: { height: '29px' } }),
+    ]);
+  // Below the status the two kinds of title differ. Where it was opened from says which
+  // one this is likely to be.
+  const isShow = /(series|season|upcoming)/.test(cameFrom()) || /^\/?$/.test(cameFrom());
+  const rest = isShow
+    ? [
+        row([skelPill(45)]),
+        skelTitle('22%'),
+        rating(),
+        skelTitle('30%'),
+        el('div', { class: 'muted' }, [skelText('44%')]),
+        el('div', { class: 'progress-bar' }),
+        skelTitle('26%'),
+        el('div', { class: 'skeleton', style: { height: '354px', borderRadius: 'var(--r-md)' } }),
+      ]
+    : [
+        row([skelPill(45), skelPill(45)], 'rewatch-keys'),
+        row([skelPill(45), skelPill(45)]),
+        skelTitle('22%'),
+        rating(),
+        el('div', { class: 'bento-section skeleton', style: { height: '296px', borderRadius: 'var(--r-md)' } }),
+      ];
   const frag = document.createDocumentFragment();
   frag.append(
-    el('div', { class: 'detail-hero skeleton' }),
+    skelHero(),
     el('div', { class: 'detail-head' }, [
       // Wrap the poster like the real layout so it's bottom-anchored (sticking up
       // into the hero) instead of overflowing DOWN into the description below.
       el('div', { class: 'detail-poster-wrap' }, [el('div', { class: 'detail-poster skeleton' })]),
-      el('div', { class: 'detail-titles' }, [
-        skelLine({ width: '75%', height: '22px', margin: '0 0 8px' }),
-        skelLine({ width: '50%', height: '14px' }),
-        skelLine({ width: '40%', height: '13px', margin: '12px 0 0' }),
+      el('div', { class: 'detail-titles', style: { flex: '1' } }, [
+        el('h2', {}, [skelText('78%')]),
+        el('div', { class: 'detail-meta' }, [
+          el('div', { class: 'meta-row' }, [skelText('34%')]),
+          el('div', { class: 'meta-row' }, [skelText('48%')]),
+          el('div', { class: 'meta-row' }, [skelText('62%')]),
+        ]),
       ]),
     ]),
-    el('div', { style: { marginTop: '20px' } }, [
-      skelLine({ margin: '0 0 8px' }),
-      skelLine({ width: '92%', margin: '8px 0' }),
-      skelLine({ width: '96%', margin: '8px 0' }),
+    el('div', {}, [
+      skelOverview(4),
+      skelShowMore(),
+      el('div', { class: 'section-title remote-title' }, [skelText('34%')]),
+      row([skelPill(47)]),
+      ...rest,
     ])
   );
   return frag;
