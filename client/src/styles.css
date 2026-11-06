@@ -608,13 +608,15 @@ body.grid-virtual-active .gc-scroller {
   right: 0;
   z-index: 30;
   display: flex;
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
-  backdrop-filter: blur(14px);
+  /* Solid, not a see-through blur: the bar is held out of the page fade, and only rejoins
+     the page as the fade ends, so a blur over what's behind it (Home's posters) would
+     change at that moment. At 96% it was barely see-through anyway. */
+  background: var(--surface);
   border-top: 1px solid var(--border);
   /* Rounded at the top only — it still sits flush on the bottom edge, so it
      reads as a sheet the content slides under rather than a full-width ledge.
-     overflow keeps the blur and the fill inside the rounded shape at the
-     corners, where the border alone would leave a square edge behind them. */
+     overflow keeps the fill inside the rounded shape at the corners, where the
+     border alone would leave a square edge behind them. */
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   overflow: hidden;
   padding-bottom: env(safe-area-inset-bottom);
