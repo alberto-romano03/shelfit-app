@@ -4,6 +4,7 @@ import { imageCache } from './imageCache.js';
 import { withBase } from './basePath.js';
 import { t } from './i18n.js';
 import { trackSheet } from './sheetStack.js';
+import { tileFor, learnPosterHue } from './posterColour.js';
 
 // --- DOM builder ----------------------------------------------------------
 export function el(tag, props = {}, children = []) {
@@ -607,13 +608,22 @@ export function mountPoster(container, url, alt, opts = {}) {
     // behind all the off-screen work).
     if (opts.autoDecode !== false && img.decode) img.decode().catch(() => {});
     if (img.complete && img.naturalWidth > 0) show(); // already decoded → instant
+    learnPosterHue(url, img);
     return container;
   }
 
-  // Streaming path (cache miss): fade the image in over the shimmer as it loads.
+  // Streaming path (cache miss): fade the image in over the shimmer as it loads, or over
+  // the poster's own colour once that's known.
+  const tile = tileFor(url);
+  if (tile) {
+    container.classList.remove('skeleton');
+    container.classList.add('poster-tile');
+    container.style.setProperty('--tile', tile);
+  }
   const img = el('img', { class: 'img-fade', alt: alt || '' });
   const reveal = () => {
     if (img.naturalWidth <= 0) return;
+    learnPosterHue(url, img);
     // The decoded image is already in the DOM; fade it in over the shimmer, then
     // stop the shimmer once the image has fully covered it (never a hard cut,
     // never a gap of emptiness between the two states).

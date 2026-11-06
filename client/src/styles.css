@@ -5205,6 +5205,22 @@ button.srow:active {
   position: relative;
   isolation: isolate;
 }
+/* A poster's own colour while it loads, in the tour's poster style (.sc-wall .sc-poster):
+   the soft sheen, over its angled gradient. */
+.poster-tile {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.18), transparent 55%), var(--tile);
+}
+.gc-cell.poster-tile .gc-img {
+  transition: opacity var(--dur-long) var(--ease-state);
+}
+.gc-cell.tile-wait .gc-img {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gc-cell.poster-tile .gc-img {
+    transition: none;
+  }
+}
 .skeleton {
   overflow: hidden;
   background: var(--surface);

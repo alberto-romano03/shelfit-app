@@ -23,6 +23,7 @@
 // FRESH_MS is quietly revalidated too, which catches what the server changes on
 // its own (the nightly Kodi sync).
 
+import { tileFor, learnPosterHue } from './posterColour.js';
 import { createApi, isAbortError } from './api.js';
 import { el, stateBlock } from './ui.js';
 import { imageCache } from './imageCache.js';
@@ -164,7 +165,7 @@ function createCell(onItemClick) {
     currentItem = item;
     retryHandler = null;
     node.dataset.itemId = item.id;
-    node.classList.remove('is-skel', 'is-retry');
+    node.classList.remove('is-skel', 'is-retry', 'poster-tile', 'tile-wait');
     if (item.rating) {
       badge.style.display = '';
       badge.innerHTML = `★ ${item.rating}`;
@@ -177,12 +178,21 @@ function createCell(onItemClick) {
     if (cached) {
       if (img.getAttribute('src') !== cached) img.src = cached;
       node.classList.remove('skeleton');
+      learnPosterHue(item.poster_url, img);
       return;
     }
     // Otherwise shimmer until it decodes, never over the previous title's poster.
     // Guard against the cell being recycled to another item mid-load.
     img.removeAttribute('src');
-    node.classList.add('skeleton');
+    const tile = tileFor(item.poster_url);
+    if (tile) {
+      // Its own colour, once known; the poster fades over it.
+      node.classList.remove('skeleton');
+      node.classList.add('poster-tile', 'tile-wait');
+      node.style.setProperty('--tile', tile);
+    } else {
+      node.classList.add('skeleton');
+    }
     if (!item.poster_url) return;
     imageCache
       .load(item.poster_url)
@@ -190,6 +200,14 @@ function createCell(onItemClick) {
         if (currentItem !== item) return;
         if (u) img.src = u;
         node.classList.remove('skeleton');
+        if (!u) return;
+        (img.decode ? img.decode() : Promise.resolve())
+          .catch(() => {})
+          .then(() => {
+            if (currentItem !== item) return;
+            node.classList.remove('tile-wait');
+            learnPosterHue(item.poster_url, img);
+          });
       })
       .catch(() => {
         /* keep the shimmer; never a broken-image icon */
@@ -199,7 +217,7 @@ function createCell(onItemClick) {
     currentItem = null;
     retryHandler = null;
     delete node.dataset.itemId;
-    node.classList.remove('is-retry');
+    node.classList.remove('is-retry', 'poster-tile', 'tile-wait');
     node.classList.add('is-skel', 'skeleton');
     img.removeAttribute('src');
     badge.style.display = 'none';
@@ -208,7 +226,7 @@ function createCell(onItemClick) {
     currentItem = null;
     retryHandler = fn;
     delete node.dataset.itemId;
-    node.classList.remove('is-skel', 'skeleton');
+    node.classList.remove('is-skel', 'skeleton', 'poster-tile', 'tile-wait');
     node.classList.add('is-retry');
     img.removeAttribute('src');
     badge.style.display = 'none';
