@@ -1271,7 +1271,7 @@ export async function openPosterMenu(item) {
       ]);
       const addLend = () => {
         if (suggestRecipients && suggestRecipients.length && rows.isConnected) {
-          rows.append(row('send', t('detail.suggest'), () => openSuggestSheet(item)));
+          rows.append(row('heart-handshake', t('detail.suggest'), () => openSuggestSheet(item)));
         }
       };
       modal.append(
@@ -1576,7 +1576,7 @@ function openMenu(d, reload) {
     // the household can sign in.
     if (suggestRecipients && suggestRecipients.length) {
       actions.push({
-        icon: 'send',
+        icon: 'heart-handshake',
         label: t('detail.suggest'),
         onClick: (_c, cl) => {
           cl();
