@@ -1589,6 +1589,7 @@ body.grid-virtual-active .gc-scroller {
   grid-template-areas: 'status status status status';
 }
 .bento-cell {
+  transition: background-color var(--dur-medium) var(--ease-state), color var(--dur-medium) var(--ease-state);
   background: var(--surface-elevated);
   border-radius: var(--r-md);
   padding: 10px;

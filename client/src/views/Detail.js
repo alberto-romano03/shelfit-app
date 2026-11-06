@@ -4,6 +4,7 @@
 // Edits persist immediately; built views are retained (LRU) for instant return.
 
 import { timeHintsOn, hoursAndMinutes, roughlyLeft, endsAt } from '../timeHints.js';
+import { posterHue, savedPosterHue, tilesForHue } from '../posterColour.js';
 import { markedToast, undoable, deferred } from '../undoable.js';
 import { followTitle } from '../headerTitle.js';
 import { api, createApi, isAbortError } from '../api.js';
@@ -273,13 +274,30 @@ const BENTO_PALETTES = [
 ];
 // Set the scoped --bento-* custom properties on a .bento grid, once, from the
 // title's tmdb id. Cells then theme themselves purely via their bento-shade-* class.
-function applyBentoPalette(grid, tmdbId) {
+function applyBentoPalette(grid, tmdbId, posterUrl) {
   const n = BENTO_PALETTES.length;
-  const pal = BENTO_PALETTES[(((Number(tmdbId) || 0) % n) + n) % n];
-  grid.style.setProperty('--bento-dark', pal.dark);
-  grid.style.setProperty('--bento-mid', pal.mid);
-  grid.style.setProperty('--bento-light', pal.light);
-  grid.style.setProperty('--bento-mid-text', pal.midText);
+  const paint = (pal) => {
+    grid.style.setProperty('--bento-dark', pal.dark);
+    grid.style.setProperty('--bento-mid', pal.mid);
+    grid.style.setProperty('--bento-light', pal.light);
+    grid.style.setProperty('--bento-mid-text', pal.midText);
+  };
+  // The tiles take the poster's colour. Known already, they paint with it from the start;
+  // otherwise they fade to it once it's worked out. A poster with no colour to speak of
+  // keeps the palette chosen from the id.
+  const known = posterUrl ? savedPosterHue(posterUrl) : null;
+  if (known !== undefined && known !== null) {
+    paint(tilesForHue(known));
+    return grid;
+  }
+  paint(BENTO_PALETTES[(((Number(tmdbId) || 0) % n) + n) % n]);
+  if (known === undefined) {
+    posterHue(posterUrl)
+      .then((hue) => {
+        if (hue !== null) paint(tilesForHue(hue));
+      })
+      .catch(() => {});
+  }
   return grid;
 }
 
@@ -389,7 +407,8 @@ function buildBento(d, meta) {
 
   const grid = applyBentoPalette(
     d.type === 'movie' ? buildMovieBento(meta) : buildShowBento(meta),
-    d.tmdb_id
+    d.tmdb_id,
+    d.poster_url
   );
   // Liner Notes are always fully expanded (no collapse).
   const header = el('div', { class: 'bento-header' }, [
@@ -414,7 +433,8 @@ function buildOfflineBento(d, meta) {
   ]);
   const grid = applyBentoPalette(
     el('div', { class: 'bento bento--solo' }, [statusCell(st, 'status', 'dark')]),
-    d.tmdb_id
+    d.tmdb_id,
+    d.poster_url
   );
   const bodyWrap = el('div', { class: 'bento-body' }, [grid]);
   return el('div', { class: 'bento-section' }, [header, bodyWrap]);
