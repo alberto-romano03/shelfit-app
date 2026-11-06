@@ -5,9 +5,8 @@
 // Animates max-height between the truncated preview and the full text, with a
 // timeout fallback in case transitionend is missed.
 
-import { el, setLabel } from './ui.js';
+import { el, showMoreToggle } from './ui.js';
 import { smartTruncate } from './truncate.js';
-import { t } from './i18n.js';
 
 // Returns the nodes to append: just the paragraph when the text fits, or the
 // paragraph plus a toggle when it needed truncating.
@@ -19,7 +18,9 @@ export function collapsibleText(full, className = 'overview overview-collapsible
   ov.textContent = truncated ? shortText : full;
   if (!truncated) return [ov];
 
-  const toggle = el('div', { class: 'overview-toggle', text: t('common.showMore') });
+  // While it's cut short, the last lines dissolve into the page.
+  ov.classList.add('is-cut');
+  const more = showMoreToggle();
   let expanded = false;
   let animating = false;
 
@@ -29,11 +30,14 @@ export function collapsibleText(full, className = 'overview overview-collapsible
     if (!animating) return;
     animating = false;
     ov.removeEventListener('transitionend', onEnd);
-    if (!expanded) ov.textContent = shortText; // box is small now — trim to the preview
+    if (!expanded) {
+      ov.textContent = shortText; // box is small now — trim to the preview
+      ov.classList.add('is-cut');
+    }
     ov.style.maxHeight = 'none'; // natural height after the animation
   };
 
-  toggle.addEventListener('click', () => {
+  more.el.addEventListener('click', () => {
     if (animating) return;
     animating = true;
     const from = ov.offsetHeight; // current height (preview or full)
@@ -42,7 +46,8 @@ export function collapsibleText(full, className = 'overview overview-collapsible
     // expansion finishes. Deferring it left the old text sitting there for the
     // whole ~280ms expand, so the swap read as a late, disconnected flicker
     // rather than part of the same gesture.
-    setLabel(toggle, expanded ? t('text.showLess') : t('common.showMore'));
+    more.setOpen(expanded);
+    if (expanded) ov.classList.remove('is-cut');
 
     // Measure the height the box is heading TO, then decide what text to show
     // while it travels.
@@ -80,5 +85,5 @@ export function collapsibleText(full, className = 'overview overview-collapsible
     return h;
   }
 
-  return [ov, toggle];
+  return [ov, more.el];
 }

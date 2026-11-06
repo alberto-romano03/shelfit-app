@@ -1704,10 +1704,63 @@ body.grid-virtual-active .gc-scroller {
   overflow: hidden;
   transition: max-height var(--dur-medium) var(--ease-in-out);
 }
-.overview-toggle {
-  color: var(--accent);
-  font-size: 13px;
-  margin-bottom: 12px;
+/* Show more / Show less: the pill matches .grid-divider-label, and the line either side
+   closes off the text. The whole row answers the tap. */
+.show-more {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: -4px 0 4px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.show-more::before,
+.show-more::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--text-primary) 20%, transparent);
+}
+.show-more-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  transition: scale var(--dur-short) var(--ease-out);
+}
+.show-more:active .show-more-pill {
+  scale: var(--press);
+}
+.show-more-chev {
+  display: inline-flex;
+  color: var(--text-secondary);
+  transition: rotate var(--dur-medium) var(--ease-out);
+}
+.show-more-chev svg {
+  width: 14px;
+  height: 14px;
+}
+.show-more.is-open .show-more-chev {
+  rotate: 180deg;
+}
+@media (prefers-reduced-motion: reduce) {
+  .show-more-chev {
+    transition: none;
+  }
+}
+/* Text cut short dissolves into whatever is behind it, on a page or in a sheet. */
+.overview.is-cut {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.8em), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.8em), transparent);
 }
 
 .stars {
@@ -6722,10 +6775,8 @@ img.mood-emoji {
 .genre-collapsible.collapsed {
   max-height: 142px; /* 3 rows: 42*3 + 8*2 */
 }
-.genre-toggle {
-  cursor: pointer;
-  margin-top: 10px;
-  margin-bottom: 0;
+.show-more.genre-toggle {
+  margin: 6px 0 0;
 }
 .genre-chip {
   min-width: 0;

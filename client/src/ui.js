@@ -1014,6 +1014,29 @@ export function setLabel(node, text) {
   });
 }
 
+// Show more / Show less: a small pill sitting on a line that closes off what's above it,
+// the same device as the section dividers on What's Next. The chevron turns as it opens.
+//   const more = showMoreToggle();
+//   more.el.addEventListener('click', () => more.setOpen(!open));
+export function showMoreToggle() {
+  const label = el('span', { text: t('common.showMore') });
+  const chevron = el('span', {
+    class: 'show-more-chev',
+    html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+  });
+  const node = el('button', { class: 'show-more', type: 'button', 'aria-expanded': 'false' }, [
+    el('span', { class: 'show-more-pill' }, [label, chevron]),
+  ]);
+  return {
+    el: node,
+    setOpen(open) {
+      node.classList.toggle('is-open', open);
+      node.setAttribute('aria-expanded', open ? 'true' : 'false');
+      setLabel(label, open ? t('text.showLess') : t('common.showMore'));
+    },
+  };
+}
+
 // --- Segmented control ------------------------------------------------------
 // The design-system default for a chip-style choice between a small, fixed set
 // of options (Movies / TV Shows and friends): ONE rounded track with the active

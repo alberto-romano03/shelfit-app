@@ -9,6 +9,7 @@ import {
   spinner,
   openSheet,
   setLabel,
+  showMoreToggle,
   segmentedControl,
   stateBlock,
   lucideIcon,
@@ -196,7 +197,9 @@ export function openDustItOff() {
       // Collapse to ~3 rows; reveal the rest with a toggle. Height animates via
       // max-height (set to the measured scrollHeight so wrapping stays correct).
       row.classList.add('genre-collapsible', 'collapsed');
-      const toggle = el('div', { class: 'overview-toggle genre-toggle', text: t('common.showMore') });
+      const more = showMoreToggle();
+      const toggle = more.el;
+      toggle.classList.add('genre-toggle');
       let expanded = false;
       toggle.addEventListener('click', () => {
         expanded = !expanded;
@@ -209,7 +212,7 @@ export function openDustItOff() {
           row.classList.add('collapsed');
           row.style.maxHeight = '';
         }
-        setLabel(toggle, expanded ? t('dust.showLess') : t('common.showMore'));
+        more.setOpen(expanded);
       });
       // After expanding, drop the inline cap so the grid can reflow freely.
       row.addEventListener('transitionend', (e) => {

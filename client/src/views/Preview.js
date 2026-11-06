@@ -3,6 +3,7 @@
 // detail; the only action is an explicit "Add to library" (nothing is added by
 // opening it). Redirects to the real detail when the title is already present.
 
+import { collapsibleText } from '../collapsibleText.js';
 import { followTitle } from '../headerTitle.js';
 import { createApi, isAbortError } from '../api.js';
 import { navigate, onCleanup } from '../router.js';
@@ -132,17 +133,7 @@ export default async function Preview(container, params) {
 
   // --- Body: overview + add CTA --- (margin clears it from the head above) ---
   const body = el('div', { style: { marginTop: '20px' } });
-  if (meta.overview) {
-    const ov = el('div', { class: 'overview clamp', text: meta.overview });
-    const toggle = el('div', { class: 'overview-toggle', text: t('common.showMore') });
-    let expanded = false;
-    toggle.addEventListener('click', () => {
-      expanded = !expanded;
-      ov.classList.toggle('clamp', !expanded);
-      toggle.textContent = expanded ? t('preview.showLess') : t('common.showMore');
-    });
-    body.append(ov, toggle);
-  }
+  if (meta.overview) body.append(...collapsibleText(meta.overview));
 
   // Explicit add — nothing happens until the user chooses to. Reuses the shared
   // add dialog; on success it jumps to the new title's real detail.

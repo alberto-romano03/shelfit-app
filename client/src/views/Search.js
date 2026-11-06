@@ -11,6 +11,7 @@
 // Also exports the shared "Add to library" modal (openAddModal) used here and
 // by other views.
 
+import { collapsibleText } from '../collapsibleText.js';
 import { api, createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup } from '../router.js';
 import {
@@ -972,17 +973,7 @@ export function openAddModal(r, { onAdded } = {}) {
 
     // --- Summary with Show more / Show less (kept compact) ---
     let summary = null;
-    if (r.overview) {
-      const ov = el('div', { class: 'overview clamp', text: r.overview });
-      const toggle = el('div', { class: 'overview-toggle', text: t('common.showMore') });
-      let expanded = false;
-      toggle.addEventListener('click', () => {
-        expanded = !expanded;
-        ov.classList.toggle('clamp', !expanded);
-        toggle.textContent = expanded ? t('search.showLess') : t('common.showMore');
-      });
-      summary = el('div', { class: 'add-summary' }, [ov, toggle]);
-    }
+    if (r.overview) summary = el('div', { class: 'add-summary' }, collapsibleText(r.overview));
 
     // --- Status bento — tap to add with that status (highlighted); tap the same
     // one again to undo (removes from library, un-highlights); tap a different
