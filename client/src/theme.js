@@ -60,10 +60,39 @@ export function setTheme(theme) {
   return next;
 }
 
+// The new theme spreads in a circle from `origin` ({ x, y }, where it was tapped), through
+// the browser's own page transition. Anything that can't do that simply switches.
+export function revealTheme(theme, origin) {
+  const same = resolved(theme) === resolved(currentTheme());
+  const still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (same || still || !origin || typeof document.startViewTransition !== 'function') {
+    return setTheme(theme);
+  }
+  const root = document.documentElement;
+  root.classList.add('theme-reveal');
+  const change = document.startViewTransition(() => setTheme(theme));
+  change.ready
+    .then(() => {
+      const r = Math.hypot(
+        Math.max(origin.x, innerWidth - origin.x),
+        Math.max(origin.y, innerHeight - origin.y)
+      );
+      root.animate(
+        { clipPath: [`circle(0px at ${origin.x}px ${origin.y}px)`, `circle(${r}px at ${origin.x}px ${origin.y}px)`] },
+        { duration: 600, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', pseudoElement: '::view-transition-new(root)' }
+      );
+    })
+    .catch(() => {});
+  change.finished.finally(() => root.classList.remove('theme-reveal'));
+  return theme;
+}
+
 // Quick two-way flip for the Home cover button: pin the opposite of whatever is
 // showing right now (so from 'system' it commits to an explicit light/dark).
-export function toggleTheme() {
-  return setTheme(resolved(currentTheme()) === 'light' ? 'dark' : 'light');
+export function toggleTheme(origin) {
+  const next = resolved(currentTheme()) === 'light' ? 'dark' : 'light';
+  revealTheme(next, origin);
+  return next;
 }
 
 export function initTheme() {

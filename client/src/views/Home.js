@@ -51,6 +51,9 @@ import { t, locale } from '../i18n.js';
 // Decorative animated background for the two home CTAs. Inert markup (grey,
 // low-opacity, CSS-@keyframes-animated) that lives *behind* the label as soft
 // texture — never a foreground icon. See styles.css for the animations.
+const THEME_SUN = 'M12 8C13.061 8 14.078 8.422 14.828 9.172C15.578 9.922 16 10.939 16 12C16 14.209 14.209 16 12 16C9.791 16 8 14.209 8 12C8 9.791 9.791 8 12 8Z';
+const THEME_MOON = 'M11.2 3C9.11 5.787 9.387 9.687 11.85 12.15C14.313 14.613 18.213 14.89 21 12.8C20.556 17.53 16.506 21.105 11.757 20.956C7.008 20.807 3.194 16.992 3.045 12.243C2.896 7.494 6.463 3.447 11.2 3Z';
+
 const DUST_STAR =
   '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.3 7.4L22 12l-7.7 2.6L12 22l-2.3-7.4L2 12l7.7-2.6z"/></svg>';
 // Six stars → an irregularly-scattered starfield; each star's size, position and
@@ -134,14 +137,19 @@ export default async function Home(container) {
   const cover = el('div', { class: 'profile-cover' });
 
   // Theme toggle sits between edit and settings; icon reflects current theme.
+  // The sun's disc and the moon are the same five curves in different places, so the one
+  // reshapes into the other (styles.css, .theme-morph). A browser that can't animate a path
+  // just swaps it.
   const themeBtn = el('button', {
-    class: 'icon-btn cover-btn',
+    class: 'icon-btn cover-btn' + (resolvedTheme() === 'light' ? ' is-moon' : ''),
     'aria-label': t('home.toggleTheme'),
-    html: resolvedTheme() === 'light' ? icons.moon : icons.sun,
+    html: `<svg class="theme-morph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="tm-rays" d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/><path class="tm-disc" d="${resolvedTheme() === 'light' ? THEME_MOON : THEME_SUN}"/></svg>`,
   });
   themeBtn.addEventListener('click', () => {
-    const next = toggleTheme();
-    themeBtn.innerHTML = next === 'light' ? icons.moon : icons.sun;
+    const box = themeBtn.getBoundingClientRect();
+    const next = toggleTheme({ x: box.left + box.width / 2, y: box.top + box.height / 2 });
+    themeBtn.classList.toggle('is-moon', next === 'light');
+    themeBtn.querySelector('.tm-disc').setAttribute('d', next === 'light' ? THEME_MOON : THEME_SUN);
   });
 
   // Edit + theme live on the cover; Settings moved to the top header bar. The

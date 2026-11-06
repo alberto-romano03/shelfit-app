@@ -365,6 +365,43 @@ select {
   display: flex;
   gap: 4px;
 }
+/* The theme spreading from where it was tapped (revealTheme in theme.js): the new look on
+   top, opening up; the old one still underneath. */
+html.theme-reveal::view-transition-old(root),
+html.theme-reveal::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html.theme-reveal::view-transition-old(root) {
+  z-index: 0;
+}
+html.theme-reveal::view-transition-new(root) {
+  z-index: 1;
+}
+/* The sun and moon are one drawing: the disc reshapes, the rays turn away. */
+.theme-morph .tm-rays {
+  transform-origin: 12px 12px;
+  transition: opacity var(--dur-medium) var(--ease-state), transform var(--dur-set) var(--ease-in-out);
+}
+.is-moon .theme-morph .tm-rays {
+  opacity: 0;
+  transform: rotate(45deg) scale(0.6);
+}
+@supports (d: path('M0 0')) {
+  .theme-morph .tm-disc {
+    d: path('M12 8C13.061 8 14.078 8.422 14.828 9.172C15.578 9.922 16 10.939 16 12C16 14.209 14.209 16 12 16C9.791 16 8 14.209 8 12C8 9.791 9.791 8 12 8Z');
+    transition: d var(--dur-set) var(--ease-in-out);
+  }
+  .is-moon .theme-morph .tm-disc {
+    d: path('M11.2 3C9.11 5.787 9.387 9.687 11.85 12.15C14.313 14.613 18.213 14.89 21 12.8C20.556 17.53 16.506 21.105 11.757 20.956C7.008 20.807 3.194 16.992 3.045 12.243C2.896 7.494 6.463 3.447 11.2 3Z');
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-morph .tm-rays,
+  .theme-morph .tm-disc {
+    transition: none;
+  }
+}
 /* The page's title, once it has scrolled away: it takes the logo's place. The right
    edge clears the two 44px actions. */
 .header-title {

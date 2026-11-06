@@ -5,7 +5,7 @@
 
 import { api, createApi, isAbortError, markLibraryChanged } from '../api.js';
 import { onCleanup } from '../router.js';
-import { currentTheme, setTheme } from '../theme.js';
+import { currentTheme, revealTheme } from '../theme.js';
 import { getPref, setPref } from '../prefs.js';
 import { pushSupported, enablePush, disablePush, currentPushEndpoint } from '../push.js';
 import { signOut } from '../signOut.js';
@@ -598,6 +598,7 @@ export default async function Settings(container) {
 
   // Three-way theme picker (System / Dark / Light) as a segmented control rather
   // than a single dark-mode switch: "System" follows the OS, and applies live.
+  let themeTap = null;
   const theme = segmentedControl({
     options: [
       ['system', t('settings.theme.system'), 'sun-moon'],
@@ -606,7 +607,11 @@ export default async function Settings(container) {
     ],
     value: currentTheme(),
     ariaLabel: t('settings.theme.label'),
-    onChange: (v) => setTheme(v), // applies instantly, no reload
+    onChange: (v) => revealTheme(v, themeTap), // applies instantly, no reload
+  });
+  // The new theme spreads from where the option was tapped.
+  theme.el.addEventListener('pointerdown', (e) => {
+    themeTap = { x: e.clientX, y: e.clientY };
   });
   const themeRow = el('div', { class: 'srow srow--stack' }, [
     el('div', { class: 'srow-head' }, [
