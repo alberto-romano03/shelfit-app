@@ -11,6 +11,7 @@
 // not-yet-fetched ranges render shimmer skeletons; a failed page shows a retry
 // row. Scroll position is remembered per season (in memory) for the session.
 
+import { timeHintsOn, hoursAndMinutes } from '../timeHints.js';
 import { haptic } from '../haptic.js';
 import { markedToast } from '../undoable.js';
 import { createApi, isAbortError } from '../api.js';
@@ -161,7 +162,10 @@ export default async function Season(container, params) {
   const total = Number.isFinite(first.total) ? first.total : (first.episodes || []).length;
   const totalPages = first.totalPages || 1;
   // Absolute index to jump to (first unwatched, else last episode) — see server.
-  const nextIndex = Number.isFinite(first.next_index) ? first.next_index : 0;
+  let nextIndex = Number.isFinite(first.next_index) ? first.next_index : 0;
+  // The count and time left. A copy saved before these existed simply shows neither.
+  let watchedCount = Number.isFinite(first.watched_count) ? first.watched_count : null;
+  let minutesLeft = Number.isFinite(first.minutes_left) ? first.minutes_left : null;
   const episodes = new Array(total); // position → episode object (or empty)
   const indexByEp = new Map(); // episode_number → absolute index (loaded eps only)
   const pageStatus = new Array(totalPages + 1); // 1-indexed: undefined | 'loading' | 'loaded' | 'error'
@@ -249,7 +253,25 @@ export default async function Season(container, params) {
   const spacer = el('div', { class: 'ep-spacer' });
   const scroller = el('div', { class: 'ep-scroller' }, [spacer]);
   const listSep = el('hr', { class: 'status-sep season-sep' });
-  const seasonView = el('div', { class: 'season-view' }, [header, actionRow, listSep, scroller]);
+  const progressText = el('div', { class: 'season-progress-text' });
+  const progressFill = el('i');
+  const progress = el('div', { class: 'season-progress' }, [
+    progressText,
+    el('div', { class: 'season-progress-bar' }, [progressFill]),
+  ]);
+  function paintProgress() {
+    if (watchedCount === null) return;
+    const count = t('season.progress', { watched: watchedCount, total });
+    const left = timeHintsOn() && minutesLeft > 0 ? t('time.leftExact', { time: hoursAndMinutes(minutesLeft) }) : '';
+    progressText.textContent = left ? `${count} · ${left}` : count;
+    progressFill.style.transform = `scaleX(${total ? watchedCount / total : 0})`;
+  }
+  paintProgress();
+  const seasonView = el(
+    'div',
+    { class: 'season-view' },
+    watchedCount === null ? [header, actionRow, listSep, scroller] : [header, progress, actionRow, listSep, scroller]
+  );
 
   let ROW_H = FALLBACK_ROW_H;
   const pool = []; // recycled row objects, ready for reuse
@@ -357,6 +379,8 @@ export default async function Season(container, params) {
       if (ep.air_date) bits.push(formatDate(ep.air_date));
       if (ep.runtime) bits.push(t('season.runtime', { min: ep.runtime }));
       sub.textContent = bits.join(' · ');
+      node.classList.toggle('is-next', hasNext() && ep._i === nextIndex);
+      node.classList.toggle('is-watched', !!ep.watched);
       check.classList.remove('check-draw');
       check.classList.toggle('done', !!ep.watched);
       if (ep.watched && ep.watch_count > 1) check.innerHTML = `<span class="check-count">×${ep.watch_count}</span>`;
@@ -491,6 +515,28 @@ export default async function Season(container, params) {
   // Refresh the row currently displaying episode `ep` after its data mutated
   // (mark watched, note edited, catch-up). No-op when that row is off-screen —
   // it will show the new state whenever it scrolls back in.
+  // Whether there is an episode left to point at. The server's next_index is the last
+  // episode once the season is finished.
+  function hasNext() {
+    return watchedCount !== null && watchedCount < total;
+  }
+  // Keep the count, the time left and the "next" mark true after a change. `ep` may be null
+  // for an episode whose page isn't loaded yet.
+  function noteMarked(ep, delta) {
+    if (watchedCount === null) return;
+    const unwatched = total - watchedCount;
+    const average = unwatched > 0 ? minutesLeft / unwatched : 0;
+    const runtime = ep && ep.runtime > 0 ? ep.runtime : average;
+    watchedCount = Math.max(0, Math.min(total, watchedCount + delta));
+    minutesLeft = Math.max(0, minutesLeft - delta * runtime);
+    paintProgress();
+    const before = nextIndex;
+    if (delta < 0 && ep && ep._i < nextIndex) nextIndex = ep._i;
+    while (nextIndex < total - 1 && episodes[nextIndex] && episodes[nextIndex].watched) nextIndex += 1;
+    if (episodes[before]) refreshEp(episodes[before]);
+    if (nextIndex !== before && episodes[nextIndex]) refreshEp(episodes[nextIndex]);
+  }
+
   function refreshEp(ep) {
     if (!ep || ep._i == null) return;
     const r = activeRows.get(ep._i);
@@ -567,6 +613,7 @@ export default async function Season(container, params) {
       ep.watched = true;
       ep.watch_count = ep.watch_count || 1;
       refreshEp(ep);
+      noteMarked(ep, 1);
       try {
         const res = await api.markEpisode(id, data.season_number, ep.episode_number);
         if ((res.watch_count || 1) !== ep.watch_count) {
@@ -582,6 +629,7 @@ export default async function Season(container, params) {
         ep.watched = false;
         ep.watch_count = prevCount;
         refreshEp(ep);
+        noteMarked(ep, -1);
         toast(err.message, 'bad');
       }
       return;
@@ -597,6 +645,7 @@ export default async function Season(container, params) {
         if (newCount <= 0) {
           ep.watched = false;
           ep.watch_count = 0;
+          noteMarked(ep, -1);
         } else {
           ep.watched = true;
           ep.watch_count = newCount;
@@ -628,12 +677,16 @@ export default async function Season(container, params) {
                 for (const m of res.marked_episodes) {
                   if (m.season !== data.season_number) continue;
                   const idx = indexByEp.get(m.episode);
-                  if (idx == null) continue; // its page isn't loaded → reflects on fetch
+                  if (idx == null) {
+                    noteMarked(null, 1); // its page isn't loaded → the row reflects on fetch
+                    continue;
+                  }
                   const cur = episodes[idx];
                   if (cur && !cur.watched) {
                     cur.watched = true;
                     if (!cur.watch_count) cur.watch_count = 1;
                     refreshEp(cur);
+                    noteMarked(cur, 1);
                   }
                 }
               } else {
