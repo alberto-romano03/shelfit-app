@@ -1008,7 +1008,7 @@ export default async function Detail(container, params) {
 
   // A film's controls are its remote, a section of their own after the synopsis: the status
   // button in its row with Kodi, then the date and rewatch keys, then Owned + Cinema. A show
-  // keeps the status button full-width above the Kodi/Owned row.
+  // has one too: the status button full-width, above the Kodi/Owned row.
   if (isMovie) {
     body.append(
       el('div', { class: 'section-title remote-title', text: t('detail.remote') }),
@@ -1020,7 +1020,14 @@ export default async function Detail(container, params) {
       ratingWrap
     );
   } else {
-    body.append(statusBtn, actionsRow, kodiFeedback, ratingTitle, ratingWrap);
+    body.append(
+      el('div', { class: 'section-title', text: t('detail.remote') }),
+      statusBtn,
+      actionsRow,
+      kodiFeedback,
+      ratingTitle,
+      ratingWrap
+    );
   }
 
   // --- Series progress + seasons ---
