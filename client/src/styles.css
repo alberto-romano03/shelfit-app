@@ -445,6 +445,66 @@ html.theme-reveal::view-transition-new(root) {
   width: 24px;
   height: 24px;
 }
+/* The gear turns on the way into Settings and back on the way out. A half turn lands on
+   the same drawing, so it rests as crisp as it started. */
+.settings-gear svg {
+  transition: transform var(--dur-set) var(--ease-in-out);
+}
+.settings-gear.is-open svg {
+  transform: rotate(180deg);
+}
+/* The magnifying glass takes a look around when tapped, then settles back. */
+.search-look svg {
+  animation: search-look var(--dur-set) var(--ease-in-out);
+}
+@keyframes search-look {
+  35% {
+    transform: translate(-1.5px, -1.5px) rotate(-14deg);
+  }
+  70% {
+    transform: translate(1px, 1px) rotate(6deg);
+  }
+}
+/* The tutorial's question mark tilts its head, side to side, then straightens up. */
+.help-tilt svg {
+  animation: help-tilt var(--dur-set) var(--ease-in-out);
+}
+@keyframes help-tilt {
+  25% {
+    transform: rotate(-12deg);
+  }
+  60% {
+    transform: rotate(9deg);
+  }
+  85% {
+    transform: rotate(-3deg);
+  }
+}
+/* The profile's pen writes a little; the person beside it stays put. */
+.pen-writes svg path:nth-of-type(2) {
+  animation: pen-writes var(--dur-set) var(--ease-in-out);
+}
+@keyframes pen-writes {
+  20% {
+    transform: translate(-2px, 1px);
+  }
+  45% {
+    transform: translate(0.5px, 0);
+  }
+  70% {
+    transform: translate(-1.5px, 1px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-gear svg {
+    transition: none;
+  }
+  .search-look svg,
+  .help-tilt svg,
+  .pen-writes svg path:nth-of-type(2) {
+    animation: none;
+  }
+}
 /* Round buttons floating over imagery (hero backdrop / person photo) or that must
    stand out in BOTH themes: a fixed dark scrim with a WHITE glyph. The icon must
    NOT follow --text-primary here — in light mode that flips it dark and it

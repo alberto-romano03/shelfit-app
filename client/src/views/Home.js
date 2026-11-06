@@ -43,7 +43,7 @@ import {
   segmentedControl,
   fadeSwap,
   lucideIcon,
-  stateBlock, longPress,
+  stateBlock, longPress, playOnce,
 } from '../ui.js';
 import { imageCache } from '../imageCache.js';
 import { isServerReachable, markDegraded } from '../network.js';
@@ -163,7 +163,10 @@ export default async function Home(container) {
         class: 'icon-btn cover-btn edit-cover-btn',
         html: icons.userRoundPen,
         'aria-label': t('home.profile.edit'),
-        onClick: () => profileData && openProfileModal(profileData, () => navigate('/')),
+        onClick: (e) => {
+          playOnce(e.currentTarget, 'pen-writes');
+          if (profileData) openProfileModal(profileData, () => navigate('/'));
+        },
       }),
       themeBtn,
     ]
@@ -181,7 +184,10 @@ export default async function Home(container) {
           class: 'icon-btn cover-btn',
           html: icons.help,
           'aria-label': t('showcase.reopen'),
-          onClick: openShowcase,
+          onClick: (e) => {
+            playOnce(e.currentTarget, 'help-tilt');
+            openShowcase();
+          },
         }),
       ]
     )

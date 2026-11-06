@@ -5,7 +5,7 @@ import './styles.css';
 import { initTheme } from './theme.js';
 import { initI18n, t, onLangChange } from './i18n.js';
 import { initRouter, navigate, start } from './router.js';
-import { el, icons } from './ui.js';
+import { el, icons, playOnce } from './ui.js';
 import { startNetworkMonitor, wasDegraded, clearDegraded } from './network.js';
 import { initKodi } from './kodi.js';
 import { initNowPlaying } from './nowPlaying.js';
@@ -66,10 +66,12 @@ const brand = el('div', { class: 'brand' }, [
   el('h1', { html: 'shelf<span>it</span>' }),
 ]);
 const settingsBtn = el('button', {
-  class: 'icon-btn',
+  class: 'icon-btn settings-gear',
   'aria-label': t('common.settings'),
   html: icons.gear,
   onClick: () => {
+    // Turns now, not when the page swaps a frame or two later.
+    settingsBtn.classList.toggle('is-open', currentPath !== '/settings');
     // Toggle: if already on Settings, close it and return to the previous
     // page (history.back restores that page's scroll position). Fall back to
     // Home when there is no prior in-app entry (e.g. a cold start on
@@ -86,7 +88,10 @@ const searchBtn = el('button', {
   class: 'icon-btn',
   'aria-label': t('common.search'),
   html: icons.search,
-  onClick: () => navigate('/search'),
+  onClick: () => {
+    playOnce(searchBtn, 'search-look');
+    navigate('/search');
+  },
 });
 const headerActions = el('div', { class: 'header-actions' }, [settingsBtn, searchBtn]);
 const header = el('header', { class: 'app-header' }, [brand, headerActions]);
@@ -180,6 +185,8 @@ initRouter({
     // Track the route history (one step back) for the Settings-icon toggle.
     if (path !== currentPath) previousPath = currentPath;
     currentPath = path;
+    // Also for leaving Settings another way: Back, or a tab.
+    settingsBtn.classList.toggle('is-open', path === '/settings');
     tabButtons.forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.path === path);
     });
