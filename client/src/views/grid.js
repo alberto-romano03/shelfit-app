@@ -68,9 +68,9 @@ const gridState = {};
 // type -> the next mount opens on the default filter (ignores the remembered one).
 const gridFresh = {};
 
-// Where the status bar's chip was when a grid page was left ({ type, geometry }),
-// so the other grid can glide its chip from there. Read once by the next grid
-// mount.
+// Where the status bar's chip was when a grid page was left ({ type, geometry, away }:
+// away when the bar had slid out of sight), so the other grid can glide its chip from
+// there. Read once by the next grid mount.
 let statusHandoff = null;
 
 // A bottom-nav tab tap: the section opens on its default chip/sort, at the top of
@@ -230,7 +230,9 @@ export async function gridView(container, type) {
   for (const L of PICKER_LETTERS) {
     const b = el('button', { class: 'letter-pick', type: 'button', text: L });
     b.addEventListener('click', () => {
-      if (!b.disabled) virtual.scrollToGroup(L);
+      if (b.disabled) return;
+      holdChrome(300, true); // the picker stays up while its jump runs
+      virtual.scrollToGroup(L);
     });
     letterEls[L] = b;
     letterPicker.append(b);
@@ -264,7 +266,14 @@ export async function gridView(container, type) {
   });
   const simpleGrid = skelGrid(12);
 
-  container.append(chipRow, offlineNote, filterBar, collBar, letterPicker, simpleGrid, virtual.el);
+  // The filters in one layer. Over the virtual grid they float, so they can slide away
+  // without the grid moving; over the simple grid they are just the top of the page.
+  const chrome = el('div', { class: 'grid-chrome' }, [chipRow, offlineNote, filterBar, collBar, letterPicker]);
+  container.append(chrome, simpleGrid, virtual.el);
+  const measureChrome = () => {
+    chromeH = chrome.offsetHeight;
+    container.style.setProperty('--grid-chrome-h', `${chromeH}px`);
+  };
 
   function setMode(mode) {
     const useVirtual = mode === 'virtual';
@@ -276,7 +285,58 @@ export async function gridView(container, type) {
     // simple grid (collections / offline) flows normally without these.
     container.classList.toggle('view-grid-virtual', useVirtual);
     document.body.classList.toggle('grid-virtual-active', useVirtual);
+    setChromeAway(false);
+    measureChrome(); // the layer's padding differs between the two
   }
+
+  // --- Filters step aside -------------------------------------------------
+  // Scrolling down slides them up out of the way, scrolling up brings them back. Only ever
+  // a class on the layer: the grid's scroll position means the same in both states.
+  const AWAY_AFTER = 16; // px of steady travel, so a finger's wobble moves nothing
+  const BACK_AFTER = 8;
+  let chromeH = 0;
+  let chromeAway = false;
+  let lastScroll = 0;
+  let travel = 0;
+  let holdUntil = 0;
+  let holdWhileMoving = false;
+  function setChromeAway(away) {
+    if (away === chromeAway) return;
+    chromeAway = away;
+    chrome.classList.toggle('is-away', away);
+  }
+  // Scrolling the app does itself moves nothing: a restored position, or a letter's jump,
+  // which has no set length, so that hold lasts until the scroll has stopped.
+  const holdChrome = (ms, whileMoving = false) => {
+    holdUntil = performance.now() + ms;
+    holdWhileMoving = whileMoving;
+  };
+  function onGridScroll() {
+    const box = virtual.el;
+    // Clamped: iOS's bounce past either end would read as a change of direction.
+    const y = Math.max(0, Math.min(box.scrollTop, box.scrollHeight - box.clientHeight));
+    const moved = y - lastScroll;
+    lastScroll = y;
+    const now = performance.now();
+    if (now < holdUntil) {
+      if (holdWhileMoving) holdUntil = now + 150;
+      return;
+    }
+    if (!moved) return;
+    // Above this the top of the list is still showing under them: nothing to make room for.
+    if (y < chromeH) {
+      travel = 0;
+      setChromeAway(false);
+      return;
+    }
+    travel = moved > 0 === travel > 0 ? travel + moved : moved;
+    if (travel > AWAY_AFTER) setChromeAway(true);
+    else if (travel < -BACK_AFTER) setChromeAway(false);
+  }
+  virtual.el.addEventListener('scroll', onGridScroll, { passive: true });
+  const chromeSize = new ResizeObserver(measureChrome);
+  chromeSize.observe(chrome, { box: 'border-box' });
+
   setMode('simple'); // start on the skeleton grid until the first load resolves
 
   // Genre/sort filters don't apply to the collections view, which has its own
@@ -371,12 +431,15 @@ export async function gridView(container, type) {
     clearTimeout(letterHideTimer); // a pending picker-hide must not outlive the view
     virtual.destroy();
     window.removeEventListener('shelfit:server-change', onServerChange);
+    virtual.el.removeEventListener('scroll', onGridScroll);
+    chromeSize.disconnect();
+    container.style.removeProperty('--grid-chrome-h');
     // The .view container and body persist across views — clear our layout classes
     // so the next view doesn't inherit the grid's flex layout.
     container.classList.remove('view-grid-virtual');
     document.body.classList.remove('grid-virtual-active');
     gridState[type] = { status: state.status, genre: state.genre, sort: state.sort, coll: state.coll };
-    statusHandoff = { type, geometry: statusBar.geometry() };
+    statusHandoff = { type, geometry: statusBar.geometry(), away: chromeAway };
     if (state.status === 'collections') collectionsScrollY = window.scrollY;
   });
 
@@ -409,6 +472,7 @@ export async function gridView(container, type) {
     // server for owned titles across every status instead.
     try {
       setMode('virtual');
+      holdChrome(500); // the list may restore its position
       const owned = state.status === 'owned';
       const res = await virtual.load({
         status: owned ? '' : state.status,
@@ -692,7 +756,13 @@ export async function gridView(container, type) {
   const handoff = statusHandoff;
   statusHandoff = null;
   if (handoff && handoff.type !== type && document.documentElement.dataset.vt === 'grid') {
-    statusBar.glideFrom(handoff.geometry);
+    if (handoff.away) {
+      // There was no bar to hold still: this one fades in with its page.
+      chipRow.classList.add('segbar--unlifted');
+      afterTransition().then(() => chipRow.classList.remove('segbar--unlifted'));
+    } else {
+      statusBar.glideFrom(handoff.geometry);
+    }
   }
   syncChrome();
   renderGrid();

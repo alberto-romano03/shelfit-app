@@ -632,7 +632,7 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
       metrics = computeMetrics();
       buildLayout();
       sizeScroller();
-      scroller.scrollTop = Math.min(top, Math.max(0, totalHeight - scroller.clientHeight));
+      scroller.scrollTop = Math.min(top, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
       render();
     }
     if (onUpdate) onUpdate(summary());
@@ -724,13 +724,13 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
     const savedTop = scrollMem.get(key) || 0;
     const applyScroll = () => {
       if (s !== store) return;
-      const clamped = Math.min(savedTop, Math.max(0, totalHeight - scroller.clientHeight));
+      const clamped = Math.min(savedTop, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
       if (clamped > 0 && Math.abs(scroller.scrollTop - clamped) > 2) {
         scroller.scrollTop = clamped;
         render();
       }
     };
-    scroller.scrollTop = Math.min(savedTop, Math.max(0, totalHeight - scroller.clientHeight));
+    scroller.scrollTop = Math.min(savedTop, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
     render(0);
     requestAnimationFrame(() => {
       if (s === store) render();
@@ -760,7 +760,7 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
     metrics = computeMetrics();
     buildLayout();
     sizeScroller();
-    scroller.scrollTop = Math.min(prevTop, Math.max(0, totalHeight - scroller.clientHeight));
+    scroller.scrollTop = Math.min(prevTop, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
     recycleAll();
     render();
   }

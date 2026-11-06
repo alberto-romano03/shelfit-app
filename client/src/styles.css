@@ -378,30 +378,6 @@ html.theme-reveal::view-transition-old(root) {
 html.theme-reveal::view-transition-new(root) {
   z-index: 1;
 }
-/* The sun and moon are one drawing: the disc reshapes, the rays turn away. */
-.theme-morph .tm-rays {
-  transform-origin: 12px 12px;
-  transition: opacity var(--dur-medium) var(--ease-state), transform var(--dur-set) var(--ease-in-out);
-}
-.is-moon .theme-morph .tm-rays {
-  opacity: 0;
-  transform: rotate(45deg) scale(0.6);
-}
-@supports (d: path('M0 0')) {
-  .theme-morph .tm-disc {
-    d: path('M12 8C13.061 8 14.078 8.422 14.828 9.172C15.578 9.922 16 10.939 16 12C16 14.209 14.209 16 12 16C9.791 16 8 14.209 8 12C8 9.791 9.791 8 12 8Z');
-    transition: d var(--dur-set) var(--ease-in-out);
-  }
-  .is-moon .theme-morph .tm-disc {
-    d: path('M11.2 3C9.11 5.787 9.387 9.687 11.85 12.15C14.313 14.613 18.213 14.89 21 12.8C20.556 17.53 16.506 21.105 11.757 20.956C7.008 20.807 3.194 16.992 3.045 12.243C2.896 7.494 6.463 3.447 11.2 3Z');
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .theme-morph .tm-rays,
-  .theme-morph .tm-disc {
-    transition: none;
-  }
-}
 /* The page's title, once it has scrolled away: it takes the logo's place. The right
    edge clears the two 44px actions. */
 .header-title {
@@ -507,20 +483,45 @@ body.grid-virtual-active .view.view-grid-virtual {
   width: 100%;
   display: flex;
   flex-direction: column;
+  /* The top padding moves into the filter layer, so the grid reaches the header. */
+  position: relative;
+  padding-top: 0;
   /* Reserve the fixed navbar's height so the flex scroller ends at the nav's top. */
   padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  /* Where the filters go when they slide up: not behind the see-through header. */
+  overflow: hidden;
+  overflow: clip;
 }
-/* Chrome rows keep their natural height; only the scroller grows. */
-body.grid-virtual-active .view.view-grid-virtual > .chips,
-body.grid-virtual-active .view.view-grid-virtual > .segbar,
-body.grid-virtual-active .view.view-grid-virtual > .filter-bar,
-body.grid-virtual-active .view.view-grid-virtual > .letter-picker,
-body.grid-virtual-active .view.view-grid-virtual > .offline-chip-note {
-  flex: none;
+/* The filters float over the grid and slide up out of the way (grid.js). Only a transform
+   moves, so no poster is laid out again; the grid keeps its size and scroll position. */
+body.grid-virtual-active .view.view-grid-virtual > .grid-chrome {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: var(--gutter);
+  right: var(--gutter);
+  padding-top: 12px;
+  background: var(--bg);
+  will-change: transform;
+  transition: transform var(--dur-medium) var(--ease-out), visibility 0s;
+}
+body.grid-virtual-active .view.view-grid-virtual > .grid-chrome.is-away {
+  transform: translateY(-100%);
+  /* Out of the keyboard's reach once it has gone. */
+  visibility: hidden;
+  transition: transform var(--dur-medium) var(--ease-in-out), visibility 0s linear var(--dur-medium);
+}
+@media (prefers-reduced-motion: reduce) {
+  body.grid-virtual-active .view.view-grid-virtual > .grid-chrome,
+  body.grid-virtual-active .view.view-grid-virtual > .grid-chrome.is-away {
+    transition: none;
+  }
 }
 body.grid-virtual-active .gc-scroller {
   flex: 1 1 auto;
   min-height: 0;
+  /* The list starts under the filters and scrolls on beneath them. */
+  padding-top: var(--grid-chrome-h, 0px);
   /* Flex owns the height now — override the inline pixel height the JS still sets. */
   height: auto !important;
 }
@@ -1954,7 +1955,7 @@ textarea.notes {
   transform-origin: left;
   transition: transform var(--dur-medium) var(--ease-out);
 }
-/* Watched rows step back. The next episode has a gold edge. */
+/* Watched rows step back. */
 .episode.is-watched .thumb img {
   opacity: 0.45;
 }
@@ -1964,16 +1965,6 @@ textarea.notes {
 .episode:has(.check-draw) .thumb img,
 .episode:has(.check-draw) .ep-title {
   transition: opacity var(--dur-medium) var(--ease-state), color var(--dur-medium) var(--ease-state);
-}
-.episode.is-next .thumb {
-  position: relative;
-}
-.episode.is-next .thumb::after {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--accent);
 }
 .episode .ep-sub {
   font-size: 12px;
@@ -2198,8 +2189,12 @@ body.season-active .ep-scroller {
   -webkit-mask-size: contain;
   mask-size: contain;
 }
+/* Starts right under the divider, so rows are cut there rather than in the gap below it.
+   The divider's bottom margin moves inside, and the first row still rests below it. */
 .ep-scroller {
   position: relative;
+  margin-top: -12px;
+  padding-top: 12px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -5918,7 +5913,7 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .toast {
 .segbar.grid-status {
   margin-inline: auto;
 }
-html[data-vt='grid'] .segbar.grid-status {
+html[data-vt='grid'] .segbar.grid-status:not(.segbar--unlifted) {
   view-transition-name: grid-status;
 }
 html[data-vt='grid']::view-transition-group(grid-status) {
@@ -12691,9 +12686,8 @@ textarea.lend-message-input:focus {
    loaded. The text is laid out normally and the logo is absolutely positioned
    over it, so only one is ever visible and neither affects layout.
 
-   ALIGNMENT: left, matching the text title it replaces and every other modal
-   heading in the app. To centre it instead, change `align-items` and the logo's
-   `left` below to `center` / `0; right: 0; margin: 0 auto`. */
+   ALIGNMENT: the logo is centred on the sheet. The text title it replaces stays
+   left, matching every other modal heading in the app. */
 .menu-title {
   position: relative;
   display: flex;
@@ -12718,16 +12712,15 @@ textarea.lend-message-input:focus {
 }
 .menu-title-logo {
   position: absolute;
-  left: 0;
+  left: 50%;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translate(-50%, -50%);
   max-height: 68px;
   /* A very wide logo gives up height rather than running past the sheet. */
   max-width: 100%;
   width: auto;
   height: auto;
   object-fit: contain;
-  object-position: left center;
   opacity: 0;
   transition: opacity var(--dur-medium) var(--ease-out);
 }

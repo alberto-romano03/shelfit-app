@@ -3,7 +3,7 @@
 // rating, notes, series progress/seasons, a "Liner Notes" bento, and Kodi play.
 // Edits persist immediately; built views are retained (LRU) for instant return.
 
-import { haptic } from '../haptic.js';
+import { hapticHold } from '../haptic.js';
 import { timeHintsOn, hoursAndMinutes, roughlyLeft, endsAt } from '../timeHints.js';
 import { posterHue, savedPosterHue, tilesForHue } from '../posterColour.js';
 import { markedToast, undoable, deferred } from '../undoable.js';
@@ -1242,7 +1242,7 @@ const LEND_PLACEHOLDERS = ['lend.placeholder1', 'lend.placeholder2', 'lend.place
 // Holding a poster: the quick things, without opening the title. Nothing is marked on the
 // shelf; a small copy of the poster sits beside the title here, as in this page's own menu.
 export async function openPosterMenu(item) {
-  haptic();
+  hapticHold();
   // A card saved before the id was kept has only what it draws.
   if (!item.tmdb_id) {
     try {

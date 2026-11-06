@@ -29,6 +29,31 @@ export function hapticStar() {
   haptic();
 }
 
+// Holding a poster. Firmer than a tap's tick, since it answers a finger that isn't moving.
+// iOS has no tap to borrow here, so the switch's tick is asked for from script, through a
+// throwaway label. Best effort: iOS may ignore it, and then the sheet opening is the answer.
+export function hapticHold() {
+  try {
+    if (!getPref('haptic')) return;
+    if (hasVibrate()) {
+      navigator.vibrate(30);
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.setAttribute('switch', '');
+    const label = document.createElement('label');
+    label.setAttribute('aria-hidden', 'true');
+    label.style.display = 'none';
+    label.append(input);
+    document.body.append(label);
+    label.click();
+    label.remove();
+  } catch {
+    /* never let feedback break an interaction */
+  }
+}
+
 // A hidden global switch used only for the iOS second-tick attempt (below).
 let beatSwitch = null;
 function ensureBeatSwitch() {

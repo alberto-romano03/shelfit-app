@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v169'; // bumped: Show more, duration bar, hold sheet, lending icon
+const CACHE = 'shelfit-shell-v170'; // bumped: title logo, hold haptic, theme icon on iOS, Season list edge, filters step aside
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by

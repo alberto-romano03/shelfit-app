@@ -379,7 +379,6 @@ export default async function Season(container, params) {
       if (ep.air_date) bits.push(formatDate(ep.air_date));
       if (ep.runtime) bits.push(t('season.runtime', { min: ep.runtime }));
       sub.textContent = bits.join(' · ');
-      node.classList.toggle('is-next', hasNext() && ep._i === nextIndex);
       node.classList.toggle('is-watched', !!ep.watched);
       check.classList.remove('check-draw');
       check.classList.toggle('done', !!ep.watched);
@@ -512,16 +511,8 @@ export default async function Season(container, params) {
     render(); // swap skeletons for real rows (or retry rows) in the current range
   }
 
-  // Refresh the row currently displaying episode `ep` after its data mutated
-  // (mark watched, note edited, catch-up). No-op when that row is off-screen —
-  // it will show the new state whenever it scrolls back in.
-  // Whether there is an episode left to point at. The server's next_index is the last
-  // episode once the season is finished.
-  function hasNext() {
-    return watchedCount !== null && watchedCount < total;
-  }
-  // Keep the count, the time left and the "next" mark true after a change. `ep` may be null
-  // for an episode whose page isn't loaded yet.
+  // Keep the count, the time left and where the jump goes true after a change. `ep` may be
+  // null for an episode whose page isn't loaded yet.
   function noteMarked(ep, delta) {
     if (watchedCount === null) return;
     const unwatched = total - watchedCount;
@@ -530,13 +521,13 @@ export default async function Season(container, params) {
     watchedCount = Math.max(0, Math.min(total, watchedCount + delta));
     minutesLeft = Math.max(0, minutesLeft - delta * runtime);
     paintProgress();
-    const before = nextIndex;
     if (delta < 0 && ep && ep._i < nextIndex) nextIndex = ep._i;
     while (nextIndex < total - 1 && episodes[nextIndex] && episodes[nextIndex].watched) nextIndex += 1;
-    if (episodes[before]) refreshEp(episodes[before]);
-    if (nextIndex !== before && episodes[nextIndex]) refreshEp(episodes[nextIndex]);
   }
 
+  // Refresh the row currently displaying episode `ep` after its data mutated
+  // (mark watched, note edited, catch-up). No-op when that row is off-screen —
+  // it will show the new state whenever it scrolls back in.
   function refreshEp(ep) {
     if (!ep || ep._i == null) return;
     const r = activeRows.get(ep._i);
