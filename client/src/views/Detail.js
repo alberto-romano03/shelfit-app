@@ -3,6 +3,7 @@
 // rating, notes, series progress/seasons, a "Liner Notes" bento, and Kodi play.
 // Edits persist immediately; built views are retained (LRU) for instant return.
 
+import { haptic } from '../haptic.js';
 import { timeHintsOn, hoursAndMinutes, roughlyLeft, endsAt } from '../timeHints.js';
 import { posterHue, savedPosterHue, tilesForHue } from '../posterColour.js';
 import { markedToast, undoable, deferred } from '../undoable.js';
@@ -49,7 +50,7 @@ import {
 // null until the first answer, and empty when nobody else can sign in.
 let suggestRecipients = null;
 function loadSuggestRecipients() {
-  api
+  return api
     .suggestRecipients()
     .then((d) => {
       suggestRecipients = (d && d.recipients) || [];
@@ -1227,6 +1228,56 @@ export function openCollectionTitle(p) {
 // as the server (routes/suggestions.js).
 const LEND_MESSAGE_MAX = 100;
 const LEND_PLACEHOLDERS = ['lend.placeholder1', 'lend.placeholder2', 'lend.placeholder3'];
+
+// Holding a poster: the quick things, without opening the title. Nothing is marked on the
+// shelf; a small copy of the poster sits beside the title here, as in this page's own menu.
+export async function openPosterMenu(item) {
+  haptic();
+  // A card saved before the id was kept has only what it draws.
+  if (!item.tmdb_id) {
+    try {
+      item = { ...item, tmdb_id: (await api.mediaDetail(item.id)).tmdb_id };
+    } catch (err) {
+      toast(err.message, 'bad');
+      return;
+    }
+  }
+  openModal(
+    (modal, close) => {
+      const row = (icon, label, onClick) =>
+        settingsRow({
+          icon,
+          label,
+          onClick: () => {
+            close();
+            onClick();
+          },
+        }).el;
+      const rows = el('div', { class: 'poster-menu-rows' }, [
+        row('external-link', t('detail.viewOnTmdb'), () =>
+          window.open(`https://www.themoviedb.org/${item.type === 'movie' ? 'movie' : 'tv'}/${item.tmdb_id}`, '_blank', 'noopener')
+        ),
+        row('list-plus', t('detail.addToList'), () => openAddToListSheet(item)),
+      ]);
+      const addLend = () => {
+        if (suggestRecipients && suggestRecipients.length && rows.isConnected) {
+          rows.append(row('send', t('detail.suggest'), () => openSuggestSheet(item)));
+        }
+      };
+      modal.append(
+        el('div', { class: 'poster-menu-head' }, [
+          poster(item.poster_url, ''),
+          el('h3', { text: item.title_it || item.title_orig || '' }),
+        ]),
+        rows
+      );
+      // Lend only when someone else can sign in. Known already if a detail page has opened.
+      if (suggestRecipients) queueMicrotask(addLend);
+      else loadSuggestRecipients().then(addLend);
+    },
+    { handle: true, className: 'poster-menu' }
+  );
+}
 
 function openSuggestSheet(d) {
   let stopTypewriter = () => {};

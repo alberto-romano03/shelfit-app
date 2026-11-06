@@ -93,6 +93,7 @@ export async function persistWatching(items) {
       }
       out.push({
         id: it.id,
+        tmdb_id: it.tmdb_id,
         type: it.type,
         title_it: it.title_it,
         poster_url: it.poster_url,

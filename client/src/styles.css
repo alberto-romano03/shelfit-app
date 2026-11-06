@@ -5221,6 +5221,34 @@ button.srow:active {
     transition: none;
   }
 }
+/* Holding a poster */
+.gc-cell,
+.watching-card {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.gc-img,
+.watching-card img {
+  -webkit-user-drag: none;
+}
+.poster-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.poster-menu-head h3 {
+  min-width: 0;
+  margin: 0;
+  font-size: 16px;
+}
+.poster-menu-head .poster-card {
+  flex: none;
+  width: 44px;
+  border-radius: var(--r-sm);
+  box-shadow: none;
+}
 .skeleton {
   overflow: hidden;
   background: var(--surface);

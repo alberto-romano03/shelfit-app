@@ -10,6 +10,7 @@
 // module owns fetching, layout (section dividers included), recycling and
 // per-filter scroll memory.
 
+import { openPosterMenu } from './Detail.js';
 import { createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup, cameBack, afterTransition } from '../router.js';
 import {
@@ -257,6 +258,7 @@ export async function gridView(container, type) {
   const virtual = createPosterGrid({
     type,
     onItemClick: (item) => openDetail(`/detail/${item.id}`),
+    onItemHold: openPosterMenu,
     onActiveGroup: highlightLetter,
     onUpdate: applyViewInfo, // a background check swapped in newer content
   });

@@ -25,7 +25,7 @@
 
 import { tileFor, learnPosterHue } from './posterColour.js';
 import { createApi, isAbortError } from './api.js';
-import { el, stateBlock } from './ui.js';
+import { el, stateBlock, longPress } from './ui.js';
 import { imageCache } from './imageCache.js';
 import { isServerReachable, markDegraded } from './network.js';
 import { afterTransition } from './router.js';
@@ -138,7 +138,7 @@ window.addEventListener('shelfit:library-changed', () => {
 // Build one recyclable poster cell: a persistent .poster-card whose <img> src,
 // rating badge and click target are mutated on reuse — no nodes created while
 // scrolling. Three modes (poster / skeleton / retry) toggled by class.
-function createCell(onItemClick) {
+function createCell(onItemClick, onItemHold) {
   const img = el('img', { class: 'gc-img', alt: '' });
   // Never hold a frame on decoding: a page change paints its first frame at once
   // and the posters (already in memory) land a moment later.
@@ -160,6 +160,11 @@ function createCell(onItemClick) {
     }
     if (currentItem && onItemClick) onItemClick(currentItem);
   });
+  if (onItemHold) {
+    longPress(node, () => {
+      if (currentItem) onItemHold(currentItem);
+    });
+  }
 
   function show(item) {
     currentItem = item;
@@ -243,7 +248,7 @@ function createDivider() {
 // `.el`, then calls `.load(filter)` on mount and on every chip/genre/sort change.
 // `onUpdate` gets the same summary as `.load` when a background check swaps in
 // newer content.
-export function createPosterGrid({ type, onItemClick, onActiveGroup, onUpdate }) {
+export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup, onUpdate }) {
   const ac = new AbortController();
   const api = createApi(ac.signal);
 
@@ -482,7 +487,7 @@ export function createPosterGrid({ type, onItemClick, onActiveGroup, onUpdate })
         const idx = row.startItem + c;
         let cell = activeCells.get(idx);
         if (!cell) {
-          cell = cellPool.pop() || createCell(onItemClick);
+          cell = cellPool.pop() || createCell(onItemClick, onItemHold);
           if (!cell.node.isConnected) spacer.appendChild(cell.node);
           cell.node.style.display = '';
           cell._i = -1;
@@ -582,7 +587,7 @@ export function createPosterGrid({ type, onItemClick, onActiveGroup, onUpdate })
     let n = 0;
     for (let r = 0; r < rowsToShow; r++) {
       for (let c = 0; c < COLS; c++) {
-        const cell = cellPool.pop() || createCell(onItemClick);
+        const cell = cellPool.pop() || createCell(onItemClick, onItemHold);
         if (!cell.node.isConnected) spacer.appendChild(cell.node);
         cell.node.style.display = '';
         cell.node.style.left = `${c * (metrics.colW + GAP)}px`;

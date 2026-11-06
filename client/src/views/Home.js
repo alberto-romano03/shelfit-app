@@ -3,6 +3,7 @@
 // entry points (Back to the Shelf, Dust It Off, Rate-O-Matic, receipt). Paints
 // instantly from a durable cache, then revalidates each piece from the network.
 
+import { openPosterMenu } from './Detail.js';
 import { api, createApi, isAbortError } from '../api.js';
 import { navigate, onCleanup, openDetail, cameBack } from '../router.js';
 import { openDustItOff } from '../dustItOff.js';
@@ -41,7 +42,7 @@ import {
   segmentedControl,
   fadeSwap,
   lucideIcon,
-  stateBlock,
+  stateBlock, longPress,
 } from '../ui.js';
 import { imageCache } from '../imageCache.js';
 import { isServerReachable, markDegraded } from '../network.js';
@@ -324,6 +325,7 @@ export default async function Home(container) {
       el('div', { class: 'wc-ep', text: epText(it) }),
     ]);
     card.addEventListener('click', () => navigate(`/detail/${it.id}`));
+    longPress(card, () => openPosterMenu(it));
     return card;
   }
   // Order-sensitive signature used to skip a needless re-render when nothing changed.

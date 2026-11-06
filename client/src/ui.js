@@ -660,6 +660,45 @@ export function mountPoster(container, url, alt, opts = {}) {
   return container;
 }
 
+// Press and hold. It lets go as soon as the finger moves or the page scrolls, and the tap
+// that ends a hold doesn't also open what's under it.
+const HOLD_MS = 380;
+export function longPress(node, onHold) {
+  let timer = 0;
+  let x = 0;
+  let y = 0;
+  let held = false;
+  const cancel = () => clearTimeout(timer);
+  node.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    held = false;
+    x = e.clientX;
+    y = e.clientY;
+    cancel();
+    timer = setTimeout(() => {
+      held = true;
+      onHold();
+    }, HOLD_MS);
+  });
+  node.addEventListener('pointermove', (e) => {
+    if (Math.hypot(e.clientX - x, e.clientY - y) > 8) cancel();
+  });
+  node.addEventListener('pointerup', cancel);
+  node.addEventListener('pointercancel', cancel);
+  node.addEventListener('pointerleave', cancel);
+  node.addEventListener('contextmenu', (e) => e.preventDefault()); // Android's image menu
+  node.addEventListener(
+    'click',
+    (e) => {
+      if (!held) return;
+      held = false;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    },
+    true
+  );
+}
+
 // A poster card (2:3). Shows a shimmer skeleton until its image decodes; the
 // skeleton stays on error rather than collapsing or showing a broken icon.
 export function poster(url, title, opts) {
