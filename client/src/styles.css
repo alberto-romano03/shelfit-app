@@ -800,7 +800,8 @@ body.grid-virtual-active .gc-scroller {
    and stays scrollable instead of being clipped at the top. */
 .gc-empty {
   position: absolute;
-  inset: 0;
+  /* Below the filters, which float over the top of this scroller. */
+  inset: var(--grid-chrome-h, 0px) 0 0;
   display: flex;
   flex-direction: column;
   padding: 20px 0;
@@ -5079,8 +5080,8 @@ button.srow:active {
   -webkit-mask-size: contain;
   mask-size: contain;
 }
-.empty-title {
-  margin: 0;
+.empty .empty-title {
+  margin: 0; /* over a dialog's own heading margin */
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -5173,6 +5174,11 @@ button.srow:active {
 .empty--page {
   gap: 14px;
   padding: 40px 20px;
+  justify-content: center; /* in the height fitState gives it */
+}
+/* The page's spare 40px under its content would let a page with only a state on it scroll. */
+.view:has(.empty--page, .empty--section) {
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
 }
 .empty--page .empty-art {
   width: 74px;
@@ -5191,6 +5197,7 @@ button.srow:active {
 .empty--section {
   gap: 10px;
   padding: 26px 16px;
+  justify-content: center;
 }
 .empty--section .empty-art {
   width: 48px;
@@ -6378,16 +6385,6 @@ img.mood-emoji {
   gap: 10px;
   margin-top: 16px;
 }
-.dust-empty {
-  text-align: center;
-  padding: 34px 12px;
-  color: var(--text-secondary);
-}
-.dust-empty-emoji {
-  font-size: 42px;
-  margin-bottom: 10px;
-}
-
 .row-actions {
   display: flex;
   align-items: center;
@@ -10425,21 +10422,14 @@ textarea.lend-message-input:focus {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 14px;
   padding: 30px 24px;
   text-align: center;
 }
-.cine-empty-icon {
+.cine-empty .empty-art {
   width: 52px;
   height: 52px;
-  background: var(--text-secondary);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  opacity: 0.8;
 }
 .cine-empty-text { color: var(--text-secondary); font-size: 15px; max-width: 320px; }
 

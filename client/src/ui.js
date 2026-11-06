@@ -1659,7 +1659,7 @@ export function spinner(opts = {}) {
 const STATE_ICONS = { error: 'signpost', offline: 'earth', empty: 'shelving-unit' };
 // Small drawings from the rental shop, for the page and section sizes (an inline state
 // is a single row, too small for one). One line colour and one detail in the kind's ink.
-// Glyphs not listed here say something more specific, and stay as they are.
+// Any other glyph is drawn as itself.
 const STATE_ART = {
   sleeve:
     '<rect x="10" y="5" width="28" height="38" rx="3"/><rect class="art-detail" x="15" y="11" width="18" height="26" rx="1.5" stroke-dasharray="3 3"/>',
@@ -1671,13 +1671,86 @@ const STATE_ART = {
     '<rect x="6" y="6" width="36" height="23" rx="3"/><circle cx="17" cy="17.5" r="4.5"/><circle cx="31" cy="17.5" r="4.5"/><path class="art-detail" d="M20 29c-1 4-9 2-9 7s8 6 10 2 2-6 6-5 4 7 8 5 3-5 0-9"/>',
   sign:
     '<path d="M12 19l12-12 12 12"/><circle cx="24" cy="6" r="1.5"/><rect x="7" y="19" width="34" height="21" rx="2"/><path class="art-detail" d="M14 27h20M14 33h12"/>',
+  card:
+    '<rect x="5" y="11" width="38" height="27" rx="3"/><circle cx="16" cy="21" r="3.5"/><path d="M10 32a6 6 0 0 1 12 0"/><path class="art-detail" d="M27 20h10M27 26h10M27 32h6"/>',
+  clapper:
+    '<rect x="7" y="19" width="34" height="23" rx="2"/><path d="M14 28h20M14 34h12"/><path class="art-detail" d="M7 19L5.5 13 37.5 5l2 6.5zM14.5 10.8l3.5 5.7M23.5 8.5l3.5 5.7M32.5 6.3l3.5 5.7"/>',
+  wall:
+    '<rect x="11" y="6" width="26" height="36" rx="2"/><path class="art-detail" d="M24 32c-5.5-3.8-8-6.8-8-10a4.4 4.4 0 0 1 8-2.5 4.4 4.4 0 0 1 8 2.5c0 3.2-2.5 6.2-8 10z"/>',
+  till:
+    '<path d="M13 24l2-10h18l2 10"/><rect x="7" y="24" width="34" height="18" rx="2"/><path d="M7 35h34M21 38.5h6M15 29.5h.01M21 29.5h.01M27 29.5h.01M33 29.5h.01"/><rect class="art-detail" x="17" y="6" width="14" height="8" rx="1"/>',
+  ticket:
+    '<path d="M6 14h36v7a3 3 0 0 0 0 6v7H6v-7a3 3 0 0 0 0-6z"/><path d="M12 21h13M12 27h9"/><path class="art-detail" d="M32 14v20" stroke-dasharray="2.5 3"/>',
+  boxset:
+    '<path d="M14 9h24a2 2 0 0 1 2 2v24"/><path d="M10 13h24a2 2 0 0 1 2 2v24"/><rect x="6" y="17" width="26" height="26" rx="2"/><rect class="art-detail" x="11" y="23" width="16" height="8" rx="1"/>',
 };
-const STATE_ICON_ART = { 'shelving-unit': 'shelf', 'library-big': 'sleeve', 'list-plus': 'sleeve', popcorn: 'popcorn' };
+const STATE_ICON_ART = {
+  'shelving-unit': 'shelf',
+  'library-big': 'sleeve',
+  'list-plus': 'sleeve',
+  popcorn: 'popcorn',
+  'user-round': 'card',
+  clapperboard: 'clapper',
+  'heart-plus': 'wall',
+  wallet: 'till',
+  layers: 'boxset',
+  ticket: 'ticket',
+};
 function stateArtFor(kind, tier, icon) {
   if (tier === 'inline') return null;
-  if (kind === 'error') return STATE_ART.tape;
-  if (kind === 'offline') return STATE_ART.sign;
-  return STATE_ART[STATE_ICON_ART[icon || STATE_ICONS.empty]] || null;
+  if (kind === 'error') return 'tape';
+  if (kind === 'offline') return 'sign';
+  return STATE_ICON_ART[icon || STATE_ICONS.empty] || null;
+}
+// One of the drawings on its own, for an empty state with its own layout.
+export function stateArt(name) {
+  return el('div', {
+    class: 'empty-art empty-art--drawn',
+    html: `<svg viewBox="0 0 48 48" aria-hidden="true">${STATE_ART[name]}</svg>`,
+  });
+}
+// A state sits in the middle of the space you can see: it fills from where it starts down
+// to the bottom of what it scrolls in (the tab bar for a page, the edge for a sheet), less
+// whatever comes after it, and centres itself in that. A sheet sized by its content has no
+// room to spare, so nothing changes there.
+function fitState(node) {
+  if (!node.isConnected || node.closest('.gc-empty')) return; // that one centres in CSS
+  let host = node.parentElement;
+  while (host && host !== document.body && !/auto|scroll/.test(getComputedStyle(host).overflowY)) {
+    host = host.parentElement;
+  }
+  // Its entrance animation may still be holding it a few pixels low.
+  node.style.minHeight = '';
+  node.style.marginBottom = '';
+  const lifted = new DOMMatrixReadOnly(getComputedStyle(node).transform).m42;
+  const top = node.getBoundingClientRect().top - lifted;
+  let room;
+  let hostPad = 0;
+  if (host && host !== document.body) {
+    hostPad = parseFloat(getComputedStyle(host).paddingBottom) || 0;
+    room = host.getBoundingClientRect().bottom - hostPad - top;
+  } else {
+    const nav = document.querySelector('.tabbar');
+    room = window.innerHeight - (nav ? nav.getBoundingClientRect().height : 0) - top;
+  }
+  for (let next = node.nextElementSibling; next; next = next.nextElementSibling) room -= next.offsetHeight;
+  if (room <= node.offsetHeight + 1) return; // no room to spare
+  // Over the host's bottom padding too, so the middle is the middle of what you see. Only
+  // here: a host sized by its content would grow to match, every time.
+  node.style.minHeight = `${room + hostPad}px`;
+  if (hostPad) node.style.marginBottom = `${-hostPad}px`;
+}
+const fitStates = () => document.querySelectorAll('.empty--page, .empty--section, .cine-empty').forEach(fitState);
+let stateWatch = null;
+// Measured before the first paint, so a state never appears and then moves.
+export function watchState(node) {
+  if (!stateWatch) {
+    stateWatch = new ResizeObserver(fitStates);
+    const view = document.getElementById('view');
+    if (view) stateWatch.observe(view); // what sits above it can change size too
+    window.addEventListener('resize', fitStates);
+  }
+  stateWatch.observe(node);
 }
 const STATE_TIERS = ['page', 'section', 'inline'];
 const RETRY_REARM_MS = 4000;
@@ -1694,12 +1767,7 @@ export function stateBlock(opts = {}) {
       role: kind === 'error' ? 'alert' : null,
     },
     [
-      art
-        ? el('div', {
-            class: 'empty-art empty-art--drawn',
-            html: `<svg viewBox="0 0 48 48" aria-hidden="true">${art}</svg>`,
-          })
-        : el('div', { class: 'empty-art' }, [lucideIcon(opts.icon || STATE_ICONS[kind], 'empty-ico')]),
+      art ? stateArt(art) : el('div', { class: 'empty-art' }, [lucideIcon(opts.icon || STATE_ICONS[kind], 'empty-ico')]),
       el('h3', { class: 'empty-title', text: opts.title || '' }),
       opts.detail ? el('p', { class: 'empty-detail', text: opts.detail }) : null,
     ]
@@ -1725,6 +1793,7 @@ export function stateBlock(opts = {}) {
   // The raw exception goes last and small: useful to whoever runs the server,
   // never the headline.
   if (opts.error) node.append(el('p', { class: 'empty-err', text: opts.error }));
+  if (tier !== 'inline') watchState(node);
   return node;
 }
 

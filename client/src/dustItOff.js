@@ -511,10 +511,7 @@ export function openDustItOff() {
       if (!first) {
         body.innerHTML = '';
         body.append(
-          el('div', { class: 'dust-empty' }, [
-            el('div', { class: 'dust-empty-emoji', text: '🗄️' }),
-            el('div', { text: t('dust.empty') }),
-          ])
+          stateBlock({ tier: 'section', title: t('dust.empty') })
         );
         return;
       }

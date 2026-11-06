@@ -18,8 +18,9 @@ import {
   iconAction,
   segmentedControl,
   selectPill,
+  stateArt,
+  watchState,
 } from './ui.js';
-import { withBase } from './basePath.js';
 import { api } from './api.js';
 import { attachSwipe } from './swipe.js';
 import { imageCache } from './imageCache.js';
@@ -461,19 +462,15 @@ export function openCinemaTickets() {
     }
 
     function showEmpty() {
-      const icon = el('span', { class: 'cine-empty-icon' });
-      const url = `url("${withBase('/icons/lucide/ticket.svg')}")`;
-      icon.style.webkitMaskImage = url;
-      icon.style.maskImage = url;
-      body.replaceChildren(
-        el('div', { class: 'cine-empty' }, [
-          icon,
-          el('div', {
-            class: 'cine-empty-text',
-            text: t('ticket.empty'),
-          }),
-        ])
-      );
+      const empty = el('div', { class: 'cine-empty' }, [
+        stateArt('ticket'),
+        el('div', {
+          class: 'cine-empty-text',
+          text: t('ticket.empty'),
+        }),
+      ]);
+      watchState(empty);
+      body.replaceChildren(empty);
     }
 
     function showMessage(msg) {

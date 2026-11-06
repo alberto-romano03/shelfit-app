@@ -302,7 +302,7 @@ export default async function Lists(container) {
     }
     if (!lists.length) {
       note.replaceChildren(
-        stateBlock({ icon: 'list-plus', title: t('lists.noneTitle'), detail: t('lists.noneDetail'), tier: 'inline' })
+        stateBlock({ icon: 'list-plus', title: t('lists.noneTitle'), detail: t('lists.noneDetail'), tier: 'section' })
       );
     } else if (!shown) {
       note.replaceChildren(el('div', { class: 'muted lp-none', text: t('lists.noneFiltered') }));
