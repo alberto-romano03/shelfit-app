@@ -1734,10 +1734,32 @@ textarea.notes {
   font-size: 12px;
   color: var(--text-secondary);
 }
-.season-left-hint {
-  font-size: 12px;
-  color: var(--accent);
-  padding: 0 14px 10px;
+/* The season you're on is outlined; a finished one has a tick, an unfinished one a bar. */
+.season-item.is-current {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.season-header {
+  position: relative;
+}
+.season-done {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-right: 2px;
+  background-color: var(--success);
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  -webkit-mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  mask-position: center;
+}
+.season-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
 }
 .link-btn {
   color: var(--accent);

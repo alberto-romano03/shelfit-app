@@ -1015,14 +1015,26 @@ export default async function Detail(container, params) {
     );
 
     const seasonsWrap = el('div', {});
+    // The season you're on: the one you last marked if it isn't finished, otherwise the
+    // first that isn't. Nothing is outlined before you've watched anything.
+    const unfinished = p.seasons.filter((s) => s.watched < s.total);
+    const onSeason = !p.watched_episodes
+      ? null
+      : unfinished.find((s) => s.season_number === p.current_season) || unfinished[0] || null;
     for (const s of p.seasons) {
-      const item = el('div', { class: 'season-item' });
+      const finished = s.total > 0 && s.watched >= s.total;
+      const countText = finished
+        ? t('detail.seasonAllWatched', { total: s.total })
+        : s === onSeason
+          ? t(s.watched ? 'detail.seasonWatching' : 'detail.seasonNext', { watched: s.watched, total: s.total })
+          : t('detail.seasonEpisodes', { watched: s.watched, total: s.total });
+      const item = el('div', { class: 'season-item' + (s === onSeason ? ' is-current' : '') });
       const header = el('div', { class: 'season-header' }, [
         el('div', {}, [
           el('div', { class: 's-name', text: s.name }),
-          el('div', { class: 's-count', text: t('detail.seasonEpisodes', { watched: s.watched, total: s.total }) }),
+          el('div', { class: 's-count', text: countText }),
         ]),
-        el('button', {
+        finished ? lucideIcon('check', 'season-done') : el('button', {
           class: 'link-btn',
           text: t('detail.markAllWatched'),
           onClick: async (e) => {
@@ -1039,16 +1051,13 @@ export default async function Detail(container, params) {
           },
         }),
       ]);
+      if (!finished && s.watched > 0) {
+        const bar = el('i', { class: 'season-bar' });
+        bar.style.width = `${(s.watched / s.total) * 100}%`;
+        header.append(bar);
+      }
       header.addEventListener('click', () => navigate(`/season/${id}/${s.season_number}`));
       item.append(header);
-      if (p.current_season === s.season_number && p.episodes_left > 0) {
-        item.append(
-          el('div', {
-            class: 'season-left-hint',
-            text: t('detail.episodesLeft', { n: p.episodes_left, season: s.name }),
-          })
-        );
-      }
       seasonsWrap.append(item);
     }
     body.append(el('div', { class: 'section-title', text: t('common.seasons') }), seasonsWrap);
