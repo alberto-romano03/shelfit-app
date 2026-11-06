@@ -5287,18 +5287,23 @@ button.srow:active {
 }
 .poster-menu-head {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .poster-menu-head h3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   min-width: 0;
   margin: 0;
-  font-size: 16px;
+  font-size: 20px;
+  line-height: 1.25;
 }
 .poster-menu-head .poster-card {
   flex: none;
-  width: 44px;
+  width: 88px;
   border-radius: var(--r-sm);
   box-shadow: none;
 }
