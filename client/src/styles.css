@@ -6015,85 +6015,83 @@ img.mood-emoji {
   box-shadow: 0 8px 18px color-mix(in srgb, var(--mood) 45%, transparent);
 }
 
-/* Duration — custom snap slider */
-.dur-slider {
-  padding: 6px 4px 2px;
-}
-.dur-label-track {
+/* Duration: a thick bar whose fill is the choice, with its value in the bar and the levels
+   below, each under its own quarter. */
+.dur-bar {
   position: relative;
-  height: 24px;
-}
-.dur-rail {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transition: transform var(--dur-short) var(--ease-out);
-}
-.dur-label {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform: translateX(-50%);
-  padding: 3px 10px;
-  border-radius: var(--r-pill);
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  transition: transform var(--dur-short) var(--ease-out);
-}
-.dur-track {
-  position: relative;
-  height: 8px;
-  margin: 8px 8px 0;
-  border-radius: var(--r-pill);
+  height: 48px;
+  border-radius: var(--r-md);
   background: var(--surface-elevated);
+  overflow: hidden;
   cursor: pointer;
   touch-action: none;
-}
-.dur-fill-clip {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: inherit;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .dur-fill {
   position: absolute;
   inset: 0;
   background: var(--accent);
-  transition: transform var(--dur-short) var(--ease-out);
+  transition: transform var(--dur-medium) var(--ease-out);
 }
-.dur-thumb {
+.dur-rail {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: transform var(--dur-medium) var(--ease-out);
+}
+.dur-grip {
+  position: absolute;
+  top: 50%;
+  left: -1.5px;
+  width: 3px;
+  height: 20px;
+  margin-top: -10px;
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, 0.45);
+  transition: height var(--dur-short) var(--ease-out), margin-top var(--dur-short) var(--ease-out);
+}
+.dur-bar.dragging .dur-grip {
+  height: 28px;
+  margin-top: -14px;
+}
+.dur-value {
   position: absolute;
   top: 50%;
   left: 0;
-  pointer-events: auto;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #fff;
-  border: 3px solid var(--accent);
-  box-shadow: var(--shadow-xs);
-  transform: translate(-50%, -50%);
-  transition: scale var(--dur-short) var(--ease-out);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-primary);
+  transform: translate(25px, -50%);
+  transition: transform var(--dur-medium) var(--ease-out), color var(--dur-short) var(--ease-state);
 }
-.dur-thumb.dragging {
-  scale: 1.27;
+.dur-rail.is-inside .dur-value {
+  color: var(--on-accent);
+  transform: translate(calc(-100% - 11px), -50%);
 }
-.dur-ticks {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 10px;
+.dur-levels {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 4px;
 }
-.dur-ticks span {
-  font-size: 11px;
+.dur-level {
+  min-height: 32px;
+  font-size: 12px;
   color: var(--text-secondary);
+  text-align: center;
   transition: color var(--dur-short) var(--ease-state);
 }
-.dur-ticks span.on {
+.dur-level.on {
   color: var(--accent);
-  font-weight: 700;
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dur-fill,
+  .dur-rail,
+  .dur-value {
+    transition: none;
+  }
 }
 .rating-row {
   display: flex;
@@ -6845,18 +6843,6 @@ img.mood-emoji {
 .rating-btn .star-meter { font-size: 12px; letter-spacing: 1px; }
 .rating-btn.active { background: var(--surface-elevated); border-color: var(--accent); }
 .rating-btn.active .stars5.gold { color: var(--stars); opacity: 1; }
-
-/* Duration slider — aligned coordinate system */
-/* Extra horizontal padding so the thumb (translateX(-50%), ~22–28px) never sits
-   flush against the sheet edge at either extreme. Tighter top padding pulls the
-   slider closer to its section label. */
-.dur-slider { padding: 2px 22px 2px; }
-/* Pull the Duration slider up toward its heading (this group only). */
-.dust-group:has(.dur-slider) .dust-label { margin-bottom: 4px; }
-.dur-label-track { position: relative; height: 24px; }
-.dur-track { margin: 8px 0 0; }
-.dur-ticks { position: relative; display: block; height: 18px; margin-top: 10px; }
-.dur-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 
 /* Result screen: the pick card scrolls in the sheet body, actions in the footer. */
 .dust-adjust { align-self: center; display: inline-flex; align-items: center; gap: 4px; }

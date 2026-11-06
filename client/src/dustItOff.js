@@ -1,3 +1,4 @@
+import { haptic } from './haptic.js';
 import { api } from './api.js';
 import { navigate } from './router.js';
 import {
@@ -257,73 +258,76 @@ export function openDustItOff() {
     // --- Duration slider (aligned label / ticks / thumb) ---
     function buildDuration() {
       const N = DURATIONS.length;
-      const labelEl = el('div', { class: 'dur-label' });
-      // Everything that moves is moved by transform, on a rail as wide as the track
-      // (a transform's percentage is of the element's own width), so a step never
-      // lays out the sheet.
-      const labelRail = el('div', { class: 'dur-rail' }, [labelEl]);
+      // Everything that moves is moved by transform, on a rail as wide as the bar (a
+      // transform's percentage is of the element's own width), so a step never lays out
+      // the sheet. The handle sits over the middle of the chosen level's name, and the gold
+      // ends just past it.
+      const value = el('span', { class: 'dur-value' });
+      const rail = el('div', { class: 'dur-rail' }, [el('i', { class: 'dur-grip' }), value]);
       const fill = el('div', { class: 'dur-fill' });
-      const thumb = el('div', { class: 'dur-thumb' });
-      const thumbRail = el('div', { class: 'dur-rail' }, [thumb]);
-      const track = el('div', { class: 'dur-track' }, [el('div', { class: 'dur-fill-clip' }, [fill]), thumbRail]);
-      const ticks = el('div', { class: 'dur-ticks' });
-      DURATIONS.forEach(([, tickKey], i) => {
-        const s = el('span', { text: t(tickKey) });
-        s.style.left = (i / (N - 1)) * 100 + '%';
-        ticks.append(s);
+      const bar = el(
+        'div',
+        { class: 'dur-bar', role: 'slider', tabindex: '0', 'aria-label': t('dust.duration'), 'aria-valuemin': '0', 'aria-valuemax': String(N - 1) },
+        [fill, rail]
+      );
+      const levels = DURATIONS.map(([, levelKey], i) => {
+        const b = el('button', { class: 'dur-level', type: 'button', text: t(levelKey) });
+        b.addEventListener('click', () => apply(i));
+        return b;
       });
-      const wrap = el('div', { class: 'dur-slider' }, [
-        el('div', { class: 'dur-label-track' }, [labelRail]),
-        track,
-        ticks,
-      ]);
+      const wrap = el('div', { class: 'dur-slider' }, [bar, el('div', { class: 'dur-levels' }, levels)]);
 
       let idx = DURATIONS.findIndex((d) => d[0] === state.duration);
       if (idx < 0) idx = N - 1;
 
       function apply(i) {
         idx = Math.max(0, Math.min(N - 1, i));
-        const pct = (idx / (N - 1)) * 100;
-        thumbRail.style.transform = `translateX(${pct}%)`;
-        labelRail.style.transform = `translateX(${pct}%)`;
-        fill.style.transform = `translateX(${pct - 100}%)`;
-        // Anchor the label to the edge at the extremes so it never overflows the
-        // sheet: left-aligned at the first stop, right-aligned at the last,
-        // centred over the thumb everywhere in between.
-        labelEl.style.transform =
-          idx === 0 ? 'translateX(0)' : idx === N - 1 ? 'translateX(-100%)' : 'translateX(-50%)';
-        // NOT setLabel: this readout tracks a live drag, so a fade per step
-        // would flicker. It moves with the thumb, which already reads as change.
-        labelEl.textContent = t(DURATIONS[idx][2]);
+        const pct = ((idx + 0.5) / N) * 100;
+        fill.style.transform = `translateX(calc(${pct - 100}% + 11px))`;
+        rail.style.transform = `translateX(${pct}%)`;
+        // Beside the fill while there's room, inside it once there isn't.
+        rail.classList.toggle('is-inside', idx >= N / 2);
+        value.textContent = t(DURATIONS[idx][2]);
+        bar.setAttribute('aria-valuenow', String(idx));
+        bar.setAttribute('aria-valuetext', value.textContent);
         state.duration = DURATIONS[idx][0];
-        ticks.querySelectorAll('span').forEach((s, k) => s.classList.toggle('on', k === idx));
+        levels.forEach((b, k) => b.classList.toggle('on', k === idx));
       }
       apply(idx);
 
       function idxFromX(clientX) {
-        const rect = track.getBoundingClientRect();
-        let r = (clientX - rect.left) / rect.width;
-        r = Math.max(0, Math.min(1, r));
-        return Math.round(r * (N - 1));
+        const rect = bar.getBoundingClientRect();
+        const r = Math.max(0, Math.min(0.999, (clientX - rect.left) / rect.width));
+        return Math.floor(r * N);
       }
       let dragging = false;
-      track.addEventListener('pointerdown', (e) => {
+      bar.addEventListener('pointerdown', (e) => {
         dragging = true;
-        thumb.classList.add('dragging');
+        bar.classList.add('dragging');
         apply(idxFromX(e.clientX));
         try {
-          track.setPointerCapture(e.pointerId);
+          bar.setPointerCapture(e.pointerId);
         } catch {
           /* ignore */
         }
       });
-      track.addEventListener('pointermove', (e) => dragging && apply(idxFromX(e.clientX)));
+      bar.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const next = idxFromX(e.clientX);
+        if (next === idx) return;
+        apply(next);
+        haptic();
+      });
       const end = () => {
         dragging = false;
-        thumb.classList.remove('dragging');
+        bar.classList.remove('dragging');
       };
-      track.addEventListener('pointerup', end);
-      track.addEventListener('pointercancel', end);
+      bar.addEventListener('pointerup', end);
+      bar.addEventListener('pointercancel', end);
+      bar.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight') apply(idx + 1);
+        if (e.key === 'ArrowLeft') apply(idx - 1);
+      });
       return wrap;
     }
 
