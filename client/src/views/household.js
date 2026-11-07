@@ -27,7 +27,7 @@ export function buildHousehold(api) {
   const section = el('div', { class: 'settings-section household-section' });
   const listWrap = el('div', { class: 'household-list' }, [skelLine({ width: '70%' })]);
   const formWrap = el('div', { class: 'magic-form-wrap' });
-  const addRow = settingsRow({ icon: 'plus', label: t('household.add'), sub: t('household.addSub') });
+  const addRow = settingsRow({ icon: 'plus', label: t('household.add'), sub: t('household.addSub'), control: 'chevron' });
 
   section.append(
     settingsHeader('users', t('household.title')),
@@ -154,7 +154,7 @@ export function buildHousehold(api) {
         el('div', { class: 'muted', text: statusLine(m) }),
         el('div', { class: 'household-actions' }, rows)
       );
-    });
+    }, { handle: true });
   }
 
   function renameMember(m) {
@@ -197,7 +197,7 @@ export function buildHousehold(api) {
       );
       input.focus();
       input.select();
-    });
+    }, { handle: true });
   }
 
   function confirmReset(m) {

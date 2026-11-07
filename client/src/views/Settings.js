@@ -20,6 +20,7 @@ import {
   icons,
   clear,
   skelLine,
+  stateBlock,
   toast,
   openModal,
   formatBytes,
@@ -200,6 +201,8 @@ export default async function Settings(container) {
       renderUsage(d.usage);
     } catch (err) {
       toast(err.message, 'bad');
+      // The control already moved: back to what the server holds.
+      api.usage().then((d) => renderUsage(d.usage || [])).catch(() => {});
     }
   }
 
@@ -250,18 +253,13 @@ export default async function Settings(container) {
       applyCap(u.api, Math.max(0, parseInt(capInput.value, 10) || 0))
     );
 
-    const presets = el('div', { class: 'usage-presets' });
-    for (const [label, value] of CAP_PRESETS) {
-      const on = value === 0 ? !limited : u.cap === value;
-      presets.append(
-        el('button', {
-          class: 'usage-preset' + (on ? ' active' : ''),
-          type: 'button',
-          text: label,
-          onClick: () => applyCap(u.api, value),
-        })
-      );
-    }
+    const presets = segmentedControl({
+      options: CAP_PRESETS.map(([label, value]) => [value, label]),
+      value: limited ? u.cap : 0,
+      allowNone: true, // a custom budget is none of the presets
+      ariaLabel: t('settings.usage.monthlyBudget'),
+      onChange: (value) => applyCap(u.api, value),
+    });
 
     // The bypass is a boolean, so it wears the app's boolean control instead of
     // a shrunken .btn — and it says what it does. Meaningless with no budget.
@@ -287,7 +285,7 @@ export default async function Settings(container) {
     card.append(
       el('div', { class: 'usage-budget' }, [
         el('div', { class: 'usage-budget-label', text: t('settings.usage.monthlyBudget') }),
-        presets,
+        presets.el,
         capInput,
         bypassRow.el,
       ])
@@ -783,6 +781,7 @@ export default async function Settings(container) {
             title: t('settings.account.logoutAllTitle'),
             body: t('settings.account.logoutAllBody'),
             confirmLabel: t('settings.account.logoutAllConfirm'),
+            confirmIcon: 'log-out',
             onConfirm: () => signOut({ everywhere: true }),
           }),
       });
@@ -928,10 +927,6 @@ export default async function Settings(container) {
 
     metadataSection.append(
       el('div', { class: 'srow srow--stack' }, [
-        el('div', { class: 'srow-head' }, [
-          lucideIcon('languages', 'srow-ico'),
-          el('div', { class: 'srow-label', text: t('settings.metaLang') }),
-        ]),
         picker.el,
         el('div', { class: 'srow-sub', text: t('settings.metaLangSub') }),
       ]),
@@ -958,8 +953,8 @@ export default async function Settings(container) {
   // ------ Tabbed layout (chips) -----------------------------------------
   // The existing sections are re-parented into per-tab panels; nothing about how
   // each section works changes — only one panel is visible at a time. Tabs are
-  // driven by what actually exists (no empty tabs; Account appears only when a
-  // login is configured, the instance tabs only for the master).
+  // driven by what actually exists: Account appears only when a login is configured,
+  // Household only with logins or for a member (see staffOnly).
   const wrapPanel = (...sections) => el('div', { class: 'settings-panel' }, sections);
   const TAB_DEFS = [
     { key: 'general', label: t('settings.tab.general'), panel: wrapPanel(appearanceSection, installSection, notificationsSection) },
@@ -1055,10 +1050,25 @@ export default async function Settings(container) {
     })
     .catch(() => {});
 
+  // A tab that runs the instance is the master's. A member still has it, saying so.
+  function staffOnly(key, detail) {
+    const tab = TAB_DEFS.find((x) => x.key === key);
+    tab.panel.replaceChildren(
+      stateBlock({ icon: 'user-round', title: t('settings.staffOnly.title'), detail })
+    );
+    chipByKey[key].style.display = '';
+  }
+
   // The instance controls appear for the master only; for a member nothing of
   // them is fetched at all.
   authP.then((s) => {
-    if (!isMaster(s)) return;
+    if (!isMaster(s)) {
+      staffOnly('household', t('settings.staffOnly.household'));
+      staffOnly('kodi', t('settings.staffOnly.kodi'));
+      staffOnly('advanced', t('settings.staffOnly.advanced'));
+      tabBar.refresh(); // the track just got wider: re-measure the chips
+      return;
+    }
     kodiSection.replaceWith(buildKodiSettings(api));
     metadataSection.style.display = '';
     folderTools.style.display = '';
@@ -1160,5 +1170,5 @@ async function showLog(source) {
       el('span', { text: t('common.close') }),
     ])])
     );
-  });
+  }, { handle: true });
 }

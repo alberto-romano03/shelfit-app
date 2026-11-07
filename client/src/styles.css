@@ -953,6 +953,16 @@ button:active,
 .selpill--block .selpill-key:empty {
   display: none;
 }
+/* In Settings a selector is as tall as the segmented control beside it, with one text inset. */
+.settings-section .selpill {
+  height: 38px;
+  padding-left: 16px;
+}
+/* In a form it stands among the fields. */
+.kodi-form .selpill {
+  height: 48px;
+  padding-left: 16px;
+}
 /* A live filter wears the accent, so "something is narrowing this grid" reads
    without opening anything. */
 .selpill.is-set {
@@ -3780,6 +3790,17 @@ body.modal-open {
 .modal--handle {
   padding-top: 6px;
 }
+/* The Kodi form keeps the inline forms' rhythm: its .stack gap (10px) is cancelled so a
+   label sits 8px above its field and 16px below the last one. */
+.kodi-form .stack {
+  margin-top: 0;
+}
+.kodi-form .stack > .field-label {
+  margin: 6px 0 -2px;
+}
+.kodi-form .stack > .field-label:first-child {
+  margin-top: 0;
+}
 /* --- Split modal: a scrolling body under a pinned footer -------------------
    .modal is itself the scroller, so a long form pushes its own Save/Cancel
    below the fold — the Kodi instance form is six fields plus an icon picker and
@@ -4368,6 +4389,9 @@ textarea.text-field {
 .srow:first-child {
   border-top: 0;
 }
+.tvtime-folder .srow:first-child {
+  border-top: 1px solid var(--border);
+}
 button.srow {
   cursor: pointer;
   transition: background-color var(--dur-long) var(--ease-state);
@@ -4471,9 +4495,17 @@ button.srow:active {
     transform: rotate(360deg);
   }
 }
-/* Body revealed by a chevron row, indented past the glyph. */
+/* Body revealed by a chevron row, and results a row reports: on the row labels' column
+   (2px row inset + 20px glyph + 12px gap). */
 .srow-body {
-  padding: 2px 2px 10px 31px;
+  padding: 2px 2px 10px 34px;
+}
+.cache-results,
+.import-results {
+  padding: 0 2px 8px 34px;
+}
+.cache-results .settings-row {
+  padding: 4px 0;
 }
 
 /* One destructive treatment for the whole app surface: danger ink on the label
@@ -4587,7 +4619,8 @@ button.srow:active {
 .usage-card {
   position: relative;
   overflow: hidden;
-  padding: 13px 14px 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--surface-elevated);
 }
@@ -4690,36 +4723,10 @@ button.srow:active {
   text-transform: uppercase;
   color: var(--text-secondary);
 }
-.usage-presets {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.usage-preset {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: border-color var(--dur-short) var(--ease-state),
-    color var(--dur-short) var(--ease-state),
-    background-color var(--dur-short) var(--ease-state);
-}
-.usage-preset.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
 .usage-custom {
+  height: 38px; /* a second way to make the same choice, so as tall as the presets */
   margin-top: 8px;
+  padding-block: 0;
 }
 /* The bypass row is a settingsRow, which carries its own border-top for
    stacking inside a group. Here it is the last thing in a block that already
@@ -4747,7 +4754,7 @@ button.srow:active {
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.45;
-  padding: 5px 0;
+  padding: 3px 0;
   overflow-wrap: anywhere;
 }
 /* Idle, this wrap holds two empty text divs, a hidden bar and a hidden row —
@@ -6476,7 +6483,8 @@ img.mood-emoji {
 .switch .slider {
   position: absolute;
   inset: 0;
-  background: var(--surface-elevated);
+  /* Not a surface colour: it sits on sections and on the cards inside them. */
+  background: color-mix(in srgb, var(--text-secondary) 30%, transparent);
   border-radius: var(--r-pill);
   transition: background var(--dur-short) var(--ease-state);
   cursor: pointer;
@@ -8997,10 +9005,10 @@ textarea.notes:focus,
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 13px 14px 12px;
+  padding: 14px;
   border-radius: var(--r-md);
   background: var(--surface-elevated);
-  border: 1px solid transparent;
+  border: 1px solid var(--border);
   transition: border-color var(--dur-short) var(--ease-state),
     background-color var(--dur-short) var(--ease-state);
 }
@@ -9020,14 +9028,14 @@ textarea.notes:focus,
    active one, an outline button on the rest. */
 .kodi-active-chip {
   flex: 0 0 auto;
-  height: 30px;
-  padding: 0 14px;
+  height: 36px; /* the round actions beside it */
+  padding: 0 16px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: border-color var(--dur-short) var(--ease-state),
@@ -9351,10 +9359,30 @@ textarea.notes:focus,
 .magic-form .field-label:first-child {
   margin-top: 0;
 }
-/* The expiry track is content-width, not a wrapping row. */
-.magic-expiry {
-  align-self: flex-start;
-  max-width: 100%;
+/* Controls are --surface-elevated, and so is a card inside a section: there they step
+   down to the section's colour, or Cancel and the fields melt into the card. */
+.usage-card .text-field,
+.magic-form .text-field,
+.magic-result .text-field,
+.magic-form .btn-secondary,
+.magic-result .btn-secondary {
+  background: var(--surface);
+}
+.usage-card .seg,
+.magic-form .seg {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(var(--seg-count), minmax(0, 1fr));
+  background: var(--surface);
+}
+.usage-card .seg-opt,
+.magic-form .seg-opt {
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.household-section .magic-form,
+.household-section .magic-result {
+  margin-top: 12px;
 }
 .magic-form-actions {
   display: flex;
@@ -9554,7 +9582,7 @@ textarea.lend-message-input:focus {
 }
 /* TV Time import: whose library it fills (shown only with several members). */
 .tvtime-target {
-  margin: 4px 0 10px;
+  margin: 4px 2px 10px;
 }
 .magic-result-head {
   font-weight: 700;
@@ -10122,6 +10150,9 @@ textarea.lend-message-input:focus {
      slot whether the track is content-sized or stretched. */
   transform: translateX(calc(100% * var(--seg-i)));
   transition: transform var(--dur-short) var(--ease-out);
+}
+.seg--none .seg-chip {
+  opacity: 0;
 }
 .seg-opt {
   position: relative;

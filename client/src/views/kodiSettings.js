@@ -324,11 +324,13 @@ export function buildKodiSettings(api) {
       const ownerPill =
         ownerOptions.length > 1
           ? selectPill({
-              label: t('kodiSettings.syncOwner'),
               options: ownerOptions,
               value: savedOwner,
+              className: 'selpill--block',
             })
           : null;
+
+      if (ownerPill) ownerPill.select.setAttribute('aria-label', t('kodiSettings.syncOwner'));
 
       const testResult = el('div', { class: 'kodi-test-result' });
 
@@ -398,7 +400,7 @@ export function buildKodiSettings(api) {
 
       // The form is long enough to scroll, so the actions are pinned: the body
       // scrolls under the rule instead of pushing Save out of reach.
-      modal.classList.add('modal--split');
+      modal.classList.add('modal--split', 'kodi-form');
       modal.append(
         el('div', { class: 'modal-body' }, [
           el('h3', { text: editing ? t('kodiSettings.editTitle') : t('kodiSettings.addTitle') }),
@@ -427,7 +429,7 @@ export function buildKodiSettings(api) {
           ]),
         ])
       );
-    });
+    }, { handle: true });
   }
 
   async function removeInstance(inst) {

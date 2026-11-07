@@ -11,7 +11,7 @@ import {
   toast,
   formatDate,
   skelLine,
-  segmentedBar,
+  segmentedControl,
   stateBlock,
   settingsRow,
   settingsHeader,
@@ -37,6 +37,7 @@ export function buildMagicLinks(api) {
     icon: 'plus',
     label: t('magic.generateNew'),
     sub: t('magic.generateNewSub'),
+    control: 'chevron',
   });
   const genBtn = genRow.el;
 
@@ -125,10 +126,8 @@ export function buildMagicLinks(api) {
       placeholder: t('magic.labelPlaceholder'),
     });
 
-    // Expiry — a single choice, so the app's segmented track rather than a row of
-    // loose chips. The scrolling variant is used because four content-width
-    // options fit a phone comfortably while four equal columns would not.
-    const expiryBar = segmentedBar({
+    // Expiry: a single choice, so the app's segmented control, as wide as the field above.
+    const expiryBar = segmentedControl({
       options: expiryChips(),
       value: expiry,
       ariaLabel: t('magic.expiryAria'),
@@ -137,7 +136,6 @@ export function buildMagicLinks(api) {
       },
     });
     const chips = expiryBar.el;
-    chips.classList.add('magic-expiry');
 
     const generate = el('button', { class: 'btn btn-primary' }, [
       lucideIcon('plus', 'btn-lucide'),

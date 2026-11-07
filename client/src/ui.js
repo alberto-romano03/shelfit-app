@@ -221,10 +221,12 @@ export function typewriterPlaceholder(el, text, { speed = 55, startDelay = 320 }
 // such a row last in its group, after settingsRule().
 export function settingsRow(opts = {}) {
   const isSwitch = opts.control === 'switch';
-  const tag = isSwitch ? 'div' : 'button';
+  // A row holding a switch or its own round action isn't itself a button: only that
+  // control is tappable, and a button can't hold another one.
+  const tag = isSwitch || opts.end ? 'div' : 'button';
   const node = el(tag, {
     class: 'srow' + (opts.danger ? ' srow--danger' : ''),
-    type: isSwitch ? null : 'button',
+    type: tag === 'button' ? 'button' : null,
   });
 
   node.append(lucideIcon(opts.icon || 'circle-check', 'srow-ico'));
@@ -1169,8 +1171,10 @@ export function segmentedControl({
   onChange,
   ariaLabel = t('ui.selection'),
   center = false,
+  allowNone = false, // a value matching no option picks nothing, instead of the first
 }) {
-  let active = Math.max(0, options.findIndex(([v]) => v === value));
+  let active = options.findIndex(([v]) => v === value);
+  if (active < 0 && !allowNone) active = 0;
   const chip = el('div', { class: 'seg-chip', 'aria-hidden': 'true' });
   // A third tuple entry is an optional Lucide glyph shown left of the label.
   const labels = [];
@@ -1194,7 +1198,8 @@ export function segmentedControl({
   root.style.setProperty('--seg-count', String(options.length || 1));
 
   function paint() {
-    root.style.setProperty('--seg-i', String(active));
+    root.style.setProperty('--seg-i', String(Math.max(0, active)));
+    root.classList.toggle('seg--none', active < 0);
     buttons.forEach((b, i) => b.setAttribute('aria-checked', String(i === active)));
   }
   function pick(i, notify) {
