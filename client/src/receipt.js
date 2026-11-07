@@ -331,7 +331,10 @@ function htmlRow(r, colors) {
     return el('div', { style: { ...base, color: colors.faint, letterSpacing: '1px' }, text: r.text });
   }
   if (r.type === 'closing') {
-    return el('div', { style: { ...base, textAlign: 'center', fontWeight: '800', letterSpacing: '2px' }, text: r.text });
+    // As the export draws it: no tracking, centred on the paper. A long line may run into the
+    // side padding, and a flex row lets it spread both ways, where centred text would only
+    // overflow to the right.
+    return el('div', { style: { ...base, display: 'flex', justifyContent: 'center', overflow: 'visible', fontWeight: '800' }, text: r.text });
   }
   // item / total → left + right
   const left = el('span', { style: { fontFamily: FONT, fontSize: `${f}px`, color: colors.ink, fontWeight: r.type === 'total' ? '700' : '400', minWidth: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, text: r.left });
