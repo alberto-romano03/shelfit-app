@@ -4615,6 +4615,9 @@ button.srow:active {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* The section's 10px bottom padding is meant for rows, which carry their own. Ending on
+     a card, this makes it the same 14px as the sides. */
+  margin-bottom: 4px;
 }
 .usage-card {
   position: relative;
