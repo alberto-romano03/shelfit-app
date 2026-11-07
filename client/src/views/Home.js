@@ -513,7 +513,7 @@ export default async function Home(container) {
   const drawer = el('button', {
     class: 'desk-drawer',
     'aria-label': t('home.desk.openTickets'),
-    html: '<span class="desk-drawer-face"><span class="desk-knob" aria-hidden="true"></span></span>',
+    html: `<span class="desk-drawer-face" aria-hidden="true"><span class="desk-label">${t('ticket.myTickets')}</span><span class="desk-pull"></span></span>`,
     onClick: () => {
       // CSS-only pull-open (translateY on the drawer face), running as the modal
       // comes up rather than ahead of it; the drawer then resets behind it.

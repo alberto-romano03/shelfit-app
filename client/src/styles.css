@@ -10344,22 +10344,43 @@ textarea.lend-message-input:focus {
 .desk-drawer-face {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   height: 90px;
   border-radius: var(--r-sm); /* subtle softening — less rounded than app cards */
-  /* Flat wood: one solid, saturated oak. No gradient, no inner shading, no cast
-     shadow — the colour alone carries it, matching the flat shelf boxsets. */
+  /* Flat wood: one solid, saturated oak. No gradient, no cast shadow, matching the flat
+     shelf boxsets. The drawer is told by what's on its front: a recessed panel, a label
+     in its brass holder, and a bar to pull. */
   background: #855E42;
   transition: transform var(--dur-medium) var(--ease-glide);
 }
-/* Brass knob. Flat, but not a bare circle: a hard-edged inner lip (zero blur, so
-   it stays flat rather than becoming a gradient) darkens the lower third and
-   reads as the machined edge of a real pull. */
-.desk-knob {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
+.desk-drawer-face::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 2px solid #6f4d35;
+  border-radius: 4px;
+}
+.desk-label {
+  position: relative;
+  padding: 3px 10px;
+  border: 2px solid #d8b25e;
+  border-radius: 3px;
+  background: #f3e7cf;
+  color: #2c2415;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.desk-pull {
+  position: relative;
+  width: 72px;
+  height: 10px;
+  border-radius: var(--r-pill);
   background: #d8b25e;
   box-shadow: inset 0 -3px 0 #a8863f;
 }

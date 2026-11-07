@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v176'; // bumped: pages slide, dialogs rise from the edge, skeletons match their pages
+const CACHE = 'shelfit-shell-v177'; // bumped: the drawer on Home reads as a drawer
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by
