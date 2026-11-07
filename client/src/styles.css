@@ -11255,20 +11255,21 @@ textarea.lend-message-input:focus {
 }
 
 /* ========================= The Wall (home) =========================
-   A framed portrait between two taped-up posters. The wall grain is pure CSS
-   (layered low-alpha gradients — no image asset); the tape and the gilded frame
-   are inline SVG in theWall.js. The posters' glossy sheen is NOT redefined here:
+   A framed portrait between two taped-up posters. The wall is a flat colour; its
+   grain is kept below, hidden. The gilded frame is inline SVG in theWall.js. The posters' glossy sheen is NOT redefined here:
    .wall-poster is added to the existing .detail-poster::after reflection rule. */
 .wall-section {
   margin: 34px -16px 26px; /* bleed to the screen edges so the wall reads as a wall */
   padding: 18px 13px 30px;
   overflow: hidden; /* tape may reach past the slots — never let it scroll the page */
   background-color: color-mix(in srgb, var(--text-primary) 4%, var(--bg));
-  /* Subtle plaster grain: two offset hatches + a soft vignette. */
+  /* Plaster grain, hidden for now: uncomment to bring it back. Two offset hatches + a soft
+     vignette.
   background-image:
     repeating-linear-gradient(48deg, rgba(255, 255, 255, 0.018) 0 2px, transparent 2px 5px),
     repeating-linear-gradient(-42deg, rgba(0, 0, 0, 0.02) 0 2px, transparent 2px 6px),
     radial-gradient(120% 90% at 50% 0%, rgba(255, 255, 255, 0.035), transparent 70%);
+  */
   border-block: 1px solid var(--border);
 }
 .wall-section .section-title {
@@ -11302,14 +11303,7 @@ textarea.lend-message-input:focus {
 .wall-slot:active {
   filter: brightness(1.06);
 }
-/* --- Taped posters ---
-   The strip's CENTRE is placed a fixed fraction inside the poster's corner:
-   `top/left: 6%` measures that inset from the corner, and the 50% translate
-   slides the strip's own centre onto that point before the rotation turns it
-   about the same centre. Positioning it by an eyeballed negative offset (as it
-   was) meant the overhang differed corner to corner and drifted with the
-   poster's width; this keeps both corners identical at any size, and puts more
-   of the tape on the poster than off it. */
+/* --- Taped posters --- */
 .wall-poster {
   position: relative; /* anchors the shared ::after reflection */
   aspect-ratio: 2 / 3;
@@ -11324,23 +11318,22 @@ textarea.lend-message-input:focus {
   object-fit: cover;
   display: block;
 }
+/* One flat strip across the top edge, torn at both ends. A warm clementine for the film,
+   a muted sage for the series. */
 .wall-tape {
   position: absolute;
-  width: 44%;
-  height: auto;
-  pointer-events: none;
+  top: 0;
+  left: 50%;
   z-index: 3;
-  filter: drop-shadow(0 1px 2.5px rgba(0, 0, 0, 0.55));
+  width: 39%;
+  aspect-ratio: 58 / 18;
+  transform: translate(-50%, -33%) rotate(-4deg);
+  pointer-events: none;
+  background: #c85f36;
+  clip-path: polygon(0 0, 4% 16%, 0 33%, 4% 50%, 0 66%, 4% 83%, 0 100%, 100% 100%, 96% 83%, 100% 66%, 96% 50%, 100% 33%, 96% 16%, 100% 0);
 }
-.wall-tape--tl {
-  top: 6%;
-  left: 6%;
-  transform: translate(-50%, -50%) rotate(-38deg);
-}
-.wall-tape--br {
-  bottom: 6%;
-  right: 6%;
-  transform: translate(50%, 50%) rotate(-38deg);
+.wall-slot--show .wall-tape {
+  background: #4a7359;
 }
 /* --- Framed person --- */
 .wall-slot--person .wall-person-photo {

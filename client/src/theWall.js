@@ -1,8 +1,8 @@
 // "The Wall" — a home section styled as a real wall: your one favourite film and
 // series taped up either side of a framed portrait of your favourite person.
 //
-// Everything decorative here is INLINE SVG (scotch tape, the ornate frame) so
-// there are no extra image assets to ship or cache. Posters come from the local
+// The tape is plain CSS and the ornate frame INLINE SVG, so there are no extra
+// image assets to ship or cache. Posters come from the local
 // TMDB cache; the person photo comes from /api/persons/:id/photo (custom upload
 // first, then the cached TMDB profile).
 //
@@ -18,40 +18,6 @@ import { withBase } from './basePath.js';
 import { openTitlePicker, openPersonPicker } from './pickers.js';
 import { saveWall, getWall } from './offlineCache.js';
 import { t } from './i18n.js';
-
-// Two strips of coloured tape, rotated across opposite corners — the same soft
-// rounded strip as before, with the diagonal hatch for adhesive grain and the
-// blur filter softening the edges.
-//
-// What changed is the paint. It used to be a 62%-alpha cream wash with a white
-// hatch over it, which on a near-black wall composited down to a grey smudge;
-// both are OPAQUE colours now. One roll per poster, so the film and the series
-// are taped up in different colours: a warm clementine and a muted sage, dialled
-// down from the palette so they sit on the wall rather than shout off it.
-const TAPES = {
-  movie: { face: '#c85f36', grain: '#d97e57' },
-  show: { face: '#4a7359', grain: '#6b9578' },
-};
-
-function tape(corner, kind) {
-  const c = TAPES[kind] || TAPES.movie;
-  const id = `tapeGrain-${kind}-${corner}`;
-  return `
-<svg class="wall-tape wall-tape--${corner}" viewBox="0 0 78 30" aria-hidden="true">
-  <defs>
-    <pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
-      <line x1="0" y1="0" x2="0" y2="6" stroke="${c.grain}" stroke-width="1.1"/>
-    </pattern>
-    <filter id="${id}-soft" x="-10%" y="-25%" width="120%" height="150%">
-      <feGaussianBlur stdDeviation="0.5"/>
-    </filter>
-  </defs>
-  <g filter="url(#${id}-soft)">
-    <rect x="1" y="6" width="76" height="18" rx="1" fill="${c.face}"/>
-    <rect x="1" y="6" width="76" height="18" rx="1" fill="url(#${id})"/>
-  </g>
-</svg>`;
-}
 
 // Carved wooden picture frame, in the style of a classic moulding: concentric
 // bevel bands in warm wood gradients — outer lip, lit bevel, wide moulding,
@@ -225,9 +191,8 @@ function posterSlot(kind, data, { onOpen, onPick }) {
     inner.classList.add('is-empty');
   }
   const slot = el('div', { class: `wall-slot wall-slot--${kind}` }, [inner]);
-  // Tape sits above the poster, straddling two opposite corners.
-  slot.insertAdjacentHTML('beforeend', tape('tl', kind));
-  slot.insertAdjacentHTML('beforeend', tape('br', kind));
+  // One strip of tape holds it up, straddling the top edge.
+  slot.append(el('span', { class: 'wall-tape' }));
   slot.addEventListener('click', () => (data ? onOpen(data) : onPick()));
   return slot;
 }
