@@ -307,7 +307,9 @@ function paperHeight(rows) {
 // HTML clip-path and the canvas fill.
 function tornPoints(w, h) {
   const pts = [];
-  const n = Math.max(2, Math.round(w / TOOTH_W));
+  // A tooth is two steps. A multiple of 4 makes an even number of whole teeth, so the edge
+  // ends on a full one, as it starts.
+  const n = Math.max(4, 4 * Math.round(w / TOOTH_W / 4));
   const step = w / n;
   for (let i = 0; i <= n; i++) pts.push([i * step, i % 2 === 0 ? TOOTH_H : 0]);
   pts.push([w, h - TOOTH_H]);

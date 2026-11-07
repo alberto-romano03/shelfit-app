@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v185'; // bumped: receipt options anchored, blur slider stops
+const CACHE = 'shelfit-shell-v186'; // bumped: receipt edge ends on a whole tooth
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by
