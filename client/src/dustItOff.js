@@ -34,16 +34,66 @@ const TYPES = [
 // The animated mood emojis are Google's Animated Noto Emoji (CC BY 4.0,
 // https://googlefonts.github.io/noto-emoji-animation/), the 512px WebP files
 // resized to 128px: 1f601 grin, 1f622 cry, 1f631 scream, 1f92f mind blown,
-// 1f3ac clapper, 1f634 sleep.
-// [value, animated image file (icons/animated-genre/), label key, soft accent color]
+// 1f3ac clapper, 1f634 sleep. stills/ holds the first frame of each.
+// [value, animated image file (icons/animated-genre/), label key, soft accent color, one loop in ms]
 const MOODS = [
-  ['light', 'light-fun.webp', 'dust.mood.light', '#f2c94c'],
-  ['emotional', 'emotional.webp', 'dust.mood.emotional', '#5b8def'],
-  ['tense', 'tense.webp', 'dust.mood.tense', '#eb5757'],
-  ['mindbending', 'mind-bending.webp', 'dust.mood.mindbending', '#9b6dff'],
-  ['epic', 'epic.webp', 'dust.mood.epic', '#f2994a'],
-  ['easy', 'easy-watch.webp', 'dust.mood.easy', '#3bb58f'],
+  ['light', 'light-fun.webp', 'dust.mood.light', '#f2c94c', 2340],
+  ['emotional', 'emotional.webp', 'dust.mood.emotional', '#5b8def', 1650],
+  ['tense', 'tense.webp', 'dust.mood.tense', '#eb5757', 1530],
+  ['mindbending', 'mind-bending.webp', 'dust.mood.mindbending', '#9b6dff', 2610],
+  ['epic', 'epic.webp', 'dust.mood.epic', '#f2994a', 1351],
+  ['easy', 'easy-watch.webp', 'dust.mood.easy', '#3bb58f', 1800],
 ];
+const MOOD_LOOPS = 2;
+const MOOD_REST_MS = 5000;
+const moodFiles = new Map(); // file -> Promise<Blob>, each fetched once
+
+// A mood emoji plays a couple of loops, rests on its first frame, then plays again. An
+// animated image can't be paused, so it swaps with its still; a new blob URL is what makes
+// it start over from that same frame, as the same URL would carry on where it had got to.
+// Only the still is shown with reduced motion, or when the animation can't be fetched.
+function moodEmoji(cls, file, loopMs) {
+  const still = withBase(`/icons/animated-genre/stills/${file}`);
+  const img = el('img', { class: cls, src: still, alt: '', 'aria-hidden': 'true' });
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return img;
+
+  const play = async () => {
+    if (!img.isConnected) return; // the sheet closed or redrew: this one is done
+    let blob;
+    try {
+      if (!moodFiles.has(file)) {
+        moodFiles.set(
+          file,
+          fetch(withBase(`/icons/animated-genre/${file}`)).then((r) => {
+            if (!r.ok) throw new Error(String(r.status));
+            return r.blob();
+          })
+        );
+      }
+      blob = await moodFiles.get(file);
+    } catch {
+      moodFiles.delete(file); // try again next time the sheet opens
+      return;
+    }
+    if (!img.isConnected) return;
+    const url = URL.createObjectURL(blob);
+    img.addEventListener(
+      'load',
+      () => {
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+          if (!img.isConnected) return;
+          img.src = still;
+          setTimeout(play, MOOD_REST_MS);
+        }, MOOD_LOOPS * loopMs);
+      },
+      { once: true }
+    );
+    img.src = url;
+  };
+  setTimeout(play); // once it's in the sheet
+  return img;
+}
 // Duration snap points (movies only). null = "Any" (no filter).
 // [value, tick label key, floating-label key showing the actual runtime range]
 const DURATIONS = [
@@ -52,6 +102,8 @@ const DURATIONS = [
   ['long', 'dust.duration.long', 'dust.duration.longRange'],
   [null, 'dust.duration.any', 'dust.duration.any'],
 ];
+// Where each level sits along the bar, in %: the ends near the edges, the rest evenly between.
+const DURATION_STOPS = [8, 36, 64, 92];
 // [value, label key, filled-star level out of 5]
 const RATINGS = [
   [null, 'dust.rating.any', 0],
@@ -235,15 +287,10 @@ export function openDustItOff() {
     // --- Mood ---
     function buildMood() {
       const grid = el('div', { class: 'mood-grid' });
-      MOODS.forEach(([val, gif, textKey, color]) => {
+      MOODS.forEach(([val, gif, textKey, color, loopMs]) => {
         const btn = el('button', { class: 'mood-btn' + (state.mood === val ? ' active' : '') });
-        btn.style.setProperty('--mood', color);
-        const emoji = el('img', {
-          class: 'mood-emoji',
-          src: withBase(`/icons/animated-genre/${gif}`),
-          alt: '',
-          'aria-hidden': 'true',
-        });
+        btn.style.setProperty('--tile', color);
+        const emoji = moodEmoji('mood-emoji', gif, loopMs);
         btn.append(emoji, el('span', { class: 'mood-label', text: t(textKey) }));
         btn.addEventListener('click', () => {
           state.mood = state.mood === val ? null : val;
@@ -261,7 +308,7 @@ export function openDustItOff() {
       // Everything that moves is moved by transform, on a rail as wide as the bar (a
       // transform's percentage is of the element's own width), so a step never lays out
       // the sheet. The handle sits over the middle of the chosen level's name, and the gold
-      // ends just past it.
+      // ends just past it. Any length has no limit to mark, so the gold takes the whole bar.
       const value = el('span', { class: 'dur-value' });
       const rail = el('div', { class: 'dur-rail' }, [el('i', { class: 'dur-grip' }), value]);
       const fill = el('div', { class: 'dur-fill' });
@@ -272,6 +319,7 @@ export function openDustItOff() {
       );
       const levels = DURATIONS.map(([, levelKey], i) => {
         const b = el('button', { class: 'dur-level', type: 'button', text: t(levelKey) });
+        b.style.left = `${DURATION_STOPS[i]}%`;
         b.addEventListener('click', () => apply(i));
         return b;
       });
@@ -282,8 +330,8 @@ export function openDustItOff() {
 
       function apply(i) {
         idx = Math.max(0, Math.min(N - 1, i));
-        const pct = ((idx + 0.5) / N) * 100;
-        fill.style.transform = `translateX(calc(${pct - 100}% + 11px))`;
+        const pct = DURATION_STOPS[idx];
+        fill.style.transform = DURATIONS[idx][0] === null ? 'translateX(0)' : `translateX(calc(${pct - 100}% + 11px))`;
         rail.style.transform = `translateX(${pct}%)`;
         // Beside the fill while there's room, inside it once there isn't.
         rail.classList.toggle('is-inside', idx >= N / 2);
@@ -297,8 +345,9 @@ export function openDustItOff() {
 
       function idxFromX(clientX) {
         const rect = bar.getBoundingClientRect();
-        const r = Math.max(0, Math.min(0.999, (clientX - rect.left) / rect.width));
-        return Math.floor(r * N);
+        const at = ((clientX - rect.left) / rect.width) * 100;
+        // The nearest stop.
+        return DURATION_STOPS.reduce((best, stop, i) => (Math.abs(stop - at) < Math.abs(DURATION_STOPS[best] - at) ? i : best), 0);
       }
       let dragging = false;
       bar.addEventListener('pointerdown', (e) => {
@@ -393,7 +442,7 @@ export function openDustItOff() {
       el('span', { text: t('common.close') }),
     ]),
           el('button', { class: 'btn btn-primary', onClick: run }, [
-      lucideIcon('book-search', 'btn-lucide'),
+      lucideIcon('search', 'btn-lucide'),
       el('span', { text: t('common.search') }),
     ]),
         ])
@@ -536,7 +585,7 @@ export function openDustItOff() {
         if (mood) {
           chips.push(
             el('span', { class: 'pick-why-chip' }, [
-              el('img', { class: 'pick-why-emoji', src: withBase(`/icons/animated-genre/${mood[1]}`), alt: '' }),
+              moodEmoji('pick-why-emoji', mood[1], mood[4]),
               el('span', { text: t(mood[2]) }),
             ])
           );

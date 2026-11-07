@@ -6132,8 +6132,62 @@ html.page-hop #app {
   cursor: pointer;
   transition: background-color var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
-    box-shadow var(--dur-short) var(--ease-state),
     scale var(--dur-long) var(--ease-out);
+}
+/* The picked tile's glow (moods, eras) leans toward the middle of its grid, from wherever
+   the tile sits. */
+.mood-btn:nth-child(3n + 1),
+.era-btn:nth-child(odd) {
+  --glow-x: 3px;
+}
+.mood-btn:nth-child(3n),
+.era-btn:nth-child(even) {
+  --glow-x: -3px;
+}
+.mood-btn:nth-child(-n + 3),
+.era-btn:nth-child(-n + 2) {
+  --glow-y: 3px;
+}
+.mood-btn:nth-child(n + 4),
+.era-btn:nth-child(n + 3) {
+  --glow-y: -3px;
+}
+.mood-btn,
+.era-btn {
+  position: relative;
+  isolation: isolate; /* keeps the glow's z-index inside the tile */
+}
+/* On its own layer, so the slow breath only changes opacity and never repaints a shadow. */
+.mood-btn::after,
+.era-btn::after {
+  content: '';
+  position: absolute;
+  inset: -1.5px; /* the tile's border box */
+  z-index: -1;
+  border-radius: inherit;
+  box-shadow: var(--glow-x, 0) var(--glow-y, 0) 12px color-mix(in srgb, var(--tile) 45%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-short) var(--ease-state);
+}
+.mood-btn.active::after,
+.era-btn.active::after {
+  opacity: 1;
+  animation: tile-breathe 1.8s ease-in-out var(--dur-short) infinite alternate;
+}
+@keyframes tile-breathe {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.6;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mood-btn.active::after,
+  .era-btn.active::after {
+    animation: none;
+  }
 }
 .mood-emoji {
   font-size: 24px;
@@ -6153,15 +6207,14 @@ img.mood-emoji {
   line-height: 1.15;
 }
 .mood-btn.active {
-  background: var(--mood);
-  border-color: var(--mood);
+  background: var(--tile);
+  border-color: var(--tile);
   color: var(--on-accent);
   transform: scale(1.05);
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--mood) 45%, transparent);
 }
 
 /* Duration: a thick bar whose fill is the choice, with its value in the bar and the levels
-   below, each under its own quarter. */
+   below, each under its stop. */
 .dur-bar {
   position: relative;
   height: 48px;
@@ -6216,11 +6269,17 @@ img.mood-emoji {
   transform: translate(calc(-100% - 11px), -50%);
 }
 .dur-levels {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  position: relative;
+  height: 32px;
   margin-top: 4px;
 }
+/* Centred on its stop (DURATION_STOPS, set inline), right under the handle. */
 .dur-level {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  padding: 0 6px;
+  white-space: nowrap;
   min-height: 32px;
   font-size: 12px;
   color: var(--text-secondary);
@@ -6306,8 +6365,20 @@ img.mood-emoji {
   cursor: pointer;
   transition: background-color var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
-    box-shadow var(--dur-short) var(--ease-state),
     scale var(--dur-long) var(--ease-out);
+}
+/* One muted colour per era, quieter than the moods. */
+.era-classic {
+  --tile: #b58f66;
+}
+.era-90s00s {
+  --tile: #a583a8;
+}
+.era-recent {
+  --tile: #7fa68a;
+}
+.era-latest {
+  --tile: #7c9cc7;
 }
 .era-name {
   font-size: 16px;
@@ -6320,7 +6391,7 @@ img.mood-emoji {
 .era-classic .era-name {
   font-family: Georgia, 'Times New Roman', serif;
   font-style: italic;
-  color: #b08d68;
+  color: color-mix(in srgb, var(--tile) 80%, var(--text-primary));
 }
 .era-90s00s .era-name {
   font-family: 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
@@ -6336,13 +6407,12 @@ img.mood-emoji {
 .era-latest .era-name {
   font-family: 'Century Gothic', 'Futura', system-ui, sans-serif;
   font-weight: 700;
-  color: var(--accent);
+  color: color-mix(in srgb, var(--tile) 80%, var(--text-primary));
 }
 .era-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--tile);
+  border-color: var(--tile);
   color: var(--on-accent);
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .era-btn.active .era-name,
 .era-btn.active .era-range {
@@ -6408,6 +6478,9 @@ img.mood-emoji {
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
+  /* The same line as the footer's: the filters scroll under it. */
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
 }
 .sheet-title-row {
   display: flex;
@@ -6896,7 +6969,7 @@ img.mood-emoji {
 .dust-group { margin-top: 22px; }
 /* Genre follows the type toggle directly; the between-groups rhythm reads as a
    gap here, since the header already spaces itself from the body. */
-.sheet-body > .dust-group:first-child { margin-top: 6px; }
+.sheet-body > .dust-group:first-child { margin-top: 14px; }
 .dust-label { margin: 0 0 14px; }
 
 /* Genre — strict 3-column grid, every chip identical size, thematic fonts */
@@ -6978,6 +7051,9 @@ img.mood-emoji {
 }
 .rating-btn-label { font-size: 14px; font-weight: 700; }
 .rating-btn .star-meter { font-size: 12px; letter-spacing: 1px; }
+/* Empty stars show on any ground: selected, the button is the base colour they used to have.
+   On Any they are the whole meter: no minimum. */
+.rating-btn .stars5.base { color: color-mix(in srgb, var(--text-secondary) 30%, transparent); }
 .rating-btn.active { background: var(--surface-elevated); border-color: var(--accent); }
 .rating-btn.active .stars5.gold { color: var(--stars); opacity: 1; }
 

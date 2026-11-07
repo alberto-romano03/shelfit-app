@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v182'; // bumped: even gap around the usage cards
+const CACHE = 'shelfit-shell-v183'; // bumped: Dust It Off slider, mood and era glow
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by
