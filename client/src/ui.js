@@ -1784,7 +1784,7 @@ export function stateArt(name) {
 // whatever comes after it, and centres itself in that. A sheet sized by its content has no
 // room to spare, so nothing changes there.
 function fitState(node) {
-  if (!node.isConnected || node.closest('.gc-empty')) return; // that one centres in CSS
+  if (!node.isConnected || node.closest('.gc-empty, .rom-stage')) return; // those centre in CSS
   let host = node.parentElement;
   while (host && host !== document.body && !/auto|scroll/.test(getComputedStyle(host).overflowY)) {
     host = host.parentElement;

@@ -9,7 +9,7 @@
 // All swipe physics are native pointer events + CSS transforms — no libraries.
 
 import { api } from './api.js';
-import { el, poster, starSvg, toast, openModal, spinner, lucideIcon } from './ui.js';
+import { el, poster, starSvg, toast, openModal, spinner, lucideIcon, stateBlock } from './ui.js';
 import { createRatingControls } from './ratingControls.js';
 import { attachSwipe } from './swipe.js';
 import { haptic } from './haptic.js';
@@ -46,18 +46,16 @@ export function openRateOMatic() {
     const stage = el('div', { class: 'rom-stage' });
     // The one rating row, under the deck (filled per front card by the session).
     const rateHost = el('div', { class: 'rom-rate' });
+    const footerLabel = el('span', { text: t('common.cancel') });
     const footer = el('div', { class: 'rom-footer' }, [
-      el('button', { class: 'btn btn-secondary', onClick: close }, [
-        lucideIcon('x', 'btn-lucide'),
-        el('span', { text: t('common.cancel') }),
-      ]),
+      el('button', { class: 'btn btn-secondary', onClick: close }, [lucideIcon('x', 'btn-lucide'), footerLabel]),
     ]);
     modal.append(head, stage, rateHost, footer);
-    runSession({ stage, close, footer, counter, rateHost });
+    runSession({ stage, close, footer, footerLabel, counter, rateHost });
   }, { handle: true });
 }
 
-function runSession({ stage, close, footer, counter, rateHost }) {
+function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
   let queue = [];
   let index = 0; // queue position of the current front card
   let ratedCount = 0;
@@ -68,16 +66,22 @@ function runSession({ stage, close, footer, counter, rateHost }) {
   let animating = false;
   let ctrl = null; // the rating row, rebuilt for each front card
 
-  showLoading();
-  api
-    .unrated()
-    .then((data) => {
-      queue = data.titles || [];
-      index = 0;
-      if (!queue.length) return showComplete();
-      mount();
-    })
-    .catch(() => showError());
+  load();
+
+  function load() {
+    footerLabel.textContent = t('common.cancel');
+    rateHost.style.display = '';
+    showLoading();
+    api
+      .unrated()
+      .then((data) => {
+        queue = data.titles || [];
+        index = 0;
+        if (!queue.length) return showComplete();
+        mount();
+      })
+      .catch(() => showError());
+  }
 
   // The deck's own chrome (rating row, counter, Cancel) shows only while there
   // are cards to rate.
@@ -91,17 +95,19 @@ function runSession({ stage, close, footer, counter, rateHost }) {
     // Shared app loader: the rotating disc + a random loading phrase.
     stage.replaceChildren(spinner({ compact: true }));
   }
+  // The sheet holds its height: the state takes the empty rating row's room as well, and
+  // the footer stays where it was, with nothing left to cancel.
   function showError() {
-    setDeckChrome(false); // its own Close button below
+    footerLabel.textContent = t('common.close');
+    rateHost.style.display = 'none';
     stage.replaceChildren(
-      el('div', { class: 'rom-note' }, [
-        el('div', { class: 'rom-done-title', text: t('rom.errorTitle') }),
-        el('div', { class: 'rom-done-sub', text: t('rom.errorSub') }),
-        el('button', { class: 'btn btn-primary', onClick: close }, [
-          lucideIcon('x', 'btn-lucide'),
-          el('span', { text: t('common.close') }),
-        ]),
-      ])
+      stateBlock({
+        kind: 'error',
+        tier: 'section',
+        title: t('rom.errorTitle'),
+        detail: t('rom.errorSub'),
+        action: { onClick: load },
+      })
     );
   }
 

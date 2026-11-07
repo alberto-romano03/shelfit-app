@@ -8683,8 +8683,8 @@ textarea.notes:focus,
   font-variant-numeric: tabular-nums;
 }
 /* Footer: full-width Cancel, matching the other sheet-style modals. A top border
-   is the divider between the deck and the button (auto-hidden with the footer
-   on the completion/error screens). */
+   is the divider between the deck and the button (hidden with the footer on the
+   completion screen). */
 .rom-footer {
   margin-top: 22px;
   padding-top: 16px;
@@ -8705,15 +8705,13 @@ textarea.notes:focus,
   min-height: calc(min(48vh, 390px) + 8px);
 }
 
-/* Loading / message note (shared by loading + error). */
-.rom-note {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  text-align: center;
-  min-height: 40vh;
-  justify-content: center;
+/* A state in the deck's place: it also has the rating row's room (.rom-rate, hidden), so
+   the sheet keeps the height it opened with. */
+.rom-stage:has(> .empty) {
+  min-height: calc(min(48vh, 390px) + 8px + 93px + 6px);
+}
+.rom-stage > .empty {
+  width: 100%;
 }
 /* The deck: a fixed-size positioning context at a true 2:3, sized by height;
    both cards are absolutely inset, their angles + depth set inline / by the
