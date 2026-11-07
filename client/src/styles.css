@@ -450,10 +450,10 @@ html.theme-reveal::view-transition-new(root) {
   color: var(--text-primary);
 }
 .icon-btn {
-  transition: background-color var(--dur-short) var(--ease-state);
+  transition: scale var(--dur-long) var(--ease-out);
 }
 .icon-btn:active {
-  background: var(--surface-elevated);
+  scale: var(--press-small);
 }
 .icon-btn svg {
   width: 24px;
@@ -526,9 +526,6 @@ html.theme-reveal::view-transition-new(root) {
 .icon-btn--overlay {
   background: var(--scrim-soft);
   color: #fff;
-}
-.icon-btn--overlay:active {
-  background: rgba(0, 0, 0, 0.55);
 }
 
 .view {
@@ -655,7 +652,7 @@ body.grid-virtual-active #app {
 .tabbar button svg {
   width: 24px;
   height: 24px;
-  transition: scale var(--dur-short) var(--ease-out);
+  transition: scale var(--dur-long) var(--ease-out);
 }
 .tabbar button:active svg {
   scale: var(--press-small);
@@ -709,7 +706,7 @@ body.grid-virtual-active #app {
   overflow: hidden;
   background: var(--surface-elevated);
   box-shadow: var(--shadow-sm);
-  transition: scale var(--dur-short) var(--ease-out);
+  transition: scale var(--dur-long) var(--ease-out);
 }
 .poster-card:active {
   scale: var(--press);
@@ -721,6 +718,24 @@ body.grid-virtual-active #app {
 .lend-case .poster-card:active,
 .cp-poster.poster-card:active {
   scale: none;
+}
+/* A press lands at once and lets go slowly, so even a quick tap shows. */
+button:active,
+[role='button']:active,
+.chip:active,
+.btn:active,
+.icon-btn:active,
+.poster-card:active {
+  transition-duration: var(--dur-instant);
+}
+/* The hold has landed: the poster lets go with the sheet, on the sheet's own time and curve
+   (SHEET_IN_MS and EASE in dialogMotion.js), whether or not the finger is still down. */
+.poster-card.is-held,
+.poster-card.is-held:active,
+.is-held .poster-card,
+.is-held .poster-card:active {
+  scale: none;
+  transition: scale 360ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .poster-card img {
   width: 100%;
@@ -1040,7 +1055,7 @@ body.grid-virtual-active #app {
     border-color var(--dur-short) var(--ease-state),
     color var(--dur-short) var(--ease-state),
     opacity var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
   white-space: nowrap;
   padding: 7px 14px;
   border-radius: var(--r-pill);
@@ -1811,7 +1826,7 @@ body.grid-virtual-active #app {
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
-  transition: scale var(--dur-short) var(--ease-out);
+  transition: scale var(--dur-long) var(--ease-out);
 }
 .show-more:active .show-more-pill {
   scale: var(--press);
@@ -2434,10 +2449,10 @@ textarea.note-sheet-input:focus {
   border: 1px solid var(--border);
   overflow: hidden; /* the card's rounded corners clip the flush preview image */
   cursor: pointer;
-  transition: background var(--dur-short) var(--ease-state);
+  transition: background var(--dur-long) var(--ease-state);
 }
 .tl-card:active {
-  background: var(--surface-elevated);
+  background: color-mix(in srgb, var(--text-secondary) 8%, var(--surface));
 }
 /* Preview image: flush to the card's left/top/bottom edges with no gap, cropped
    to fill (object-fit: cover), ending at a fixed x (--tl-thumb-w) so the right
@@ -2963,7 +2978,7 @@ textarea.note-sheet-input:focus {
   background: var(--surface-elevated);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: scale var(--dur-short) var(--ease-out);
+  transition: scale var(--dur-long) var(--ease-out);
 }
 .fc-clear svg {
   width: 18px;
@@ -3008,7 +3023,7 @@ textarea.note-sheet-input:focus {
   transition: background var(--dur-short) var(--ease-state),
     color var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 .fc-mine .lc {
   width: 20px;
@@ -3073,7 +3088,7 @@ textarea.note-sheet-input:focus {
   background: var(--surface);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: scale var(--dur-short) var(--ease-out);
+  transition: scale var(--dur-long) var(--ease-out);
 }
 .ht-view svg {
   width: 20px;
@@ -3120,11 +3135,10 @@ textarea.note-sheet-input:focus {
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
-  transition: scale var(--dur-short) var(--ease-out);
+  transition: scale var(--dur-long) var(--ease-out);
 }
 .fc-q:active {
   scale: var(--press);
-  background: var(--surface-elevated);
 }
 .fc-q-x {
   width: 20px;
@@ -3517,7 +3531,7 @@ textarea.note-sheet-input:focus {
   outline: 2px solid transparent;
   outline-offset: -2px;
   transition: outline-color var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 .mx-tile:active {
   scale: var(--press);
@@ -3644,7 +3658,7 @@ textarea.note-sheet-input:focus {
   transition: background var(--dur-short) var(--ease-state),
     color var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 .ht-add svg {
   width: 18px;
@@ -3860,7 +3874,7 @@ body.modal-open {
   justify-content: center;
   cursor: pointer;
   transition: background var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 .rewatch-step-btn:hover {
   background: var(--border);
@@ -3914,7 +3928,7 @@ body.modal-open {
   transition: background-color var(--dur-short) var(--ease-state),
     color var(--dur-short) var(--ease-state),
     opacity var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
   flex: 1;
   /* A row rather than centred text: every action carries its verb's glyph to the
      left of the label, and the gap keeps the pair spaced without per-icon
@@ -4182,7 +4196,7 @@ textarea.text-field {
   background: none;
   cursor: pointer;
   transition: border-color var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 .pe-tile:active:not(:disabled) {
   scale: var(--press);
@@ -4356,6 +4370,7 @@ textarea.text-field {
 }
 button.srow {
   cursor: pointer;
+  transition: background-color var(--dur-long) var(--ease-state);
 }
 button.srow:active {
   background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
@@ -4511,15 +4526,15 @@ button.srow:active {
   -webkit-mask-size: contain;
   mask-size: contain;
 }
+.icon-act {
+  transition: scale var(--dur-long) var(--ease-out);
+}
 .icon-act:active {
-  background: color-mix(in srgb, var(--text-secondary) 20%, transparent);
+  scale: var(--press-small);
 }
 .icon-act--danger {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--danger);
-}
-.icon-act--danger:active {
-  background: color-mix(in srgb, var(--danger) 22%, transparent);
 }
 .icon-act:disabled {
   opacity: var(--disabled);
@@ -4780,7 +4795,7 @@ button.srow:active {
   color: var(--accent);
 }
 .rediscover-btn:active {
-  background: var(--surface-elevated);
+  scale: var(--press-wide);
 }
 
 /* (.cd-toggle removed — Back to the Shelf now uses the shared .seg control.) */
@@ -5080,11 +5095,11 @@ button.srow:active {
   color: var(--text-primary);
   font-weight: 600;
   font-size: 14px;
-  transition: background-color var(--dur-short) var(--ease-state),
-    opacity var(--dur-short) var(--ease-state);
+  transition: opacity var(--dur-short) var(--ease-state),
+    scale var(--dur-long) var(--ease-out);
 }
 .empty-act:active {
-  background: var(--surface);
+  scale: var(--press);
 }
 .empty-act-ico {
   width: 16px;
@@ -6108,7 +6123,7 @@ html.page-hop #app {
   transition: background-color var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
     box-shadow var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 .mood-emoji {
   font-size: 24px;
@@ -6225,7 +6240,7 @@ img.mood-emoji {
   cursor: pointer;
   transition: background-color var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 .rating-row.active {
   background: var(--surface-elevated);
@@ -6282,7 +6297,7 @@ img.mood-emoji {
   transition: background-color var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
     box-shadow var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 .era-name {
   font-size: 16px;
@@ -6658,7 +6673,7 @@ img.mood-emoji {
 .rating-wrap { text-align: center; margin-top: 16px; }
 .rating-wrap .field-label { text-align: center; }
 .rating-wrap .stars { display: flex; justify-content: center; }
-.rating-wrap .stars button { transition: scale var(--dur-short) var(--ease-out); }
+.rating-wrap .stars button { transition: scale var(--dur-long) var(--ease-out); }
 .rating-wrap .stars button:active { scale: var(--press-small); }
 /* Stars + favourite heart share a centered row. */
 .rating-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
@@ -6678,7 +6693,7 @@ img.mood-emoji {
   cursor: pointer;
   transition: color var(--dur-short) var(--ease-state),
     background-color var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 .fav-btn svg { width: 20px; height: 20px; }
 .fav-btn.active { color: var(--danger); }
@@ -6906,7 +6921,7 @@ img.mood-emoji {
   color: var(--text-primary);
   font-size: 13px;
   cursor: pointer;
-  transition: scale var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-state), border-color var(--dur-short) var(--ease-state);
+  transition: scale var(--dur-long) var(--ease-out), background-color var(--dur-short) var(--ease-state), border-color var(--dur-short) var(--ease-state);
 }
 .genre-chip:active,
 .rating-btn:active {
@@ -6948,7 +6963,7 @@ img.mood-emoji {
   background: transparent;
   color: var(--text-primary);
   cursor: pointer;
-  transition: scale var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-state), border-color var(--dur-short) var(--ease-state);
+  transition: scale var(--dur-long) var(--ease-out), background-color var(--dur-short) var(--ease-state), border-color var(--dur-short) var(--ease-state);
 }
 .rating-btn-label { font-size: 14px; font-weight: 700; }
 .rating-btn .star-meter { font-size: 12px; letter-spacing: 1px; }
@@ -7153,7 +7168,7 @@ img.mood-emoji {
    On idle, a glowing orange stroke paints itself around the button perimeter
    (SVG rect, stroke-dashoffset), a soft glow fades in with it, then both fade
    out together. Driven by classes toggled from Home.js; stops on interaction. */
-.rediscover-btn { position: relative; transition: box-shadow var(--dur-set) var(--ease-state); }
+.rediscover-btn { position: relative; transition: box-shadow var(--dur-set) var(--ease-state), scale var(--dur-long) var(--ease-out); }
 /* Scoped past `.rediscover-btn svg { width:22px }` so the overlay fills the box. */
 .rediscover-btn .idle-border-svg {
   position: absolute;
@@ -7377,7 +7392,7 @@ img.mood-emoji {
   cursor: pointer;
 }
 button.lw-card {
-  transition: scale var(--dur-short) var(--ease-out);
+  transition: scale var(--dur-long) var(--ease-out);
 }
 button.lw-card:active {
   scale: var(--press-wide);
@@ -7506,7 +7521,7 @@ button.lw-card:active {
 }
 /* Edit mode: still there (the rows keep their place), just switched off. */
 .lw-card.lw-new {
-  transition: opacity var(--dur-short) var(--ease-state), scale var(--dur-short) var(--ease-out);
+  transition: opacity var(--dur-short) var(--ease-state), scale var(--dur-long) var(--ease-out);
 }
 .lw-card.lw-new:disabled {
   opacity: var(--disabled);
@@ -8347,8 +8362,11 @@ textarea.notes:focus,
   font-weight: 600;
   cursor: pointer;
 }
+.rcpt-mp-m {
+  transition: scale var(--dur-long) var(--ease-out);
+}
 .rcpt-mp-m:active {
-  background: var(--surface);
+  scale: var(--press);
 }
 .rcpt-mp-m.is-active {
   background: var(--accent);
@@ -8930,7 +8948,7 @@ textarea.notes:focus,
   cursor: pointer;
   transition: background var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 .kodi-play-btn:hover {
   background: color-mix(in srgb, var(--kodi-blue) 18%, transparent);
@@ -9014,10 +9032,11 @@ textarea.notes:focus,
   cursor: pointer;
   transition: border-color var(--dur-short) var(--ease-state),
     color var(--dur-short) var(--ease-state),
-    background-color var(--dur-short) var(--ease-state);
+    background-color var(--dur-short) var(--ease-state),
+    scale var(--dur-long) var(--ease-out);
 }
 .kodi-active-chip:active {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  scale: var(--press);
 }
 .kodi-active-chip.is-active {
   border-color: transparent;
@@ -9625,7 +9644,7 @@ textarea.lend-message-input:focus {
   background: none;
   border: none;
   cursor: pointer;
-  transition: scale var(--dur-short) var(--ease-out);
+  transition: scale var(--dur-long) var(--ease-out);
 }
 .pos-printer:active {
   scale: var(--press); /* whole widget reacts as one unit */
@@ -9941,7 +9960,7 @@ textarea.lend-message-input:focus {
   transition: background var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
     color var(--dur-short) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 /* The glyph carries the accent even while the label stays muted (the "hint"). */
 .toggle-wide svg {
@@ -9972,7 +9991,7 @@ textarea.lend-message-input:focus {
   transition: background var(--dur-medium) var(--ease-state),
     border-color var(--dur-medium) var(--ease-state),
     color var(--dur-medium) var(--ease-state),
-    scale var(--dur-short) var(--ease-out);
+    scale var(--dur-long) var(--ease-out);
 }
 /* The two labels share one cell and crossfade, so the button never changes width. */
 .toggle-label {
@@ -11424,8 +11443,11 @@ textarea.lend-message-input:focus {
   text-align: left;
   cursor: pointer;
 }
+.picker-row {
+  transition: background-color var(--dur-long) var(--ease-state);
+}
 .picker-row:active {
-  background: var(--surface-elevated);
+  background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
 }
 .picker-thumb {
   width: 34px;
@@ -11801,8 +11823,11 @@ textarea.lend-message-input:focus {
   font-weight: 600;
   color: var(--text-secondary);
 }
+.sc-skip {
+  transition: scale var(--dur-long) var(--ease-out);
+}
 .sc-skip:active {
-  background: var(--surface-elevated);
+  scale: var(--press);
 }
 
 .sc-viewport {

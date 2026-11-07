@@ -29,16 +29,15 @@ export function hapticStar() {
   haptic();
 }
 
-// Holding a poster. Firmer than a tap's tick, since it answers a finger that isn't moving.
-// iOS has no tap to borrow here, so the switch's tick is asked for from script, through a
-// throwaway label. Best effort: iOS may ignore it, and then the sheet opening is the answer.
+// Holding a poster, with the same tick as a rating. Android vibrates as the hold lands. iOS
+// only ticks a switch inside a real touch and the hold's timer isn't one, so there the tick
+// comes as the finger lifts (hapticHoldLift, called from touchend).
 export function hapticHold() {
+  if (hasVibrate()) haptic();
+}
+export function hapticHoldLift() {
   try {
-    if (!getPref('haptic')) return;
-    if (hasVibrate()) {
-      navigator.vibrate(30);
-      return;
-    }
+    if (!getPref('haptic') || hasVibrate()) return;
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.setAttribute('switch', '');

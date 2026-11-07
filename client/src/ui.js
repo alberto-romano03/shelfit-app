@@ -5,6 +5,7 @@ import { dialogEnter, dialogLeave, dialogHold, dimOf } from './dialogMotion.js';
 import { imageCache } from './imageCache.js';
 import { withBase } from './basePath.js';
 import { t } from './i18n.js';
+import { hapticHold, hapticHoldLift } from './haptic.js';
 import { trackSheet } from './sheetStack.js';
 import { tileFor, learnPosterHue } from './posterColour.js';
 
@@ -681,15 +682,21 @@ export function longPress(node, onHold) {
   let x = 0;
   let y = 0;
   let held = false;
+  let lift = false;
   const cancel = () => clearTimeout(timer);
   node.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     held = false;
+    lift = false;
+    node.classList.remove('is-held');
     x = e.clientX;
     y = e.clientY;
     cancel();
     timer = setTimeout(() => {
       held = true;
+      lift = true;
+      hapticHold();
+      node.classList.add('is-held');
       onHold();
     }, HOLD_MS);
   });
@@ -699,6 +706,15 @@ export function longPress(node, onHold) {
   node.addEventListener('pointerup', cancel);
   node.addEventListener('pointercancel', cancel);
   node.addEventListener('pointerleave', cancel);
+  node.addEventListener(
+    'touchend',
+    () => {
+      if (!lift) return;
+      lift = false;
+      hapticHoldLift();
+    },
+    { passive: true }
+  );
   node.addEventListener('contextmenu', (e) => e.preventDefault()); // Android's image menu
   node.addEventListener(
     'click',
