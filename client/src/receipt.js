@@ -130,6 +130,8 @@ const BLURS = [
   ['receipt.blur.medium', 50],
   ['receipt.blur.heavy', 90],
 ];
+// Where each level sits along the slider, in %: the ends near the edges, the rest evenly between.
+const BLUR_STOPS = [8, 36, 64, 92];
 
 // "None" background → a generic, diffuse blur built from the app's palette
 // (amber accent dominant, with green/red hints over the dark base). Rendered
@@ -733,9 +735,8 @@ export function openReceipt(month) {
         window.removeEventListener('resize', fit);
         return;
       }
-      const availW = previewWrap.clientWidth || 1;
-      const maxH = Math.max(220, window.innerHeight * 0.36); // leaves the options their room
-      const s = Math.min(availW / CARD_W, maxH / CARD_H);
+      // The options below have a fixed height, so the card takes the room that's left.
+      const s = Math.min((previewWrap.clientWidth || 1) / CARD_W, (previewWrap.clientHeight || 1) / CARD_H);
       card.style.transform = `scale(${s})`;
       // Container matches the scaled card exactly → no black bars.
       preview.style.width = `${CARD_W * s}px`;
@@ -814,13 +815,14 @@ export function openReceipt(month) {
       );
       const levels = BLURS.map(([key], i) => {
         const b = el('button', { class: 'rcpt-blur-level', type: 'button', text: t(key) });
+        b.style.left = `${BLUR_STOPS[i]}%`;
         b.addEventListener('click', () => choose(i));
         return b;
       });
       // The handle sits over the middle of the level's name and the gold ends just past it.
       // The strongest level is the end of the scale, so the gold takes the whole bar.
       function paint() {
-        const pct = ((state.blur + 0.5) / N) * 100;
+        const pct = BLUR_STOPS[state.blur];
         fill.style.transform = state.blur === N - 1 ? 'translateX(0)' : `translateX(calc(${pct}% - 100% + 11px))`;
         rail.style.transform = `translateX(${pct}%)`;
         bar.setAttribute('aria-valuenow', String(state.blur));
@@ -838,7 +840,9 @@ export function openReceipt(month) {
 
       const at = (x) => {
         const r = bar.getBoundingClientRect();
-        return Math.floor(((x - r.left) / r.width) * N);
+        const pct = ((x - r.left) / r.width) * 100;
+        // The nearest stop.
+        return BLUR_STOPS.reduce((best, stop, i) => (Math.abs(stop - pct) < Math.abs(BLUR_STOPS[best] - pct) ? i : best), 0);
       };
       let dragging = false;
       bar.addEventListener('pointerdown', (e) => {
@@ -875,6 +879,8 @@ export function openReceipt(month) {
     function renderPicker() {
       pickerArea.innerHTML = '';
       pickerArea.scrollTop = 0;
+      // The posters and the slider fit exactly; only the longer lists scroll.
+      pickerArea.classList.toggle('is-fitted', state.bgType === 'poster');
       if (state.bgType === 'color') {
         pickerArea.append(
           swatchGrid(COLORS, (o) => state.color === o.hex, (n, o) => { n.style.backgroundColor = o.hex; }, (o) => { state.color = o.hex; })

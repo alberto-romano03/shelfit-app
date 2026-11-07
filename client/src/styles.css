@@ -8495,9 +8495,13 @@ textarea.notes:focus,
 }
 
 /* Live preview: the 1080×1920 card is scaled by JS and the container is sized to
-   match it EXACTLY (no letterboxing), clipped by the radius, with card elevation. */
+   match it EXACTLY (no letterboxing), clipped by the radius, with card elevation.
+   It takes the room above the options, whatever that comes to. */
 .rcpt-preview-wrap {
+  flex: 1;
+  min-height: 0;
   display: flex;
+  align-items: center;
   justify-content: center;
   margin-top: 16px;
   margin-bottom: 18px;
@@ -8546,20 +8550,18 @@ textarea.notes:focus,
   overflow: hidden;
   padding-bottom: 0;
 }
-.rcpt-preview-wrap {
-  flex: none;
-}
 .rcpt-mode.seg {
   flex: none;
   display: grid;
   width: 100%;
   margin-bottom: 10px;
 }
-/* The options scroll on their own, so the receipt stays in view while you try them. The
-   last bit fades, which also says there's more below. */
+/* The options keep one height on every tab and rest on the footer's divider, so the tabs
+   never move. The longer lists scroll inside it, the receipt staying in view; their last
+   bit fades, which also says there's more below. */
 .rcpt-picker {
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  height: 216px; /* the posters, the blur slider and their padding */
   margin: 0 calc(-1 * var(--gutter));
   padding: 4px var(--gutter) 20px;
   overflow-y: auto;
@@ -8571,6 +8573,9 @@ textarea.notes:focus,
 }
 .rcpt-picker::-webkit-scrollbar {
   display: none;
+}
+.rcpt-picker.is-fitted {
+  overflow-y: hidden;
 }
 .rcpt-picker.fading {
   opacity: 0;
@@ -8650,7 +8655,7 @@ textarea.notes:focus,
   outline-offset: 2px;
 }
 .rcpt-blur-title {
-  margin: 16px 0 10px;
+  margin: 14px 0 10px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1.2px;
@@ -8692,13 +8697,18 @@ textarea.notes:focus,
   background: rgba(0, 0, 0, 0.45);
 }
 .rcpt-blur-levels {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  position: relative;
+  height: 26px;
   margin-top: 4px;
 }
+/* Centred on its stop (BLUR_STOPS, set inline), right under the handle. */
 .rcpt-blur-level {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
   min-height: 26px;
-  padding: 0;
+  padding: 0 6px;
+  white-space: nowrap;
   background: none;
   font-size: 12px;
   color: var(--text-secondary);
