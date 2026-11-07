@@ -15,7 +15,9 @@ import {
   setLabel,
   lucideIcon,
   stateBlock,
+  segmentedControl,
 } from './ui.js';
+import { haptic } from './haptic.js';
 import { withBase } from './basePath.js';
 import { imageCache } from './imageCache.js';
 import { boxBlur } from './blur.js';
@@ -167,16 +169,36 @@ function drawNoneBg(ctx, W, H) {
   }
 }
 
-// Flat background colours for the "Solid color" option (a compact spread).
-const COLORS = ['#141210', '#2a2a30', '#0d1b2a', '#16281c', '#3a1a1a', '#e9d6a2'];
-// Gradient presets — rendered as CSS in the preview and on canvas for export.
+// Flat background colours for the "Colour" option. Rows of four: neutrals, cool, warm.
+const COLORS = [
+  { hex: '#141210', nameKey: 'receipt.color.black' },
+  { hex: '#2a2a30', nameKey: 'receipt.color.graphite' },
+  { hex: '#4a4f58', nameKey: 'receipt.color.lead' },
+  { hex: '#e9d6a2', nameKey: 'receipt.color.paper' },
+  { hex: '#0d1b2a', nameKey: 'receipt.color.night' },
+  { hex: '#0f3a40', nameKey: 'receipt.color.petrol' },
+  { hex: '#16281c', nameKey: 'receipt.color.woods' },
+  { hex: '#4a4f24', nameKey: 'receipt.color.olive' },
+  { hex: '#2e1a3d', nameKey: 'receipt.color.plum' },
+  { hex: '#3a1a1a', nameKey: 'receipt.color.wine' },
+  { hex: '#8a3324', nameKey: 'receipt.color.brick' },
+  { hex: '#c98a1b', nameKey: 'receipt.color.ochre' },
+];
+// Gradient presets, rendered as CSS in the preview and on canvas for export. Rows of four:
+// warm, cool, earth.
 const GRADIENTS = [
   { nameKey: 'receipt.gradient.ember', deg: 160, stops: [['#f0a875', 0], ['#7a2e1e', 55], ['#1a1210', 100]] },
-  { nameKey: 'receipt.gradient.dusk', deg: 165, stops: [['#6a4ea0', 0], ['#26305a', 55], ['#0d0f1a', 100]] },
-  { nameKey: 'receipt.gradient.forest', deg: 160, stops: [['#5aa96a', 0], ['#234a2c', 60], ['#0e140f', 100]] },
-  { nameKey: 'receipt.gradient.slate', deg: 160, stops: [['#565b66', 0], ['#23262c', 100]] },
   { nameKey: 'receipt.gradient.gold', deg: 160, stops: [['#e9d6a2', 0], ['#8a6a2f', 55], ['#2a2010', 100]] },
   { nameKey: 'receipt.gradient.rose', deg: 160, stops: [['#f090b6', 0], ['#7a2e4a', 60], ['#1a1015', 100]] },
+  { nameKey: 'receipt.gradient.sunset', deg: 160, stops: [['#ffb36b', 0], ['#c0395a', 55], ['#2a0f2e', 100]] },
+  { nameKey: 'receipt.gradient.dusk', deg: 165, stops: [['#6a4ea0', 0], ['#26305a', 55], ['#0d0f1a', 100]] },
+  { nameKey: 'receipt.gradient.ocean', deg: 160, stops: [['#4fb3c8', 0], ['#15506e', 55], ['#0a1622', 100]] },
+  { nameKey: 'receipt.gradient.ice', deg: 160, stops: [['#cfe3ee', 0], ['#5f86a0', 55], ['#18222c', 100]] },
+  { nameKey: 'receipt.gradient.aurora', deg: 160, stops: [['#67e0b0', 0], ['#2a5e8a', 55], ['#120f2a', 100]] },
+  { nameKey: 'receipt.gradient.forest', deg: 160, stops: [['#5aa96a', 0], ['#234a2c', 60], ['#0e140f', 100]] },
+  { nameKey: 'receipt.gradient.moss', deg: 160, stops: [['#b6b86a', 0], ['#55582a', 60], ['#15160c', 100]] },
+  { nameKey: 'receipt.gradient.slate', deg: 160, stops: [['#565b66', 0], ['#23262c', 100]] },
+  { nameKey: 'receipt.gradient.sepia', deg: 160, stops: [['#c9a27a', 0], ['#5e4630', 60], ['#17110b', 100]] },
 ];
 function gradientCss(g) {
   return `linear-gradient(${g.deg}deg, ${g.stops.map(([c, p]) => `${c} ${p}%`).join(', ')})`;
@@ -573,7 +595,7 @@ export function openReceipt(month) {
       calBtn,
       picker,
     ]);
-    const body = el('div', { class: 'sheet-body' });
+    const body = el('div', { class: 'sheet-body rcpt-body' });
     const saveBtn = el('button', { class: 'btn btn-primary' }, [
       lucideIcon('printer', 'btn-lucide'),
       el('span', { text: t('receipt.print') }),
@@ -589,7 +611,7 @@ export function openReceipt(month) {
     sheet.append(header, body, footer);
 
     // bgType: 'poster' | 'color' | 'gradient'. Blur applies to the poster only.
-    const state = { bgType: 'poster', posterUrl: null, color: COLORS[0], gradient: 0, blur: 0, blurOpen: false, paper: 'white' };
+    const state = { bgType: 'poster', posterUrl: null, color: COLORS[0].hex, gradient: 0, blur: 0, paper: 'white' };
     let data = null;
     let renderToken = 0; // guards against a slow async blur overwriting a newer render
     let backgrounds = []; // { title, poster_url } from the receipt's own titles
@@ -642,24 +664,42 @@ export function openReceipt(month) {
     preview.append(card);
     const previewWrap = el('div', { class: 'rcpt-preview-wrap' }, [preview]);
 
+    function fadeAway(layer) {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        layer.remove();
+        return;
+      }
+      layer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, easing: 'ease', fill: 'forwards' }).onfinish = () => layer.remove();
+    }
+
     function renderCard() {
       const colors = PAPERS[state.paper];
       const rows = buildRows(data);
       const ph = paperHeight(rows);
       const scale = Math.min(1, (CARD_H - 60) / ph);
 
+      // The background on show stays on top of the new one and fades away once that's ready.
+      const previous = [...card.querySelectorAll('.rcpt-bg.is-painted')].pop();
       card.innerHTML = '';
       // Background layer by type. Blur applies ONLY to the poster background.
       const myToken = ++renderToken;
       const bg = el('div', { class: 'rcpt-bg' });
+      const painted = () => {
+        bg.classList.add('is-painted');
+        if (previous) fadeAway(previous);
+      };
       if (state.bgType === 'poster' && state.posterUrl) {
         posterBackgroundCss(state.posterUrl, BLURS[state.blur][1]).then((css) => {
-          if (myToken === renderToken) bg.style.backgroundImage = css;
+          if (myToken !== renderToken) return;
+          bg.style.backgroundImage = css;
+          painted();
         });
       } else if (state.bgType === 'gradient') {
         bg.style.backgroundImage = gradientCss(GRADIENTS[state.gradient]);
+        painted();
       } else {
         bg.style.backgroundColor = state.color;
+        painted();
       }
 
       // Paper with torn edges + thermal texture (drawn on top of the background).
@@ -694,7 +734,7 @@ export function openReceipt(month) {
         return;
       }
       const availW = previewWrap.clientWidth || 1;
-      const maxH = Math.max(220, window.innerHeight * 0.4);
+      const maxH = Math.max(220, window.innerHeight * 0.36); // leaves the options their room
       const s = Math.min(availW / CARD_W, maxH / CARD_H);
       card.style.transform = `scale(${s})`;
       // Container matches the scaled card exactly → no black bars.
@@ -704,67 +744,23 @@ export function openReceipt(month) {
 
     // --- Background picker ----------------------------------------------------
     const pickerArea = el('div', { class: 'rcpt-picker' });
-    const selButtons = {};
 
-    // Each selector circle shows only its own preview (colour / gradient / poster
-    // thumbnail) — no default background or border. Only the ACTIVE one gets the
-    // accent border, so all three read consistently.
-    function buildSelectorRow() {
-      const mk = (type, label, fill) => {
-        const circle = el('div', { class: 'rcpt-sel-circle' });
-        fill(circle);
-        const btn = el('button', { class: 'rcpt-sel' + (state.bgType === type ? ' active' : '') }, [
-          circle,
-          el('div', { class: 'rcpt-sel-label', text: label }),
-        ]);
-        btn.addEventListener('click', () => selectType(type));
-        selButtons[type] = btn;
-        return btn;
-      };
-      const colorBtn = mk('color', t('receipt.bg.color'), (c) => { c.style.background = state.color; });
-      const gradBtn = mk('gradient', t('receipt.bg.gradient'), (c) => {
-        c.style.backgroundImage = gradientCss(GRADIENTS[state.gradient]);
-        c.style.backgroundSize = '100% 100%'; // gradients have no intrinsic size → fill exactly (round)
+    function modeControl() {
+      const seg = segmentedControl({
+        options: [
+          ['color', t('receipt.bg.color')],
+          ['gradient', t('receipt.bg.gradient')],
+          ['poster', t('receipt.bg.poster')],
+        ],
+        value: state.bgType,
+        ariaLabel: t('receipt.bg.label'),
+        onChange: selectType,
       });
-      const posterBtn = mk('poster', t('receipt.bg.poster'), (c) => {
-        if (backgrounds.length) imageCache.load(backgrounds[0].poster_url).then((u) => { c.style.backgroundImage = `url("${u}")`; });
-        else c.append(lucideIcon('image', 'rcpt-sel-ico'));
-      });
-
-      // Blur control: sits at the end of the row after a thin divider. It's only
-      // usable when Poster is the active background; otherwise it's visibly
-      // disabled (dimmed, non-tappable).
-      const blurBtn = el('button', { class: 'rcpt-sel rcpt-blur-btn', 'aria-label': t('receipt.bg.blur') }, [
-        el('div', { class: 'rcpt-sel-circle rcpt-blur-circle' }, [lucideIcon('droplet', 'rcpt-sel-ico')]),
-        el('div', { class: 'rcpt-sel-label', text: t('receipt.bg.blur') }),
-      ]);
-      blurBtn.addEventListener('click', () => {
-        if (state.bgType !== 'poster') return; // disabled unless poster is active
-        state.blurOpen = !state.blurOpen;
-        updateBlurBtn();
-        fadeSwapPicker(); // blur options replace the poster row (and vice-versa)
-      });
-      selButtons.blur = blurBtn;
-      updateBlurBtn();
-
-      return el('div', { class: 'rcpt-selector-row' }, [
-        colorBtn,
-        gradBtn,
-        posterBtn,
-        el('div', { class: 'rcpt-sel-divider' }),
-        blurBtn,
-      ]);
+      seg.el.classList.add('rcpt-mode');
+      return seg.el;
     }
 
-    function updateBlurBtn() {
-      const b = selButtons.blur;
-      if (!b) return;
-      const enabled = state.bgType === 'poster';
-      b.classList.toggle('disabled', !enabled);
-      b.classList.toggle('active', enabled && (state.blurOpen || state.blur > 0));
-    }
-
-    // Gentle fade between picker contents (colours ↔ gradients ↔ posters ↔ blur).
+    // Gentle fade between picker contents (colours, gradients, posters).
     function fadeSwapPicker() {
       pickerArea.classList.add('fading');
       setTimeout(() => {
@@ -776,109 +772,152 @@ export function openReceipt(month) {
     function selectType(type) {
       if (state.bgType === type) return;
       state.bgType = type;
-      // Leaving the poster collapses the blur control and resets its value.
-      if (type !== 'poster') {
-        state.blurOpen = false;
-        state.blur = 0;
-      }
-      for (const t of ['color', 'gradient', 'poster']) {
-        if (selButtons[t]) selButtons[t].classList.toggle('active', t === type);
-      }
-      updateBlurBtn();
       fadeSwapPicker();
       renderCard();
-      fit();
+    }
+
+    // Picking only moves the mark, so the list stays where it was scrolled to.
+    function mark(items, chosen) {
+      items.forEach((n) => {
+        n.classList.toggle('active', n === chosen);
+        n.setAttribute('aria-pressed', String(n === chosen));
+      });
+    }
+
+    function swatchGrid(options, isOn, paint, pick) {
+      const buttons = options.map((o) => {
+        const chip = el('span', { class: 'rcpt-swatch-paint' });
+        paint(chip, o);
+        const sw = el('button', { class: 'rcpt-swatch', type: 'button' }, [
+          chip,
+          el('span', { class: 'rcpt-swatch-name', text: t(o.nameKey) }),
+        ]);
+        sw.addEventListener('click', () => {
+          mark(buttons, sw);
+          pick(o);
+          renderCard();
+        });
+        return sw;
+      });
+      mark(buttons, buttons.find((b, i) => isOn(options[i])));
+      return el('div', { class: 'rcpt-swatches' }, buttons);
+    }
+
+    function buildBlur() {
+      const N = BLURS.length;
+      const fill = el('div', { class: 'rcpt-blur-fill' });
+      const rail = el('div', { class: 'rcpt-blur-rail' }, [el('i', { class: 'rcpt-blur-grip' })]);
+      const bar = el(
+        'div',
+        { class: 'rcpt-blur-bar', role: 'slider', tabindex: '0', 'aria-label': t('receipt.bg.blur'), 'aria-valuemin': '0', 'aria-valuemax': String(N - 1) },
+        [fill, rail]
+      );
+      const levels = BLURS.map(([key], i) => {
+        const b = el('button', { class: 'rcpt-blur-level', type: 'button', text: t(key) });
+        b.addEventListener('click', () => choose(i));
+        return b;
+      });
+      // The handle sits over the middle of the level's name and the gold ends just past it.
+      // The strongest level is the end of the scale, so the gold takes the whole bar.
+      function paint() {
+        const pct = ((state.blur + 0.5) / N) * 100;
+        fill.style.transform = state.blur === N - 1 ? 'translateX(0)' : `translateX(calc(${pct}% - 100% + 11px))`;
+        rail.style.transform = `translateX(${pct}%)`;
+        bar.setAttribute('aria-valuenow', String(state.blur));
+        bar.setAttribute('aria-valuetext', t(BLURS[state.blur][0]));
+        levels.forEach((b, k) => b.classList.toggle('on', k === state.blur));
+      }
+      function choose(i) {
+        const next = Math.max(0, Math.min(N - 1, i));
+        if (next === state.blur) return;
+        state.blur = next;
+        paint();
+        renderCard();
+      }
+      paint();
+
+      const at = (x) => {
+        const r = bar.getBoundingClientRect();
+        return Math.floor(((x - r.left) / r.width) * N);
+      };
+      let dragging = false;
+      bar.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        choose(at(e.clientX));
+        try {
+          bar.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+      });
+      bar.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const before = state.blur;
+        choose(at(e.clientX));
+        if (state.blur !== before) haptic();
+      });
+      const end = () => {
+        dragging = false;
+      };
+      bar.addEventListener('pointerup', end);
+      bar.addEventListener('pointercancel', end);
+      bar.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight') choose(state.blur + 1);
+        if (e.key === 'ArrowLeft') choose(state.blur - 1);
+      });
+      return [
+        el('div', { class: 'rcpt-blur-title', text: t('receipt.bg.blur') }),
+        bar,
+        el('div', { class: 'rcpt-blur-levels' }, levels),
+      ];
     }
 
     function renderPicker() {
       pickerArea.innerHTML = '';
+      pickerArea.scrollTop = 0;
       if (state.bgType === 'color') {
-        const row = el('div', { class: 'rcpt-swatches' });
-        COLORS.forEach((hex) => {
-          const sw = el('button', { class: 'rcpt-swatch' + (state.color === hex ? ' active' : ''), style: { background: hex }, title: hex });
-          sw.addEventListener('click', () => {
-            state.color = hex;
-            const c = selButtons.color && selButtons.color.querySelector('.rcpt-sel-circle');
-            if (c) c.style.background = hex; // keep the selector preview in sync
-            renderPicker();
-            renderCard();
-            fit();
-          });
-          row.append(sw);
-        });
-        pickerArea.append(row);
+        pickerArea.append(
+          swatchGrid(COLORS, (o) => state.color === o.hex, (n, o) => { n.style.backgroundColor = o.hex; }, (o) => { state.color = o.hex; })
+        );
       } else if (state.bgType === 'gradient') {
-        const row = el('div', { class: 'rcpt-swatches' });
-        GRADIENTS.forEach((g, i) => {
-          const sw = el('button', {
-            class: 'rcpt-swatch' + (state.gradient === i ? ' active' : ''),
-            style: { backgroundImage: gradientCss(g), backgroundSize: '100% 100%' },
-            title: t(g.nameKey),
-          });
-          sw.addEventListener('click', () => {
-            state.gradient = i;
-            const c = selButtons.gradient && selButtons.gradient.querySelector('.rcpt-sel-circle');
-            if (c) {
-              c.style.backgroundImage = gradientCss(g); // keep the selector preview in sync
-              c.style.backgroundSize = '100% 100%';
-            }
-            renderPicker();
-            renderCard();
-            fit();
-          });
-          row.append(sw);
-        });
-        pickerArea.append(row);
-      } else if (state.blurOpen) {
-        // Blur intensity options replace the poster row (like colours/gradients):
-        // full-width rounded-rectangle cells with an icon row on top and label
-        // under. "Off" keeps the droplet-off glyph; Light/Medium/Heavy repeat a
-        // smaller droplet 1/2/3 times on one row, so the count itself reads the
-        // level.
-        const opts = el('div', { class: 'rcpt-blur-opts', style: { gridTemplateColumns: `repeat(${BLURS.length}, 1fr)` } });
-        BLURS.forEach((b, i) => {
-          const iconRow = el('div', { class: 'rcpt-blur-opt-icons' });
-          if (i === 0) {
-            iconRow.append(lucideIcon('droplet-off', 'rcpt-blur-opt-ico'));
-          } else {
-            for (let k = 0; k < i; k++) {
-              iconRow.append(lucideIcon('droplet', 'rcpt-blur-opt-ico rcpt-blur-opt-ico-sm'));
-            }
-          }
-          const cell = el('button', { class: 'rcpt-blur-opt' + (state.blur === i ? ' active' : '') }, [
-            iconRow,
-            el('span', { class: 'rcpt-blur-opt-label', text: t(b[0]) }),
-          ]);
-          cell.addEventListener('click', () => {
-            state.blur = i;
-            if (i === 0) state.blurOpen = false; // back to the poster row
-            updateBlurBtn();
-            fadeSwapPicker();
-            renderCard();
-            fit();
-          });
-          opts.append(cell);
-        });
-        pickerArea.append(opts);
+        pickerArea.append(
+          swatchGrid(GRADIENTS, (o) => GRADIENTS[state.gradient] === o, (n, o) => { n.style.backgroundImage = gradientCss(o); }, (o) => { state.gradient = GRADIENTS.indexOf(o); })
+        );
       } else {
-        const scroller = el('div', { class: 'rcpt-bg-scroller' });
         if (!backgrounds.length) {
-          scroller.append(el('div', { class: 'muted', text: t('receipt.noTitles') }));
+          pickerArea.append(el('div', { class: 'muted', text: t('receipt.noTitles') }));
+          return;
         }
-        backgrounds.forEach((p) => {
-          const thumb = el('button', { class: 'rcpt-bg-thumb' + (state.posterUrl === p.poster_url ? ' active' : ''), title: p.title });
+        const thumbs = backgrounds.map((p) => {
+          const thumb = el('button', { class: 'rcpt-bg-thumb', type: 'button', title: p.title, 'aria-label': p.title });
           imageCache.load(p.poster_url).then((u) => { thumb.style.backgroundImage = `url("${u}")`; });
-          thumb.addEventListener('click', () => { state.posterUrl = p.poster_url; renderPicker(); renderCard(); fit(); });
-          scroller.append(thumb);
+          thumb.addEventListener('click', () => {
+            state.posterUrl = p.poster_url;
+            mark(thumbs, thumb);
+            renderCard();
+          });
+          return thumb;
         });
-        pickerArea.append(scroller);
+        mark(thumbs, thumbs[backgrounds.findIndex((p) => p.poster_url === state.posterUrl)]);
+        pickerArea.append(el('div', { class: 'rcpt-bg-scroller' }, thumbs), ...buildBlur());
+      }
+      // Back on a tab whose choice is further along: show it.
+      const on = pickerArea.querySelector('.active');
+      if (on) {
+        requestAnimationFrame(() => {
+          const box = pickerArea.getBoundingClientRect();
+          const r = on.getBoundingClientRect();
+          if (r.bottom > box.bottom - 22) pickerArea.scrollTop += r.top - box.top - 8;
+          const strip = on.closest('.rcpt-bg-scroller');
+          if (strip) strip.scrollLeft += r.left - strip.getBoundingClientRect().left - 60;
+        });
       }
     }
 
     function build() {
       body.innerHTML = '';
       renderCard();
-      body.append(previewWrap, buildSelectorRow(), el('hr', { class: 'status-sep' }), pickerArea);
+      body.append(previewWrap, modeControl(), pickerArea);
       renderPicker();
       fit();
       requestAnimationFrame(fit);

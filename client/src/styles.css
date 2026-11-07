@@ -8540,12 +8540,93 @@ textarea.notes:focus,
   object-fit: contain;
   display: block;
 }
+.sheet-body.rcpt-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.rcpt-preview-wrap {
+  flex: none;
+}
+.rcpt-mode.seg {
+  flex: none;
+  display: grid;
+  width: 100%;
+  margin-bottom: 10px;
+}
+/* The options scroll on their own, so the receipt stays in view while you try them. The
+   last bit fades, which also says there's more below. */
+.rcpt-picker {
+  flex: 1;
+  min-height: 0;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: 4px var(--gutter) 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  transition: opacity var(--dur-short) var(--ease-state);
+}
+.rcpt-picker::-webkit-scrollbar {
+  display: none;
+}
+.rcpt-picker.fading {
+  opacity: 0;
+}
+.rcpt-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px 10px;
+  padding-top: 4px;
+}
+.rcpt-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  transition: scale var(--dur-long) var(--ease-out);
+}
+.rcpt-swatch:active {
+  scale: var(--press);
+}
+.rcpt-swatch-paint {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--r-md);
+  background-size: 100% 100%;
+  /* The dark ones would vanish into the dark sheet without an edge. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 16%, transparent);
+}
+.rcpt-swatch.active .rcpt-swatch-paint {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.rcpt-swatch-name {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.rcpt-swatch.active .rcpt-swatch-name {
+  color: var(--text-primary);
+  font-weight: 600;
+}
 .rcpt-bg-scroller {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: 4px var(--gutter);
   overflow-x: auto;
-  padding-bottom: 4px;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.rcpt-bg-scroller::-webkit-scrollbar {
+  display: none;
 }
 .rcpt-bg-thumb {
   -webkit-appearance: none;
@@ -8553,179 +8634,85 @@ textarea.notes:focus,
   flex: 0 0 auto;
   width: 52px;
   height: 78px;
+  padding: 0;
   border-radius: var(--r-sm);
   background-size: cover;
   background-position: center;
   background-color: var(--surface-elevated);
-  border: 2px solid transparent;
-  cursor: pointer;
-  padding: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 16%, transparent);
+  transition: scale var(--dur-long) var(--ease-out);
+}
+.rcpt-bg-thumb:active {
+  scale: var(--press);
 }
 .rcpt-bg-thumb.active {
-  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
-
-/* --- iOS-style background picker ---------------------------------------- */
-.rcpt-selector-row {
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  margin-bottom: 16px;
-}
-.rcpt-sel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  padding: 0;
-}
-.rcpt-sel-circle {
-  width: 62px;
-  height: 62px;
-  border-radius: 50%;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat; /* no tiled seam on the edge */
-  /* Clip the fill to the rounded padding box, so the background never shows its
-     square corners through the transparent border (the "square inner border"). */
-  -webkit-background-clip: padding-box;
-  background-clip: padding-box;
-  /* No default fill/border — each circle shows only its own preview; the accent
-     border appears solely on the active button. */
-  border: 2.5px solid transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  transition: border-color var(--dur-short) var(--ease-state);
-}
-.rcpt-sel.active .rcpt-sel-circle {
-  border-color: var(--accent);
-}
-/* Thin vertical divider before the blur control. */
-.rcpt-sel-divider {
-  align-self: center;
-  width: 1px;
-  height: 44px;
-  background: var(--border);
-  margin: 0 2px;
-}
-/* The blur control is a control (not a preview), so its circle has a surface fill
-   behind the droplet icon. Disabled unless the poster background is active. */
-.rcpt-blur-circle {
-  background-color: var(--surface-elevated);
-}
-.rcpt-blur-btn.disabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
-.rcpt-sel-label {
-  font-size: 12px;
+.rcpt-blur-title {
+  margin: 16px 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
   color: var(--text-secondary);
 }
-.rcpt-sel.active .rcpt-sel-label {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-.rcpt-sel-ico {
-  width: 24px;
-  height: 24px;
-  background-color: var(--text-secondary);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-}
-/* Picker content fades gently on option change. */
-.rcpt-picker {
-  min-height: 84px;
-  transition: opacity var(--dur-short) var(--ease-state);
-}
-.rcpt-picker.fading {
-  opacity: 0;
-}
-.rcpt-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 4px 0;
-}
-.rcpt-swatch {
-  /* iOS keeps native button chrome (square) on a <button> with a background-image
-     unless appearance is reset — that's why the gradient swatch looked square. */
-  -webkit-appearance: none;
-  appearance: none;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat; /* no tiled seam on the edge */
-  background-clip: padding-box; /* keep the fill inside the rounded border */
-  border: 2.5px solid transparent;
-  cursor: pointer;
-  padding: 0;
-}
-/* Active: just the accent ring — no inner --bg ring (it merged with the app). */
-.rcpt-swatch.active {
-  border-color: var(--accent);
-}
-/* Blur intensity options: full-width rounded-rectangle cells, icon on top and
-   label under (they replace the poster row when the blur button is open). */
-.rcpt-blur-opts {
-  display: grid;
-  gap: 8px;
-}
-.rcpt-blur-opt {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 6px;
+/* The same bar as Dust It Off's length: everything that moves goes by transform. */
+.rcpt-blur-bar {
+  position: relative;
+  height: 36px;
   border-radius: var(--r-md);
   background: var(--surface-elevated);
-  border: 1.5px solid transparent;
-  color: var(--text-secondary);
+  overflow: hidden;
   cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
-.rcpt-blur-opt.active {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface-elevated));
-  color: var(--accent);
+.rcpt-blur-fill,
+.rcpt-blur-rail {
+  position: absolute;
+  inset: 0;
+  transition: transform var(--dur-medium) var(--ease-out);
 }
-.rcpt-blur-opt-ico {
-  width: 22px;
-  height: 22px;
-  background-color: var(--text-secondary);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
+.rcpt-blur-fill {
+  background: var(--accent);
 }
-.rcpt-blur-opt.active .rcpt-blur-opt-ico {
-  background-color: var(--accent);
+.rcpt-blur-rail {
+  pointer-events: none;
 }
-.rcpt-blur-opt-label {
+.rcpt-blur-grip {
+  position: absolute;
+  top: 50%;
+  left: -1.5px;
+  width: 3px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, 0.45);
+}
+.rcpt-blur-levels {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 4px;
+}
+.rcpt-blur-level {
+  min-height: 26px;
+  padding: 0;
+  background: none;
   font-size: 12px;
+  color: var(--text-secondary);
+  transition: color var(--dur-short) var(--ease-state);
+}
+.rcpt-blur-level.on {
+  color: var(--accent);
   font-weight: 600;
 }
-/* Blur-level icon row: centred, fixed height so all four buttons align. The
-   repeated droplets (Light/Medium/Heavy) shrink so up to three fit one row. */
-.rcpt-blur-opt-icons {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  height: 24px;
-}
-.rcpt-blur-opt-ico-sm {
-  width: 14px;
-  height: 14px;
+@media (prefers-reduced-motion: reduce) {
+  .rcpt-blur-fill,
+  .rcpt-blur-rail {
+    transition: none;
+  }
 }
 /* Footer: Cancel + Save side by side. */
 .rcpt-footer {
