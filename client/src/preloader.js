@@ -15,6 +15,7 @@
 import { api, isAbortError } from './api.js';
 import { imageCache } from './imageCache.js';
 import { isServerReachable } from './network.js';
+import { withBase } from './basePath.js';
 import { seedGridPage, hasGridPage } from './gridVirtual.js';
 import {
   saveUpNext,
@@ -31,7 +32,8 @@ const TIER2_BATCH_DELAY_MS = 150; // yield between Tier-2 groups
 // One page per chip view — matches the grid's PAGE_SIZE so we preload exactly the
 // first page's posters (no more, no less).
 const GRID_PAGE_SIZE = 48;
-// Bound total preloaded images to stay under imageCache's LRU cap (300).
+// Bound total preloaded images, well inside imageCache's own limits (800 entries
+// / 150 MB), so the grids never push out what a dialog warmed.
 const MAX_PRELOAD_BUDGET = 240;
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -107,8 +109,10 @@ function upcomingImages(data) {
 // imageCache.load promises so a caller can wait on a completion threshold.
 function preloadUrls(urls) {
   const promises = [];
-  for (const url of urls) {
+  for (const raw of urls) {
     if (budget <= 0) break;
+    // Keyed like imageCache (base-prefixed), so one image never counts twice.
+    const url = raw && withBase(raw);
     if (!url || seen.has(url)) continue;
     seen.add(url);
     budget -= 1;

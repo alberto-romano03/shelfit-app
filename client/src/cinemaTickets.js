@@ -24,6 +24,7 @@ import {
 import { api } from './api.js';
 import { attachSwipe } from './swipe.js';
 import { imageCache } from './imageCache.js';
+import { prefetch, take, capped } from './warmup.js';
 import { renderTicket, renderMiniTicket, ticketFromApi, formatTicketDate } from './cinemaTicket.js';
 import { t, locale } from './i18n.js';
 
@@ -254,6 +255,31 @@ export function openNewTicketModal({ movie, existing = null, onConfirm, onRemove
 
 const NEXT_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+
+// Both lists the sheet needs. A failed cinema list just means the ticket's
+// cinema field falls back to free text.
+function fetchTickets() {
+  return Promise.all([api.cinemaTickets(), api.cinemaList().catch(() => ({ cinemas: [] }))]);
+}
+// The ticket the sheet opens on: the first in the remembered order.
+function firstTicketsOf(res, n) {
+  const all = ((res && res.tickets) || []).map(ticketFromApi);
+  return all.sort(TICKET_SORTS[readTicketSort()].cmp).slice(0, n);
+}
+// How long the loader may wait for the first ticket's backdrop before showing.
+const FIRST_PAINT_CAP_MS = 400;
+
+// Warm on intent (a finger on The Desk's drawer): fetch the tickets and load the
+// backdrop of the one the sheet opens on, plus the next, so the first ticket
+// lands whole. The sheet takes this request instead of making its own.
+export function warmCinemaTickets() {
+  prefetch('tickets', () =>
+    fetchTickets().then((r) => {
+      for (const tk of firstTicketsOf(r[0], 2)) imageCache.ready(tk.backdropPath);
+      return r;
+    })
+  );
+}
 
 export function openCinemaTickets() {
   openSheet((sheet, close) => {
@@ -622,8 +648,14 @@ export function openCinemaTickets() {
     body.replaceChildren(spinner({ compact: true }));
     // Load tickets + the cinema-name options together. A failed list fetch just
     // means the ticket's cinema field falls back to free text.
-    Promise.all([api.cinemaTickets(), api.cinemaList().catch(() => ({ cinemas: [] }))])
-      .then(([res, listRes]) => {
+    take('tickets', fetchTickets)
+      .then(async ([res, listRes]) => {
+        // The loader holds until the first ticket's backdrop is decoded (a beat
+        // at most), so the ticket never paints with an empty banner.
+        const [first] = firstTicketsOf(res, 1);
+        if (first && first.backdropPath) {
+          await capped(imageCache.ready(first.backdropPath), FIRST_PAINT_CAP_MS);
+        }
         cinemas = (listRes && listRes.cinemas) || [];
         all = (res.tickets || []).map(ticketFromApi);
         if (!all.length) {

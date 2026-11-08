@@ -13,7 +13,33 @@ import { el, poster, starSvg, toast, openModal, spinner, lucideIcon, stateBlock 
 import { createRatingControls } from './ratingControls.js';
 import { attachSwipe } from './swipe.js';
 import { haptic } from './haptic.js';
+import { imageCache } from './imageCache.js';
+import { prefetch, take, capped } from './warmup.js';
 import { t } from './i18n.js';
+
+// Warm-up: how many posters to have ready before the deck opens, and how long
+// the spinner may wait for the first two (front + back) before showing anyway.
+const WARM_POSTERS = 3;
+const FIRST_PAINT_CAP_MS = 600;
+const AHEAD = 2; // posters kept loaded behind the card waiting at the back
+
+// Fetch the unrated list once Home has settled and get its first posters loaded
+// and decoded at background priority, so the deck opens whole. The server has
+// already shuffled the list, so the warmed order is the order shown. Kept for 10
+// minutes; any library write drops it (warmup.js), and opening consumes it.
+export function warmRateOMatic() {
+  prefetch(
+    'rom',
+    () =>
+      api.unrated().then((data) => {
+        for (const ti of (data.titles || []).slice(0, WARM_POSTERS)) {
+          imageCache.ready(ti.poster_url, { preload: true });
+        }
+        return data;
+      }),
+    10 * 60 * 1000
+  );
+}
 
 // Fisher–Yates shuffle (used when restarting with skipped titles; the initial
 // queue is already randomised by the server).
@@ -72,12 +98,17 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
     footerLabel.textContent = t('common.cancel');
     rateHost.style.display = '';
     showLoading();
-    api
-      .unrated()
-      .then((data) => {
+    take('rom', () => api.unrated())
+      .then(async (data) => {
         queue = data.titles || [];
         index = 0;
         if (!queue.length) return showComplete();
+        // Keep the spinner until the two visible posters are decoded (warmed
+        // ones resolve at once), so the deck never lands with empty cards.
+        await capped(
+          Promise.all(queue.slice(0, 2).map((ti) => imageCache.ready(ti.poster_url))),
+          FIRST_PAINT_CAP_MS
+        );
         mount();
       })
       .catch(() => showError());
@@ -114,7 +145,9 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
   // A card is the poster itself, full bleed, with the type, title and year on a
   // bottom scrim, and a veil that dims it while it waits behind.
   function buildCard(title) {
-    const posterEl = poster(title.poster_url, title.title);
+    // Through imageCache, so a warmed poster paints with no fade and a cold one
+    // is kept for the next time the deck shows it.
+    const posterEl = poster(title.poster_url, title.title, { viaCache: true });
     posterEl.classList.add('rom-poster');
     const card = el('div', { class: 'rom-card' }, [
       posterEl,
@@ -171,6 +204,13 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
     positionCard(frontCard, true);
     bindControls(frontCard);
     activateFront(frontCard);
+    warmAhead();
+  }
+
+  // The cards that will drop in behind next, loaded now so each swipe reveals a
+  // poster that is already there.
+  function warmAhead() {
+    for (const ti of queue.slice(index + 2, index + 2 + AHEAD)) imageCache.ready(ti.poster_url);
   }
 
   // Save whatever rating / favourite the row holds for this card. Returns true
@@ -236,6 +276,7 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
       positionCard(promoted, true); // rotation smooths to front, veil fades away
       bindControls(promoted); // a fresh rating row for the card now in front
     }
+    warmAhead();
     // Drop a fresh background card behind, already at its own random angle.
     const nextTitle = queue[index + 1];
     backCard = nextTitle ? buildCard(nextTitle) : null;

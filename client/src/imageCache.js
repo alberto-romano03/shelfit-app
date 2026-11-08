@@ -66,6 +66,14 @@ let active = 0;
 let preloadActive = 0;
 const userQueue = [];
 const preloadQueue = [];
+// Preload jobs still waiting for a slot, by URL, so a user load of the same
+// image can move its job up to the user queue instead of waiting behind every
+// grid preload ahead of it (see promote()).
+const waiting = new Map();
+// Debug counters (window.__imageCache._stats()): did a visible image find its
+// bytes in memory? Preloads are not counted, only what the UI asked for.
+let hits = 0;
+let misses = 0;
 
 function pumpQueues() {
   while (active < MAX_ACTIVE && userQueue.length) runQueued(userQueue.shift(), false);
@@ -80,21 +88,41 @@ function pumpQueues() {
   }
 }
 function runQueued(job, isPreload) {
+  if (job.url) waiting.delete(job.url);
   active++;
   if (isPreload) preloadActive++;
-  job.run().finally(() => {
+  job.run(isPreload).finally(() => {
     active--;
     if (isPreload) preloadActive--;
     pumpQueues();
   });
 }
 // Run `task` (an async fn) under the scheduler; resolves with its result.
-function scheduleFetch(task, isPreload) {
+function scheduleFetch(task, isPreload, url) {
   return new Promise((resolve) => {
-    const q = isPreload ? preloadQueue : userQueue;
-    q.push({ run: () => task().then(resolve, resolve) });
+    const job = { run: (low) => task(low).then(resolve, resolve) };
+    if (isPreload) {
+      job.url = url;
+      waiting.set(url, job);
+      preloadQueue.push(job);
+    } else {
+      userQueue.push(job);
+    }
     pumpQueues();
   });
+}
+// The UI now needs an image that is still queued as a preload: run it as a user
+// load. One already running keeps its request; it is about to land anyway.
+function promote(url) {
+  const job = waiting.get(url);
+  if (!job) return;
+  waiting.delete(url);
+  const i = preloadQueue.indexOf(job);
+  if (i < 0) return;
+  preloadQueue.splice(i, 1);
+  job.url = null;
+  userQueue.push(job);
+  pumpQueues();
 }
 
 export const imageCache = {
@@ -103,6 +131,8 @@ export const imageCache = {
     if (!url) return null;
     url = withBase(url); // server emits root-absolute paths; serve under /base
     const entry = touch(url);
+    if (entry) hits++;
+    else misses++;
     return entry ? entry.objectUrl : null;
   },
 
@@ -115,19 +145,28 @@ export const imageCache = {
     if (!url) return Promise.resolve(url);
     if (!SUPPORTED) return Promise.resolve(withBase(url));
     url = withBase(url);
-    const entry = touch(url); // direct — url is already base-prefixed (avoids a 2nd withBase)
-    if (entry) return Promise.resolve(entry.objectUrl);
-    if (inflight.has(url)) return inflight.get(url);
-
     const isPreload = !!(opts && opts.preload);
-    const p = scheduleFetch(async () => {
+    const entry = touch(url); // direct — url is already base-prefixed (avoids a 2nd withBase)
+    if (!isPreload) {
+      if (entry) hits++;
+      else misses++;
+    }
+    if (entry) return Promise.resolve(entry.objectUrl);
+    if (inflight.has(url)) {
+      if (!isPreload) promote(url);
+      return inflight.get(url);
+    }
+
+    const p = scheduleFetch(async (low) => {
       // Bound each fetch so a stalled request can't hold a scheduler slot (and
       // starve other image loads) indefinitely; on timeout we fall back to the
       // direct URL like any other failure.
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), 30000);
       try {
-        const res = await fetch(url, { signal: ac.signal });
+        // Background fetches also tell the browser they can wait (ignored
+        // where Fetch Priority is not supported).
+        const res = await fetch(url, { signal: ac.signal, priority: low ? 'low' : 'auto' });
         if (!res.ok) return url;
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
@@ -144,9 +183,30 @@ export const imageCache = {
         clearTimeout(timer);
         inflight.delete(url);
       }
-    }, isPreload);
+    }, isPreload, url);
     inflight.set(url, p);
     return p;
+  },
+
+  // Load AND decode, so the next <img> with this image paints in its first
+  // frame. Resolves with the src to use (the object URL, or the file's own URL
+  // on failure) and never rejects. opts.decodeCapMs bounds the decode only (a
+  // big image on a slow phone must not hold the caller); opts.preload loads at
+  // background priority. Callers that must not wait on the network either race
+  // this against their own timeout.
+  ready(url, opts = {}) {
+    if (!url) return Promise.resolve(null);
+    const cap = opts.decodeCapMs == null ? 1500 : opts.decodeCapMs;
+    return this.load(url, { preload: !!opts.preload })
+      .catch(() => null)
+      .then((u) => {
+        const src = u || withBase(url);
+        const probe = new Image();
+        probe.decoding = 'async';
+        probe.src = src;
+        const decoded = probe.decode ? probe.decode().catch(() => {}) : Promise.resolve();
+        return Promise.race([decoded, new Promise((r) => setTimeout(r, cap))]).then(() => src);
+      });
   },
 
   // Fire-and-forget background warm for a list of URLs (skips already-cached /
@@ -167,9 +227,15 @@ export const imageCache = {
     totalBytes = 0;
   },
 
+  // Zero the debug counters (to measure one dialog's first screen).
+  _resetStats() {
+    hits = 0;
+    misses = 0;
+  },
+
   // Introspection (used by tests / diagnostics).
   _stats() {
-    return { entries: store.size, bytes: totalBytes };
+    return { entries: store.size, bytes: totalBytes, hits, misses, queued: preloadQueue.length };
   },
 };
 

@@ -7,10 +7,11 @@ import { openPosterMenu } from './Detail.js';
 import { api, createApi, isAbortError } from '../api.js';
 import { navigate, onCleanup, openDetail, cameBack } from '../router.js';
 import { whenStill } from '../pageMotion.js';
-import { openDustItOff } from '../dustItOff.js';
-import { openReceipt } from '../receipt.js';
-import { openRateOMatic } from '../rateOMatic.js';
-import { openCinemaTickets } from '../cinemaTickets.js';
+import { openDustItOff, warmDustItOff } from '../dustItOff.js';
+import { openReceipt, warmReceipt } from '../receipt.js';
+import { openRateOMatic, warmRateOMatic } from '../rateOMatic.js';
+import { openCinemaTickets, warmCinemaTickets } from '../cinemaTickets.js';
+import { onIntent, whenSettled } from '../warmup.js';
 import { openShowcase } from '../showcase.js';
 import { createTheWall } from '../theWall.js';
 import { openNewListSheet } from './Lists.js';
@@ -875,6 +876,18 @@ export default async function Home(container) {
   // Warm BOTH shelf queues (movies + shows) in parallel while the home is idle.
   const idleHandle = scheduleIdle(() => prefetchShelfQueues());
   cleanups.push(() => cancelIdle(idleHandle));
+
+  // ------ Dialog warm-ups (warmup.js, planning/cache-warmup/PLAN.md) ------
+  // Rate-O-Matic is opened often: its list and first posters load once per
+  // session, after the boot preloader's first tier and an idle moment. The
+  // others warm the moment a finger lands on their tile, a beat before the tap.
+  whenSettled('rom', warmRateOMatic);
+  onIntent(container, [
+    ['.spine-rom, .rom-btn', warmRateOMatic],
+    ['.spine-dust, .dust-btn', warmDustItOff],
+    ['.desk-drawer', warmCinemaTickets],
+    ['.pos-printer, .rcpt-entry', warmReceipt],
+  ]);
 }
 
 // Append an SVG rounded-rect that traces the button's border. pathLength=100
@@ -1329,18 +1342,7 @@ function openRediscoverModal() {
     // the incoming layer then faded in still empty and, once the old layer was
     // hidden, the disc briefly showed neither title.
     function readyImage(url) {
-      return imageCache
-        .load(url)
-        .catch(() => null)
-        .then((u) => {
-          const src = u || url;
-          const probe = new Image();
-          probe.src = src;
-          const decoded = probe.decode ? probe.decode().catch(() => {}) : Promise.resolve();
-          return Promise.race([decoded, new Promise((r) => setTimeout(r, RD_DECODE_CAP_MS))]).then(
-            () => src
-          );
-        });
+      return imageCache.ready(url, { decodeCapMs: RD_DECODE_CAP_MS });
     }
     function setLayerImage(layer, url, token) {
       return readyImage(url).then((src) => {

@@ -16,11 +16,13 @@ import { imageCache } from './imageCache.js';
 const READY_AHEAD = 2; // ready items to keep queued behind `current` (→ 3 total)
 
 // Warm both the fanart disc AND the poster fallback, so whichever render path
-// the disc takes, the image is already in the in-memory cache.
+// the disc takes, the image is already in the in-memory cache. Background
+// priority: this runs while Home is still painting, and opening the dialog moves
+// anything still queued to the front (imageCache promotes a user load).
 function preloadItem(item) {
   if (!item) return;
-  if (item.poster_url) imageCache.load(item.poster_url).catch(() => {});
-  if (item.fanart && item.fanart.url) imageCache.load(item.fanart.url).catch(() => {});
+  if (item.poster_url) imageCache.load(item.poster_url, { preload: true }).catch(() => {});
+  if (item.fanart && item.fanart.url) imageCache.load(item.fanart.url, { preload: true }).catch(() => {});
 }
 
 export function createShelfQueue() {

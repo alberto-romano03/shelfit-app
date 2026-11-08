@@ -20,6 +20,7 @@ import {
 import { haptic } from './haptic.js';
 import { withBase } from './basePath.js';
 import { imageCache } from './imageCache.js';
+import { prefetch, take, capped } from './warmup.js';
 import { boxBlur } from './blur.js';
 import { t } from './i18n.js';
 
@@ -55,6 +56,33 @@ function ensureReceiptFont() {
     })
     .catch(() => {});
   return _receiptFontPromise;
+}
+
+// --- Warm-up -------------------------------------------------------------------
+// What the first screen needs besides the data: the font (else the text reflows
+// from Courier), the store logo, and the first poster, the default background.
+// The receipt waits for them up to FIRST_PAINT_CAP_MS before it shows.
+const FIRST_PAINT_CAP_MS = 450;
+function firstPosterOf(r) {
+  const it = r && [...(r.movies || []), ...(r.shows || [])].find((x) => x.poster_url);
+  return it ? it.poster_url : null;
+}
+function readyFirstScreen(r) {
+  return Promise.all([
+    ensureReceiptFont(),
+    imageCache.ready(LOGO_URL),
+    imageCache.ready(firstPosterOf(r)),
+  ]);
+}
+// Warm on intent (a finger on the printer): this month's receipt plus all of the
+// above. The sheet takes this request instead of making its own.
+export function warmReceipt() {
+  prefetch('receipt', () =>
+    api.receipt().then((r) => {
+      readyFirstScreen(r);
+      return r;
+    })
+  );
 }
 
 const PAPER_W = 860;
@@ -333,8 +361,13 @@ function htmlRow(r, colors) {
   };
   if (r.type === 'logo') {
     const box = el('div', { class: 'rcpt-logo-slot', style: { height: `${h}px` } });
-    const img = el('img', { class: 'rcpt-logo-img', src: withBase(LOGO_URL), alt: '' });
-    img.addEventListener('error', () => img.remove()); // no file → wordmark only
+    // The warmed, decoded copy when there is one, so the logo paints with the paper.
+    const img = el('img', { class: 'rcpt-logo-img', src: imageCache.get(LOGO_URL) || withBase(LOGO_URL), alt: '' });
+    img.addEventListener('error', () => {
+      // A cache copy that was let go: try the file once. No file → wordmark only.
+      if (img.src.startsWith('blob:')) img.src = withBase(LOGO_URL);
+      else img.remove();
+    });
     box.append(img);
     return box;
   }
@@ -628,9 +661,9 @@ export function openReceipt(month) {
       const token = ++loadToken;
       body.innerHTML = '';
       body.append(spinner());
-      api
-        .receipt(key)
-        .then((r) => {
+      (key ? api.receipt(key) : take('receipt', () => api.receipt()))
+        .then(async (r) => {
+          await capped(readyFirstScreen(r), FIRST_PAINT_CAP_MS);
           if (token !== loadToken) return; // a newer month won the race
           data = r;
           // Re-sync the highlight to the month the server actually built.

@@ -48,6 +48,44 @@ const MOOD_LOOPS = 2;
 const MOOD_REST_MS = 5000;
 const moodFiles = new Map(); // file -> Promise<Blob>, each fetched once
 
+// The animation's bytes, fetched once per session (a failure is forgotten, so the
+// next open tries again).
+function moodFile(file) {
+  if (!moodFiles.has(file)) {
+    const p = fetch(withBase(`/icons/animated-genre/${file}`)).then((r) => {
+      if (!r.ok) throw new Error(String(r.status));
+      return r.blob();
+    });
+    p.catch(() => moodFiles.delete(file));
+    moodFiles.set(file, p);
+  }
+  return moodFiles.get(file);
+}
+
+// Warm on intent (a finger on the Dust It Off spine): decode the six stills and
+// fetch the six animations, so the mood grid opens with every emoji in place and
+// moving on time. Small files the service worker already keeps; once a session.
+const warmedStills = []; // held so the decoded stills stay in memory
+let moodsWarmed = false;
+export function warmDustItOff() {
+  if (moodsWarmed) return;
+  moodsWarmed = true;
+  // The stills paint first, so they go first; the animations follow once the
+  // stills are in, never competing with them for the connection.
+  const stills = MOODS.map(([, file]) => {
+    const img = new Image();
+    img.decoding = 'async';
+    img.fetchPriority = 'high'; // six tiny files the sheet shows first: not left in the low image queue
+    img.src = withBase(`/icons/animated-genre/stills/${file}`);
+    warmedStills.push(img);
+    return img.decode ? img.decode().catch(() => {}) : Promise.resolve();
+  });
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  Promise.all(stills).then(() => {
+    for (const [, file] of MOODS) moodFile(file).catch(() => {});
+  });
+}
+
 // A mood emoji plays a couple of loops, rests on its first frame, then plays again. An
 // animated image can't be paused, so it swaps with its still; a new blob URL is what makes
 // it start over from that same frame, as the same URL would carry on where it had got to.
@@ -61,19 +99,9 @@ function moodEmoji(cls, file, loopMs) {
     if (!img.isConnected) return; // the sheet closed or redrew: this one is done
     let blob;
     try {
-      if (!moodFiles.has(file)) {
-        moodFiles.set(
-          file,
-          fetch(withBase(`/icons/animated-genre/${file}`)).then((r) => {
-            if (!r.ok) throw new Error(String(r.status));
-            return r.blob();
-          })
-        );
-      }
-      blob = await moodFiles.get(file);
+      blob = await moodFile(file);
     } catch {
-      moodFiles.delete(file); // try again next time the sheet opens
-      return;
+      return; // moodFile forgot it: the next open tries again
     }
     if (!img.isConnected) return;
     const url = URL.createObjectURL(blob);
@@ -91,7 +119,14 @@ function moodEmoji(cls, file, loopMs) {
     );
     img.src = url;
   };
-  setTimeout(play); // once it's in the sheet
+  // Once it's in the sheet and its still has loaded, so the stills (what paints
+  // first) never queue behind the bigger animations.
+  const start = () => setTimeout(play);
+  if (img.complete) start();
+  else {
+    img.addEventListener('load', start, { once: true });
+    img.addEventListener('error', start, { once: true });
+  }
   return img;
 }
 // Duration snap points (movies only). null = "Any" (no filter).
@@ -465,15 +500,7 @@ export function openDustItOff() {
 
     // Fetch + decode an image so it paints in the frame the pick is shown.
     function decodeImage(url) {
-      if (!url) return Promise.resolve();
-      return imageCache
-        .load(url)
-        .then((src) => {
-          const probe = new Image();
-          probe.src = src || withBase(url);
-          return probe.decode ? probe.decode().catch(() => {}) : null;
-        })
-        .catch(() => {});
+      return imageCache.ready(url);
     }
     function warmPick(r) {
       return Promise.race([
@@ -643,7 +670,7 @@ export function openDustItOff() {
         if (r.backdrop_url) heroImg.src = imageCache.get(r.backdrop_url) || withBase(r.backdrop_url);
         else heroImg.removeAttribute('src');
         posterHost.innerHTML = '';
-        mountPoster(posterHost, r.poster_url, r.title);
+        mountPoster(posterHost, r.poster_url, r.title, { viaCache: true }); // joins the queue's load
         titleEl.textContent = r.title || t('dust.untitled');
         // Year · type · TMDB score. The 0-10 score wears the TMDB mark so it is
         // never mistaken for the viewer's own 1-5 stars.

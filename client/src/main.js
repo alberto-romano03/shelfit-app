@@ -32,6 +32,7 @@ import Lists from './views/Lists.js';
 import { resetGridSection } from './views/grid.js';
 import { resetUpcoming, rebuildUpcoming } from './views/Upcoming.js';
 import { preloader } from './preloader.js';
+import { markBootSettled } from './warmup.js';
 
 initTheme();
 initI18n();
@@ -298,6 +299,7 @@ preloader
   .runTier1()
   .catch(() => {})
   .finally(() => {
+    markBootSettled(); // dialog warm-ups (warmup.js) may start now
     preloader.runTier2().catch(() => {});
   });
 
