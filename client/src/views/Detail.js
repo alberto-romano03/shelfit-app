@@ -12,7 +12,7 @@ import { navigate, openDetail, onCleanup, cameFrom } from '../router.js';
 import { isServerReachable, markDegraded, reportServerSuspect } from '../network.js';
 import { savePlanDetail, getPlanDetail, formatSyncTime } from '../offlineCache.js';
 import { createRatingControls } from '../ratingControls.js';
-import { createStatusSelect } from '../statusSelect.js';
+import { createStatusSelect, buildStatusBento, STATUS_LABELS, STATUS_COLORS, STATUS_ICON } from '../statusSelect.js';
 import { isKodiActive, matchKodi } from '../kodi.js';
 import { collapsibleText } from '../collapsibleText.js';
 import { openImagePicker } from '../imagePicker.js';
@@ -48,6 +48,7 @@ import {
   stateBlock,
   typewriterPlaceholder,
   settingsRow,
+  epLabel,
 } from '../ui.js';
 
 // Who this member can suggest a title to (see openSuggestSheet). Fetched when a
@@ -1279,50 +1280,192 @@ export function openCollectionTitle(p) {
 const LEND_MESSAGE_MAX = 100;
 const LEND_PLACEHOLDERS = ['lend.placeholder1', 'lend.placeholder2', 'lend.placeholder3'];
 
-// Holding a poster: the quick things, without opening the title. Nothing is marked on the
-// shelf; a small copy of the poster sits beside the title here, as in this page's own menu.
+// Holding a poster: what the title is and the quick things, without opening it. Status and
+// rating open in place and save as you pick; lists and lending open their own sheets; TMDB
+// is the one row below. The grid's card already says almost all of it; a card that doesn't
+// (Home's Currently watching) is completed from the title first.
+const LEND_TINT = '#7cc4f2';
+
 export async function openPosterMenu(item) {
-  // A card saved before the id was kept has only what it draws.
-  if (!item.tmdb_id) {
+  if (!item.tmdb_id || item.status === undefined) {
     try {
-      item = { ...item, tmdb_id: (await api.mediaDetail(item.id)).tmdb_id };
+      const d = await api.mediaDetail(item.id);
+      const meta = d.meta || {};
+      item = {
+        ...item,
+        tmdb_id: d.tmdb_id,
+        status: d.status,
+        rating: d.rating,
+        favorite: !!d.favorite,
+        year: item.year || meta.year,
+        genres: item.genres || meta.genres,
+      };
     } catch (err) {
-      toast(err.message, 'bad');
-      return;
+      // Enough to open it without the facts; with no TMDB id there's nothing to offer.
+      if (!item.tmdb_id) {
+        toast(err.message, 'bad');
+        return;
+      }
     }
   }
+  const state = { status: item.status, rating: item.rating || null, favorite: !!item.favorite };
+
   openModal(
     (modal, close) => {
-      const row = (icon, label, onClick) =>
-        settingsRow({
-          icon,
-          label,
-          onClick: () => {
-            close();
-            onClick();
-          },
-        }).el;
-      const rows = el('div', { class: 'poster-menu-rows' }, [
-        row('external-link', t('detail.viewOnTmdb'), () =>
-          window.open(`https://www.themoviedb.org/${item.type === 'movie' ? 'movie' : 'tv'}/${item.tmdb_id}`, '_blank', 'noopener')
-        ),
-        row('list-plus', t('detail.addToList'), () => openAddToListSheet(item)),
-      ]);
-      const addLend = () => {
-        if (suggestRecipients && suggestRecipients.length && rows.isConnected) {
-          rows.append(row('heart-handshake', t('detail.suggest'), () => openSuggestSheet(item)));
-        }
-      };
+      const statusText = () =>
+        state.status === 'watching' && item.last_watched
+          ? `${STATUS_LABELS.watching} · ${epLabel(item.last_watched.season, item.last_watched.episode)}`
+          : STATUS_LABELS[state.status] || '';
+
+      // --- Head: the poster, the title, and what it is.
+      // Where it stands, written in its status colour.
+      const chip = el('div', { class: 'poster-menu-status', text: statusText() });
+      const metaBits = [item.year, (item.genres || []).slice(0, 2).join(', ')].filter(Boolean);
       modal.append(
         el('div', { class: 'poster-menu-head' }, [
           poster(item.poster_url, ''),
-          el('h3', { text: item.title_it || item.title_orig || '' }),
-        ]),
-        rows
+          el('div', { class: 'poster-menu-titles' }, [
+            el('h3', { text: item.title_it || item.title_orig || '' }),
+            metaBits.length ? el('div', { class: 'poster-menu-meta', text: metaBits.join(' · ') }) : null,
+            state.status ? chip : null,
+          ]),
+        ])
       );
-      // Lend only when someone else can sign in. Known already if a detail page has opened.
-      if (suggestRecipients) queueMicrotask(addLend);
-      else loadSuggestRecipients().then(addLend);
+
+      // --- Quick tiles, and the panel the first two open.
+      const tile = (icon, label, tint) => {
+        const b = el('button', { class: 'poster-menu-tile', type: 'button' }, [
+          icon,
+          el('span', { class: 'poster-menu-tile-label', text: label }),
+        ]);
+        if (tint) b.style.setProperty('--tile-ink', tint);
+        return b;
+      };
+      const statusTile = tile(
+        lucideIcon(STATUS_ICON[state.status] || 'eye', 'status-ico'),
+        STATUS_LABELS[state.status] || t('posterMenu.status')
+      );
+      const rateTile = tile(lucideIcon('star', 'poster-menu-ico'), '', 'var(--stars)');
+      const listTile = tile(lucideIcon('list-plus', 'poster-menu-ico'), t('posterMenu.list'));
+      const lendTile = tile(lucideIcon('heart-handshake', 'poster-menu-ico'), t('posterMenu.lend'), LEND_TINT);
+      const tiles = el('div', { class: 'poster-menu-tiles' }, [statusTile, rateTile, listTile]);
+      const panelIn = el('div', { class: 'poster-menu-panel-in' });
+      const panel = el('div', { class: 'poster-menu-panel' }, [panelIn]);
+
+      function paintStatus() {
+        const ink = STATUS_COLORS[state.status];
+        for (const node of [statusTile, chip]) node.style.setProperty('--sc', ink || 'var(--text-secondary)');
+        statusTile.firstElementChild.style.maskImage = `url("${withBase(`/icons/lucide/${STATUS_ICON[state.status] || 'eye'}.svg`)}")`;
+        statusTile.lastElementChild.textContent = STATUS_LABELS[state.status] || t('posterMenu.status');
+        chip.textContent = statusText();
+      }
+      function paintRating() {
+        rateTile.lastElementChild.textContent = state.rating ? `${state.rating} / 5` : t('posterMenu.rate');
+      }
+      paintStatus();
+      paintRating();
+
+      let open = null; // the tile whose panel is showing
+      function showPanel(which, build) {
+        statusTile.classList.toggle('is-open', which === statusTile);
+        rateTile.classList.toggle('is-open', which === rateTile);
+        if (!which || open === which) {
+          open = null;
+          statusTile.classList.remove('is-open');
+          rateTile.classList.remove('is-open');
+          panel.style.height = '0px';
+          return;
+        }
+        open = which;
+        panelIn.replaceChildren(build());
+        panel.style.height = `${panelIn.offsetHeight}px`;
+      }
+
+      statusTile.addEventListener('click', () =>
+        showPanel(statusTile, () =>
+          buildStatusBento({
+            selected: state.status,
+            onSelect: async (key, cell) => {
+              if (key === state.status) return showPanel(null);
+              const was = state.status;
+              state.status = key;
+              cell.parentElement.querySelectorAll('.status-cell').forEach((c) => c.classList.toggle('selected', c === cell));
+              paintStatus();
+              try {
+                await api.updateMedia(item.id, { status: key });
+                toast(t('detail.statusUpdated'), 'ok');
+                showPanel(null);
+              } catch (err) {
+                state.status = was;
+                paintStatus();
+                cell.parentElement.querySelectorAll('.status-cell').forEach((c, i) => c.classList.toggle('selected', i === Object.keys(STATUS_ICON).indexOf(was)));
+                toast(err.message, 'bad');
+              }
+            },
+          })
+        )
+      );
+      rateTile.addEventListener('click', () =>
+        showPanel(rateTile, () =>
+          createRatingControls({
+            rating: state.rating,
+            favorite: state.favorite,
+            onRate: (r) => api.updateMedia(item.id, { rating: r }),
+            onFavorite: (next) => api.updateMedia(item.id, { favorite: next }),
+            onError: (msg) => toast(msg, 'bad'),
+            onChange: (s) => {
+              state.rating = s.rating;
+              state.favorite = s.favorite;
+              paintRating();
+            },
+          }).element
+        )
+      );
+      listTile.addEventListener('click', () => {
+        close();
+        openAddToListSheet(item);
+      });
+      lendTile.addEventListener('click', () => {
+        close();
+        openSuggestSheet(item);
+      });
+
+      // --- TMDB, the one row, under its own logo.
+      const tmdbRow = settingsRow({
+        icon: 'external-link',
+        label: t('detail.viewOnTmdb'),
+        onClick: () => {
+          close();
+          window.open(`https://www.themoviedb.org/${item.type === 'movie' ? 'movie' : 'tv'}/${item.tmdb_id}`, '_blank', 'noopener');
+        },
+      }).el;
+      tmdbRow.querySelector('.srow-ico').replaceWith(
+        el('img', { class: 'poster-menu-tmdb', src: withBase('/icons/tmdb.svg'), alt: '' })
+      );
+
+      modal.append(
+        tiles,
+        panel,
+        el('div', { class: 'poster-menu-rows' }, [tmdbRow]),
+        // Closed the way every other sheet is: a rule, then Cancel.
+        el('hr', { class: 'status-sep' }),
+        el('div', { class: 'modal-actions' }, [
+          el('button', { class: 'btn btn-secondary', onClick: close }, [
+            lucideIcon('x', 'btn-lucide'),
+            el('span', { text: t('common.cancel') }),
+          ]),
+        ])
+      );
+
+      // Lend only when someone else can sign in. Known already if the menu or a detail page
+      // has opened before; otherwise it joins the row when the answer comes, if still open.
+      if (suggestRecipients) {
+        if (suggestRecipients.length) tiles.append(lendTile);
+      } else {
+        loadSuggestRecipients().then(() => {
+          if (suggestRecipients && suggestRecipients.length && tiles.isConnected) tiles.append(lendTile);
+        });
+      }
     },
     { handle: true, className: 'poster-menu' }
   );

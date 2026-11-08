@@ -50,7 +50,7 @@ export const STATUS_COLORS = {
   paused: '#f0c674', // amber
   dropped: '#e5867f', // red
 };
-const STATUS_ICON = Object.fromEntries(STATUS_BENTO.map((s) => [s.key, s.icon]));
+export const STATUS_ICON = Object.fromEntries(STATUS_BENTO.map((s) => [s.key, s.icon]));
 
 // Build the shared status bento grid. `onSelect(key, cell)` fires on a cell tap;
 // `selected` (optional) marks one cell active. Reused by the detail status

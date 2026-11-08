@@ -5340,7 +5340,13 @@ button.srow:active {
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+.poster-menu-titles {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding-bottom: 2px;
 }
 .poster-menu-head h3 {
   display: -webkit-box;
@@ -5350,7 +5356,90 @@ button.srow:active {
   min-width: 0;
   margin: 0;
   font-size: 20px;
-  line-height: 1.25;
+  line-height: 1.2;
+}
+.poster-menu-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+/* Where the title stands, in its status colour: a shade lighter on dark, darker on light,
+   so the pale status inks still read as text. */
+.poster-menu-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--sc) 82%, var(--text-primary));
+}
+/* Three or four quick tiles, as many columns as there are. */
+.poster-menu-tiles {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.poster-menu-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 74px;
+  padding: 8px 4px;
+  border: 1.5px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  transition: border-color var(--dur-short) var(--ease-state), scale var(--dur-long) var(--ease-out);
+}
+.poster-menu-tile:active {
+  scale: var(--press);
+}
+.poster-menu-tile.is-open {
+  border-color: color-mix(in srgb, var(--sc, var(--tile-ink, var(--accent))) 70%, transparent);
+}
+.poster-menu-ico {
+  width: 22px;
+  height: 22px;
+  background-color: var(--tile-ink, var(--text-secondary));
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.poster-menu-tile-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+/* Status and rating open here, under the tiles. */
+.poster-menu-panel {
+  height: 0;
+  overflow: hidden;
+  transition: height var(--dur-medium) cubic-bezier(0.32, 0.72, 0, 1);
+}
+.poster-menu-panel-in {
+  padding: 2px 0 10px;
+}
+.poster-menu-panel .rating-wrap {
+  margin-top: 4px;
+}
+/* TMDB's own logo stands in for the row's glyph: a stacked wordmark, so it needs more
+   room than a glyph to be read. */
+.poster-menu-tmdb {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 22px;
+  object-fit: contain;
+}
+@media (prefers-reduced-motion: reduce) {
+  .poster-menu-panel {
+    transition: none;
+  }
 }
 .poster-menu-head .poster-card {
   flex: none;
