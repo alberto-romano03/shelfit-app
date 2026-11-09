@@ -19,6 +19,7 @@ import { scheduleStatsRecompute } from '../stats.js';
 import { clientAbortSignal } from '../http.js';
 import { hasFanartDiscCached } from '../fanart.js';
 import { imageVersion } from '../customImages.js';
+import { stopMinute } from '../stoppedAt.js';
 
 const VALID_STATUS = [
   'watching',
@@ -125,6 +126,7 @@ const watchedSeasonsStmt = db.prepare(
 const seasonWatchedStmt = db.prepare(
   'SELECT episode, watch_count, watched_at, notes FROM progress WHERE item_id = ? AND season = ?'
 );
+const seasonStopsStmt = db.prepare('SELECT episode, stopped_at FROM episode_stops WHERE item_id = ? AND season = ?');
 const findByTypeTmdbStmt = db.prepare(
   'SELECT id, status FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?'
 );
@@ -468,6 +470,8 @@ export default async function mediaRoutes(fastify) {
       cinema_name: row.cinema_name || null,
       notes: row.notes,
       rewatch_count: row.rewatch_count,
+      // Minute a movie was left at (null = none); cleared when it is completed.
+      stopped_at: row.stopped_at ?? null,
       // Editable first-watch date (movies); null → the client falls back to
       // date(updated_at), matching the receipt/export.
       watch_date: row.watch_date || null,
@@ -576,6 +580,8 @@ export default async function mediaRoutes(fastify) {
     const watchedRows = seasonWatchedStmt.all(row.id, seasonNumber);
     const watchedMap = {};
     for (const r of watchedRows) watchedMap[r.episode] = r;
+    const stopMap = {};
+    for (const r of seasonStopsStmt.all(row.id, seasonNumber)) stopMap[r.episode] = r.stopped_at;
 
     const base = assetBase('show', row.tmdb_id);
     // Stable ordering — episode_number ascending, matching how episodes are
@@ -597,6 +603,8 @@ export default async function mediaRoutes(fastify) {
           watched: !!w,
           watch_count: w ? w.watch_count : 0,
           notes: w ? w.notes : null,
+          // Minute an unwatched episode was left at (watching it clears it).
+          stopped_at: w ? null : (stopMap[e.episode_number] ?? null),
         };
       });
 
@@ -616,8 +624,12 @@ export default async function mediaRoutes(fastify) {
     const baseResp = {
       item_id: row.id,
       watched_count: allEpisodes.length - unwatched.length,
+      // An episode stopped partway counts only what is left of it.
       minutes_left: Math.round(
-        unwatched.reduce((sum, e) => sum + (Number.isFinite(e.runtime) && e.runtime > 0 ? e.runtime : avgRuntime), 0)
+        unwatched.reduce((sum, e) => {
+          const len = Number.isFinite(e.runtime) && e.runtime > 0 ? e.runtime : avgRuntime;
+          return sum + Math.max(0, len - (e.stopped_at || 0));
+        }, 0)
       ),
       // The series' title, for the season page's link back to the series.
       show_title: row.title_it || row.title_orig || null,
@@ -759,6 +771,16 @@ export default async function mediaRoutes(fastify) {
       if (!Number.isFinite(rc) || rc < 0) rc = 0;
       fields.push('rewatch_count = ?');
       params.push(rc);
+    }
+    // Stopped at (movies only): the minute it was left at; 0 or null clears it.
+    if (body.stopped_at !== undefined) {
+      const minute = stopMinute(body.stopped_at);
+      if (row.type !== 'movie' || minute === undefined) {
+        reply.code(400);
+        return { error: 'stopped_at must be a whole minute (0-999) on a movie' };
+      }
+      fields.push('stopped_at = ?');
+      params.push(minute);
     }
 
     if (!fields.length) return { ok: true };

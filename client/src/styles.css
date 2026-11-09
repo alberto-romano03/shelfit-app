@@ -8,6 +8,7 @@
   --accent: #e5a00d;
   --stars: #e5a00d;
   --success: #4caf50;
+  --stop-ink: #7ed99a; /* Stopped at: the Watching status green */
   --danger: #e5484d;
   --kodi-blue: #17b2e8;
   /* State inks, for glyphs on a neutral surface: toasts and empty states. */
@@ -170,6 +171,7 @@
   --accent: #c8890a;
   --stars: #c8890a;
   --success: #3d9140;
+  --stop-ink: #3f8f57;
   --danger: #d33;
   --ink-ok: #2f7d32;
   --ink-bad: #c0392b;
@@ -216,6 +218,7 @@
     --accent: #c8890a;
     --stars: #c8890a;
     --success: #3d9140;
+    --stop-ink: #3f8f57;
     --danger: #d33;
     --ink-ok: #2f7d32;
     --ink-bad: #c0392b;
@@ -2350,7 +2353,7 @@ body.season-active #app {
 /* Multiline note input inside the episode-note bottom sheet. */
 .note-sheet-input {
   min-height: 130px;
-  resize: vertical;
+  resize: none;
   line-height: 1.45;
   /* Drop the native textarea chrome (iOS/Safari draws its own inset bevel over
      the app border, which reads as a "double"/strange border). */
@@ -2386,6 +2389,155 @@ textarea.note-sheet-input:focus {
 }
 .note-delete {
   align-self: center;
+}
+
+/* ===================== Stopped at ===================== */
+/* The field is a player's front-panel display you type the minute into. It sits in
+   the middle of the sheet; the clear key hangs off its right without moving it. */
+.stop-field {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 12px;
+  margin-top: 6px;
+}
+.stop-display {
+  grid-column: 2;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 18px 9px;
+  border-radius: var(--r-md);
+  background: #070908; /* the display stays dark in both themes, like the device */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 6px 14px rgba(0, 0, 0, 0.6);
+  font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  cursor: text;
+  transition: box-shadow var(--dur-short) var(--ease-state);
+}
+.stop-display:focus-within {
+  box-shadow: inset 0 0 0 1px rgba(126, 217, 154, 0.55), 0 0 0 3px rgba(126, 217, 154, 0.22),
+    inset 0 6px 14px rgba(0, 0, 0, 0.6);
+}
+.stop-display-lbl {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #7ed99a;
+  opacity: 0.55;
+  transform: translateY(-6px);
+}
+.stop-input {
+  width: 3ch;
+  padding: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: 30px;
+  font-weight: 700;
+  text-align: right;
+  color: #7ed99a;
+  caret-color: #7ed99a;
+  text-shadow: 0 0 10px rgba(126, 217, 154, 0.55);
+}
+.stop-input::placeholder {
+  color: #7ed99a;
+  opacity: 0.18;
+}
+.stop-input::selection {
+  background: rgba(126, 217, 154, 0.3);
+  color: #7ed99a;
+}
+.stop-input.is-over {
+  color: var(--danger);
+  text-shadow: none;
+}
+.stop-display-of {
+  font-size: 15px;
+  font-weight: 600;
+  color: #7ed99a;
+  opacity: 0.5;
+  white-space: nowrap;
+}
+.stop-clear {
+  grid-column: 3;
+  justify-self: start;
+  color: var(--text-secondary);
+}
+.stop-clear .btn-lucide {
+  width: 20px;
+  height: 20px;
+}
+.stop-sep {
+  margin: 14px 0 10px;
+}
+/* The movie's key beside its status: round, only while Watching. */
+.stop-key {
+  flex: none;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 4px; /* level with the status button, which keeps 4px under it */
+  padding: 0;
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--stop-ink);
+  cursor: pointer;
+  transition: scale var(--dur-long) var(--ease-out);
+}
+.stop-key:active {
+  scale: var(--press);
+}
+.stop-key[hidden] {
+  display: none;
+}
+.stop-key-ico {
+  width: 20px;
+  height: 20px;
+  background-color: currentColor;
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+}
+/* The status button fills up to where the movie stopped. */
+.status-select.has-stop {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--sc, var(--accent)) 16%, var(--surface)) var(--stop, 0%),
+    var(--surface) var(--stop, 0%)
+  );
+}
+.status-stop {
+  color: var(--stop-ink);
+  font-variant-numeric: tabular-nums;
+}
+/* An episode left partway: its minute in green, and a bar along its still. */
+.ep-stop {
+  color: var(--stop-ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.episode .thumb {
+  position: relative;
+}
+.ep-stop-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.ep-stop-strip[hidden] {
+  display: none;
+}
+.ep-stop-strip > i {
+  display: block;
+  height: 100%;
+  background: var(--stop-ink);
 }
 
 /* ===================== Upcoming timeline ===================== */

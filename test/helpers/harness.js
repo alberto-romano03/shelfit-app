@@ -83,6 +83,7 @@ export function client(app, cookie) {
     get: (url) => call('GET', url),
     post: (url, payload, headers) => call('POST', url, payload, headers),
     patch: (url, payload) => call('PATCH', url, payload),
+    put: (url, payload) => call('PUT', url, payload),
     del: (url) => call('DELETE', url),
   };
 }

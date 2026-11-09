@@ -19,6 +19,7 @@ import { openImagePicker } from '../imagePicker.js';
 import { withBase } from '../basePath.js';
 import { confetti } from '../confetti.js';
 import { offerShelve } from '../finishSeries.js';
+import { openStopSheet, stopLabel } from '../stoppedAt.js';
 import { openNewTicketModal } from '../cinemaTickets.js';
 import { t, locale, getLang } from '../i18n.js';
 import {
@@ -689,13 +690,22 @@ export default async function Detail(container, params) {
         : null;
   const runtimeRow = duration ? metaRow('clock', duration) : null;
   if (runtimeRow) metaRows.push(runtimeRow);
-  // A film you haven't seen says when it would end if you pressed play now.
+  // A film you haven't seen says when it would end if you pressed play now; one
+  // you are watching and stopped partway counts from where you stopped.
   function paintRuntime() {
     if (!runtimeRow || d.type !== 'movie') return;
     const unseen = timeHintsOn() && d.status !== 'completed';
-    runtimeRow.lastElementChild.textContent = unseen
-      ? t('detail.endsAt', { length: hoursAndMinutes(meta.runtime), time: endsAt(meta.runtime) })
-      : duration;
+    const left = resumeMinutesLeft();
+    runtimeRow.lastElementChild.textContent = !unseen
+      ? duration
+      : left !== null
+        ? t('detail.endsAtLeft', { length: hoursAndMinutes(left), time: endsAt(left) })
+        : t('detail.endsAt', { length: hoursAndMinutes(meta.runtime), time: endsAt(meta.runtime) });
+  }
+  // Minutes left of a movie being watched and stopped partway, else null.
+  function resumeMinutesLeft() {
+    if (d.type !== 'movie' || d.status !== 'watching' || !(d.stopped_at > 0) || !(meta.runtime > 0)) return null;
+    return Math.max(0, meta.runtime - d.stopped_at);
   }
   paintRuntime();
   if (runtimeRow && d.type === 'movie') {
@@ -738,6 +748,10 @@ export default async function Detail(container, params) {
   // failed save the chooser stays open and the value is unchanged. ---
   const statusControl = createStatusSelect({
     status: d.status,
+    suffix: (st) =>
+      d.type === 'movie' && st === 'watching' && d.stopped_at > 0
+        ? el('span', { class: 'status-stop', text: stopLabel(d.stopped_at, meta.runtime || 0) })
+        : null,
     onSelect: async (key) => {
       try {
         await api.updateMedia(id, { status: key });
@@ -746,8 +760,10 @@ export default async function Detail(container, params) {
         throw err; // keep the chooser open, leave the button unchanged
       }
       d.status = key;
+      if (key === 'completed') d.stopped_at = null; // finishing clears it (the server does too)
       renderRewatch(); // show/hide the movie's date and rewatch keys with completion
       paintRuntime();
+      paintStop();
       toast(t('detail.statusUpdated'), 'ok');
     },
   });
@@ -1011,6 +1027,39 @@ export default async function Detail(container, params) {
   kodiBtn.innerHTML =
     `<img class="kodi-logo-img" src="${withBase('/icons/kodi.svg')}" alt="" aria-hidden="true"><span>${t('detail.playOnKodi')}</span>`;
   const kodiSlot = el('div', { class: 'kodi-slot' });
+  // --- Stopped at (movies, while Watching): a round key beside the status opens the
+  // sheet to type the minute you left it at; the status button reads it out and
+  // fills up to it. Any other status hides the key and keeps the minute.
+  const stopKey =
+    d.type === 'movie'
+      ? el('button', { class: 'stop-key', type: 'button', 'aria-label': t('stop.title') }, [lucideIcon('timer', 'stop-key-ico')])
+      : null;
+  if (stopKey) {
+    stopKey.addEventListener('click', () =>
+      openStopSheet({
+        title: d.title_it,
+        total: meta.runtime || 0,
+        value: d.stopped_at || 0,
+        onSave: async (minute) => {
+          if (minute === (d.stopped_at || 0)) return;
+          await api.updateMedia(id, { stopped_at: minute });
+          d.stopped_at = minute || null;
+          paintStop();
+          paintRuntime();
+        },
+      })
+    );
+  }
+  function paintStop() {
+    if (!stopKey) return;
+    const watching = d.status === 'watching';
+    stopKey.hidden = !watching;
+    const p = watching && d.stopped_at > 0 && meta.runtime > 0 ? Math.min(1, d.stopped_at / meta.runtime) : 0;
+    statusBtn.classList.toggle('has-stop', p > 0);
+    statusBtn.style.setProperty('--stop', `${(p * 100).toFixed(1)}%`);
+    statusControl.refresh();
+  }
+  paintStop();
   const kodiFeedback = el('div', { class: 'kodi-feedback' });
   // Movies get a two-row action area: [status | Kodi] then [Owned | Cinema].
   // Shows keep the original single row [Kodi | Owned] under the full-width status
@@ -1019,6 +1068,7 @@ export default async function Detail(container, params) {
   const actionsRow = isMovie
     ? el('div', { class: 'detail-actions-row' }, [
         el('div', { class: 'status-slot' }, [statusBtn]),
+        stopKey,
         kodiSlot,
       ])
     : el('div', { class: 'detail-actions-row' }, [kodiSlot, ownedBtn]);

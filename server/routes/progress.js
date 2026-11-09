@@ -6,6 +6,7 @@
 import db from '../db.js';
 import { readMetaSync, readSeasonMetaSync } from '../cache.js';
 import { scheduleStatsRecompute } from '../stats.js';
+import { stopMinute } from '../stoppedAt.js';
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
 // Bound to the signed-in member: every handler loads the series through this
@@ -65,6 +66,14 @@ const insertNoteRowStmt = db.prepare(
 const updateNoteStmt = db.prepare(
   'UPDATE progress SET notes = ? WHERE item_id = ? AND season = ? AND episode = ?'
 );
+// Stopped at, for an episode not yet watched (a progress row means watched, and
+// inserting one clears this through a trigger; see migration 8).
+const upsertStopStmt = db.prepare(
+  `INSERT INTO episode_stops (item_id, season, episode, stopped_at, updated_at)
+   VALUES (?, ?, ?, ?, ?)
+   ON CONFLICT(item_id, season, episode) DO UPDATE SET stopped_at = excluded.stopped_at, updated_at = excluded.updated_at`
+);
+const deleteStopStmt = db.prepare('DELETE FROM episode_stops WHERE item_id = ? AND season = ? AND episode = ?');
 const deleteSeasonStmt = db.prepare(
   'DELETE FROM progress WHERE item_id = ? AND season = ?'
 );
@@ -375,6 +384,34 @@ export default async function progressRoutes(fastify) {
       }
       updateNoteStmt.run(notes ?? null, item_id, season, episode);
       return { ok: true };
+    }
+  );
+
+  // PUT /api/progress/:item_id/:season/:episode/stop { stopped_at } → the minute
+  // an unwatched episode was left at; 0 or null clears it. A watched episode has
+  // nothing to resume, so it is refused.
+  fastify.put(
+    '/api/progress/:item_id/:season/:episode/stop',
+    async (request, reply) => {
+      const season = parseInt(request.params.season, 10);
+      const episode = parseInt(request.params.episode, 10);
+      const minute = stopMinute((request.body || {}).stopped_at);
+      if (!Number.isInteger(season) || season < 1 || !Number.isInteger(episode) || episode < 1 || minute === undefined) {
+        reply.code(400);
+        return { error: 'a season, an episode and stopped_at (a whole minute 0-999) are required' };
+      }
+      const item = getItem(request.params.item_id, request.user.id);
+      if (!item || item.type !== 'show') {
+        reply.code(404);
+        return { error: 'show not found' };
+      }
+      if (getProgressIdStmt.get(item.id, season, episode)) {
+        reply.code(409);
+        return { error: 'episode already watched' };
+      }
+      if (minute === null) deleteStopStmt.run(item.id, season, episode);
+      else upsertStopStmt.run(item.id, season, episode, minute, Date.now());
+      return { ok: true, stopped_at: minute };
     }
   );
 

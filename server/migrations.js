@@ -310,6 +310,38 @@ export const MIGRATIONS = [
       db.exec('ALTER TABLE suggestions ADD COLUMN message TEXT');
     },
   },
+  {
+    // "Stopped at": the minute a film or an episode was left at, to pick it up
+    // there. A film keeps it on its own row; an episode has no progress row until
+    // it is watched, so unwatched episodes keep theirs in a table of their own.
+    // Finishing clears it whatever does the finishing (the app, Kodi sync, an
+    // import), so the triggers do it rather than every route that marks things.
+    version: 8,
+    name: 'stopped at',
+    up(db) {
+      db.exec(`
+        ALTER TABLE items ADD COLUMN stopped_at INTEGER;
+        CREATE TABLE episode_stops (
+          item_id    INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+          season     INTEGER NOT NULL,
+          episode    INTEGER NOT NULL,
+          stopped_at INTEGER NOT NULL CHECK(stopped_at > 0),
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (item_id, season, episode)
+        );
+        CREATE TRIGGER episode_stop_cleared_when_watched AFTER INSERT ON progress
+        BEGIN
+          DELETE FROM episode_stops
+           WHERE item_id = NEW.item_id AND season = NEW.season AND episode = NEW.episode;
+        END;
+        CREATE TRIGGER movie_stop_cleared_when_completed AFTER UPDATE OF status ON items
+        WHEN NEW.status = 'completed' AND NEW.stopped_at IS NOT NULL
+        BEGIN
+          UPDATE items SET stopped_at = NULL WHERE id = NEW.id;
+        END;
+      `);
+    },
+  },
 ];
 
 // Filesystem half of v1: the one custom profile photo moves from

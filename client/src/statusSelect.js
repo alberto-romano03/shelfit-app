@@ -75,7 +75,9 @@ export function buildStatusBento({ selected = null, onSelect } = {}) {
   return grid;
 }
 
-export function createStatusSelect({ status, onSelect, title } = {}) {
+// `suffix(status)` (optional) returns a node shown after the label, e.g. a movie's
+// "· 37 / 100 min" while Watching; refresh() redraws it after the caller's state changes.
+export function createStatusSelect({ status, onSelect, title, suffix } = {}) {
   let current = status;
   const btn = el('button', { class: 'status-select' });
 
@@ -90,10 +92,10 @@ export function createStatusSelect({ status, onSelect, title } = {}) {
     } else {
       btn.style.removeProperty('--sc');
     }
-    btn.append(
-      el('span', { class: 'status-cur', text: STATUS_LABELS[current] || t('statusSelect.setStatus') }),
-      el('span', { class: 'status-caret', html: icons.chevron })
-    );
+    const label = el('span', { class: 'status-cur', text: STATUS_LABELS[current] || t('statusSelect.setStatus') });
+    const extra = suffix ? suffix(current) : null;
+    if (extra) label.append(' · ', extra);
+    btn.append(label, el('span', { class: 'status-caret', html: icons.chevron }));
   }
   render();
 
@@ -130,6 +132,7 @@ export function createStatusSelect({ status, onSelect, title } = {}) {
   return {
     element: btn,
     getStatus: () => current,
+    refresh: render,
     setStatus: (s) => {
       current = s;
       render();
