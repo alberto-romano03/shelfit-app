@@ -30,6 +30,13 @@ export function openStopSheet({ title, total = 0, value = 0, note = null, onSave
         'aria-label': t('stop.field'),
       });
       input.value = value ? String(value) : '';
+      // The display's glow. A browser clips an input's text inside its own box, so a
+      // glow on the digits themselves gets cut: a copy of them behind it carries it.
+      const glow = el('span', { class: 'stop-glow', 'aria-hidden': 'true' });
+      const syncGlow = () => {
+        glow.textContent = input.value;
+      };
+      syncGlow();
       // Past the runtime the number turns red, and settles on the runtime once you
       // leave the field (or save).
       const typed = () => parseInt(input.value, 10) || 0;
@@ -37,15 +44,19 @@ export function openStopSheet({ title, total = 0, value = 0, note = null, onSave
       input.addEventListener('input', () => {
         input.value = input.value.replace(/\D/g, '').slice(0, 3);
         input.classList.toggle('is-over', !!total && typed() > total);
+        glow.classList.toggle('is-over', input.classList.contains('is-over'));
+        syncGlow();
       });
       input.addEventListener('blur', () => {
         if (input.value) input.value = String(minute());
         input.classList.remove('is-over');
+        glow.classList.remove('is-over');
+        syncGlow();
       });
 
       const display = el('label', { class: 'stop-display' }, [
         el('span', { class: 'stop-display-lbl', text: t('stop.display'), 'aria-hidden': 'true' }),
-        input,
+        el('span', { class: 'stop-counter' }, [glow, input]),
         el('span', { class: 'stop-display-of', text: total ? t('stop.displayOf', { total }) : t('stop.displayMin') }),
       ]);
       const clear = el('button', { class: 'rewatch-step-btn stop-clear', type: 'button', 'aria-label': t('stop.clear') }, [
@@ -54,6 +65,8 @@ export function openStopSheet({ title, total = 0, value = 0, note = null, onSave
       clear.addEventListener('click', () => {
         input.value = '';
         input.classList.remove('is-over');
+        glow.classList.remove('is-over');
+        syncGlow();
         input.focus();
       });
 

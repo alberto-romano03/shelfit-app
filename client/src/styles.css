@@ -2392,21 +2392,21 @@ textarea.note-sheet-input:focus {
 }
 
 /* ===================== Stopped at ===================== */
-/* The field is a player's front-panel display you type the minute into. It sits in
-   the middle of the sheet; the clear key hangs off its right without moving it. */
+/* The field is a player's front-panel display you type the minute into. It runs
+   from the sheet's left edge to the clear key; the counter sits in its middle. */
 .stop-field {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
-  column-gap: 12px;
+  gap: 12px;
   margin-top: 6px;
 }
 .stop-display {
-  grid-column: 2;
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 10px 18px 9px;
+  padding: 10px 16px 9px;
   border-radius: var(--r-md);
   background: #070908; /* the display stays dark in both themes, like the device */
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 6px 14px rgba(0, 0, 0, 0.6);
@@ -2416,10 +2416,10 @@ textarea.note-sheet-input:focus {
   transition: box-shadow var(--dur-short) var(--ease-state);
 }
 .stop-display:focus-within {
-  box-shadow: inset 0 0 0 1px rgba(126, 217, 154, 0.55), 0 0 0 3px rgba(126, 217, 154, 0.22),
-    inset 0 6px 14px rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 0 0 1.5px rgba(126, 217, 154, 0.55), inset 0 6px 14px rgba(0, 0, 0, 0.6);
 }
 .stop-display-lbl {
+  flex: 1; /* label and total share the sides equally, so the counter is centred */
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -2427,19 +2427,40 @@ textarea.note-sheet-input:focus {
   opacity: 0.55;
   transform: translateY(-6px);
 }
+.stop-counter {
+  position: relative;
+  display: inline-block;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+/* The glow, on a copy of the digits behind the input: an input clips its own text,
+   so a text-shadow on it would be cut at its edges. */
+.stop-glow {
+  position: absolute;
+  inset: 0;
+  text-align: right;
+  white-space: pre;
+  color: transparent;
+  text-shadow: 0 0 10px rgba(126, 217, 154, 0.6);
+  pointer-events: none;
+}
+.stop-glow.is-over {
+  text-shadow: none;
+}
 .stop-input {
+  position: relative; /* above its glow */
   width: 3ch;
   padding: 0;
   border: 0;
   background: none;
   outline: none;
+  -webkit-appearance: none;
+  appearance: none;
   font: inherit;
-  font-size: 30px;
-  font-weight: 700;
   text-align: right;
   color: #7ed99a;
   caret-color: #7ed99a;
-  text-shadow: 0 0 10px rgba(126, 217, 154, 0.55);
 }
 .stop-input::placeholder {
   color: #7ed99a;
@@ -2454,16 +2475,15 @@ textarea.note-sheet-input:focus {
   text-shadow: none;
 }
 .stop-display-of {
+  flex: 1;
   font-size: 15px;
   font-weight: 600;
   color: #7ed99a;
   opacity: 0.5;
   white-space: nowrap;
 }
-.stop-clear {
-  grid-column: 3;
-  justify-self: start;
-  color: var(--text-secondary);
+.stop-field .stop-clear {
+  color: var(--danger); /* over the round button's own text colour, defined later */
 }
 .stop-clear .btn-lucide {
   width: 20px;
@@ -2480,7 +2500,6 @@ textarea.note-sheet-input:focus {
   place-items: center;
   width: 48px;
   height: 48px;
-  margin-bottom: 4px; /* level with the status button, which keeps 4px under it */
   padding: 0;
   border: 1.5px solid var(--border);
   border-radius: 50%;
@@ -2498,6 +2517,9 @@ textarea.note-sheet-input:focus {
 .stop-key-ico {
   width: 20px;
   height: 20px;
+  /* The timer's dial sits below the glyph's centre (its button is on top), so it reads
+     low in a circle: lift it to centre the dial itself. */
+  transform: translateY(-1.5px);
   background-color: currentColor;
   -webkit-mask: center / contain no-repeat;
   mask: center / contain no-repeat;
