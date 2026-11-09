@@ -101,6 +101,10 @@
   --scrim: rgba(0, 0, 0, 0.7);
   --scrim-soft: rgba(0, 0, 0, 0.4);
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  /* A focused field only turns its thin 1px border accent: nothing inside it, no
+     halo outside (a halo read as a second border). Kept as a token so every field
+     and pill focuses the same way. */
+  --focus-edge: none;
   --disabled: 0.4;
   --on-accent: #000;
 
@@ -914,7 +918,7 @@ button:active,
 /* Focus lands on the select, so the ring has to be drawn by the wrapper. */
 .selpill:focus-within {
   border-color: var(--accent);
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--focus-edge);
 }
 .selpill-key,
 .selpill-val,
@@ -2366,13 +2370,7 @@ body.season-active #app {
   color: var(--text-secondary);
   opacity: 0.7;
 }
-/* The note input reads as a normal field: a single clean border. On focus we
-   only deepen the border colour — no box-shadow ring (that halo followed the
-   rounded corners and looked like a second, doubled border). */
-textarea.note-sheet-input:focus {
-  border-color: color-mix(in srgb, var(--text-secondary) 45%, var(--border));
-  box-shadow: none;
-}
+/* The note focuses like every other field: its thin border turns accent. */
 /* Note sheet footer: Cancel + Confirm side by side (equal width), Delete below. */
 .note-sheet-footer {
   display: flex;
@@ -3109,7 +3107,7 @@ textarea.note-sheet-input:focus {
 }
 .fc-field:focus-within {
   border-color: var(--accent);
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--focus-edge);
 }
 .fc-ico {
   flex: 0 0 auto;
@@ -4320,7 +4318,7 @@ textarea.text-field {
 }
 .pe-name-wrap:focus-within {
   border-color: var(--accent);
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--focus-edge);
 }
 .pe-name {
   flex: 1 1 auto;
@@ -8599,14 +8597,13 @@ textarea.notes {
 }
 /* Label → field gap and inter-field rhythm are uniform across every form. */
 .field-label { margin: 16px 0 8px; }
-/* Focus never shifts layout: border-colour swap (same width) + a box-shadow
-   ring (box-shadow is outside layout flow). */
+/* Focus never shifts layout: only the thin border turns accent (same width). */
 .text-field:focus,
 textarea.notes:focus,
 .search-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--focus-edge);
 }
 
 /* ===================== Monthly Rental Receipt ===================== */
