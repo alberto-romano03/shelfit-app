@@ -7,7 +7,7 @@ import { api, createApi, isAbortError, markLibraryChanged } from '../api.js';
 import { onCleanup } from '../router.js';
 import { currentTheme, revealTheme } from '../theme.js';
 import { getPref, setPref } from '../prefs.js';
-import { pushSupported, enablePush, disablePush, currentPushEndpoint } from '../push.js';
+import { pushSupported, enablePush, disablePush, currentPushEndpoint, syncPushLang } from '../push.js';
 import { signOut } from '../signOut.js';
 import { buildKodiSettings } from './kodiSettings.js';
 import { buildMagicLinks } from './magicLinks.js';
@@ -700,6 +700,40 @@ export default async function Settings(container) {
     });
     testRow.el.style.display = 'none';
 
+    // The occasional reminders, each on or off for the member (all devices).
+    // Shown with the test row, once this device receives notifications.
+    const REMINDERS = [
+      ['dusty', 'clock'],
+      ['cinema', 'ticket'],
+      ['comeback', 'refresh-cw'],
+    ];
+    const reminderRows = REMINDERS.map(([kind, icon]) => {
+      const row = settingsRow({
+        icon,
+        label: t(`settings.notif.${kind}`),
+        sub: t(`settings.notif.${kind}Sub`),
+        control: 'switch',
+        onChange: async (wantOn) => {
+          try {
+            await api.pushReminders({ [kind]: wantOn });
+          } catch {
+            row.setChecked(!wantOn);
+            toast(t('settings.notif.updateFailed'), 'bad');
+          }
+        },
+      });
+      row.setChecked(true);
+      row.el.style.display = 'none';
+      return { kind, row };
+    });
+    const showDeviceRows = (on) => {
+      testRow.el.style.display = on ? '' : 'none';
+      for (const { row } of reminderRows) row.el.style.display = on ? '' : 'none';
+    };
+    const paintReminders = (prefs) => {
+      for (const { kind, row } of reminderRows) row.setChecked(!prefs || prefs[kind] !== false);
+    };
+
     const notifRow = settingsRow({
       icon: 'tv',
       label: t('settings.notif.newEpisodes'),
@@ -713,12 +747,12 @@ export default async function Settings(container) {
             await enablePush();
             setPref('push', true);
             toast(t('settings.notif.enabled'), 'ok');
-            testRow.el.style.display = '';
+            showDeviceRows(true);
           } else {
             await disablePush();
             setPref('push', false);
             toast(t('settings.notif.disabled'), 'ok');
-            testRow.el.style.display = 'none';
+            showDeviceRows(false);
           }
         } catch (err) {
           notifRow.setChecked(!wantOn); // revert the switch on failure
@@ -728,7 +762,7 @@ export default async function Settings(container) {
         }
       },
     });
-    section.append(notifRow.el, testRow.el);
+    section.append(notifRow.el, ...reminderRows.map((r) => r.row.el), testRow.el);
 
     // Reflect whether THIS device notifies the signed-in member (another
     // member may have enabled notifications on it before).
@@ -738,7 +772,10 @@ export default async function Settings(container) {
         const on = !!(cfg && cfg.subscribed);
         notifRow.setChecked(on);
         setPref('push', on);
-        testRow.el.style.display = on ? '' : 'none';
+        paintReminders(cfg && cfg.reminders);
+        showDeviceRows(on);
+        // A device set up before notifications spoke its language learns it here.
+        if (on && cfg.lang !== getLang()) syncPushLang();
       })
       .catch(() => {});
   }

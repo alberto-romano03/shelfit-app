@@ -8,7 +8,7 @@
 // in those calls.
 
 import { api } from './api.js';
-import { t } from './i18n.js';
+import { t, getLang, onLangChange } from './i18n.js';
 
 export function pushSupported() {
   return (
@@ -66,9 +66,23 @@ export async function enablePush() {
       applicationServerKey: urlBase64ToUint8Array(cfg.publicKey),
     });
   }
-  await api.pushSubscribe(sub.toJSON());
+  await api.pushSubscribe(sub.toJSON(), getLang());
   return true;
 }
+
+// Notifications are written in the device's UI language, so a device that
+// switches language tells the server. Only the caller's own device changes: on
+// a device another member set up, the server ignores it.
+export async function syncPushLang(lang = getLang()) {
+  const endpoint = await currentPushEndpoint();
+  if (!endpoint) return;
+  try {
+    await api.pushLang(endpoint, lang);
+  } catch {
+    /* not this member's device, or offline: Settings sends it again */
+  }
+}
+if (pushSupported()) onLangChange((lang) => syncPushLang(lang));
 
 // Stop notifications on this device: remove it on the server, then unsubscribe
 // the browser.

@@ -359,6 +359,32 @@ export const MIGRATIONS = [
       `);
     },
   },
+  {
+    // Occasional reminders (server/reminders.js): a series left untouched, a
+    // movie on the list opening in cinemas, a finished series coming back.
+    // push_nudges logs what was sent, so each event goes out once and the
+    // reminders keep to their budget. Each device keeps the UI language it was
+    // set up in, so a notification reads in it. A member's reminder switches
+    // live on their row: NULL means all on.
+    version: 10,
+    name: 'push reminders',
+    up(db) {
+      db.exec(`
+        CREATE TABLE push_nudges (
+          id      INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          kind    TEXT NOT NULL,              -- dusty | cinema | comeback | episodes
+          item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
+          key     TEXT NOT NULL,              -- what the event is, for once-only kinds
+          sent_at INTEGER NOT NULL,           -- ms epoch
+          UNIQUE(user_id, kind, key)
+        );
+        CREATE INDEX idx_push_nudges_user ON push_nudges(user_id, sent_at);
+        ALTER TABLE push_subscriptions ADD COLUMN lang TEXT;
+        ALTER TABLE users ADD COLUMN push_reminders TEXT;
+      `);
+    },
+  },
 ];
 
 // Filesystem half of v1: the one custom profile photo moves from

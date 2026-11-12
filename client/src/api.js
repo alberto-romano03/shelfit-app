@@ -443,7 +443,9 @@ function buildApi(signal) {
     // signed-in member, unsubscribe removes just this device.
     pushConfig: (endpoint) =>
       api.get(`/api/push/config${endpoint ? `?endpoint=${encodeURIComponent(endpoint)}` : ''}`),
-    pushSubscribe: (subscription) => api.post('/api/push/subscribe', { subscription }),
+    pushSubscribe: (subscription, lang) => api.post('/api/push/subscribe', { subscription, lang }),
+    pushReminders: (prefs) => api.put('/api/push/reminders', prefs),
+    pushLang: (endpoint, lang) => api.put('/api/push/lang', { endpoint, lang }),
     pushUnsubscribe: (endpoint) => api.post('/api/push/unsubscribe', { endpoint }),
     pushTest: () => api.post('/api/push/test'),
   };

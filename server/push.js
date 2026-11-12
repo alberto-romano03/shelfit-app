@@ -13,6 +13,7 @@
 import crypto from 'node:crypto';
 import db from './db.js';
 import { readMetaSync, readSeasonMetaSync } from './cache.js';
+import { getTmdbLanguage } from './language.js';
 
 // --- settings helpers ------------------------------------------------------
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
@@ -33,15 +34,23 @@ function setSetting(key, value) {
 const activeShowsStmt = db.prepare(
   "SELECT id, tmdb_id, title_it, title_orig FROM items WHERE user_id = ? AND type = 'show' AND status IN ('watching','completed','paused')"
 );
-const userSubsStmt = db.prepare('SELECT id, endpoint, keys FROM push_subscriptions WHERE user_id = ?');
+const userSubsStmt = db.prepare('SELECT id, endpoint, keys, lang FROM push_subscriptions WHERE user_id = ?');
 const usersWithSubsStmt = db.prepare('SELECT DISTINCT user_id FROM push_subscriptions');
 const hasSubStmt = db.prepare('SELECT 1 FROM push_subscriptions WHERE user_id = ? AND endpoint = ?');
 // One browser, one owner: whoever enables notifications on it last.
 const upsertSubStmt = db.prepare(
-  `INSERT INTO push_subscriptions (user_id, endpoint, keys, created_at) VALUES (?, ?, ?, ?)
-   ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, keys = excluded.keys`
+  `INSERT INTO push_subscriptions (user_id, endpoint, keys, created_at, lang) VALUES (?, ?, ?, ?, ?)
+   ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, keys = excluded.keys,
+     lang = COALESCE(excluded.lang, push_subscriptions.lang)`
+);
+const getRemindersStmt = db.prepare('SELECT push_reminders FROM users WHERE id = ?');
+const setRemindersStmt = db.prepare('UPDATE users SET push_reminders = ? WHERE id = ?');
+const logNudgeStmt = db.prepare(
+  'INSERT OR IGNORE INTO push_nudges (user_id, kind, item_id, key, sent_at) VALUES (?, ?, ?, ?, ?)'
 );
 const deleteSubStmt = db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?');
+const setLangStmt = db.prepare('UPDATE push_subscriptions SET lang = ? WHERE user_id = ? AND endpoint = ?');
+const deviceLangStmt = db.prepare('SELECT lang FROM push_subscriptions WHERE user_id = ? AND endpoint = ?');
 const deleteUserSubsStmt = db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?');
 const deleteSubByIdStmt = db.prepare('DELETE FROM push_subscriptions WHERE id = ?');
 
@@ -52,14 +61,63 @@ const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:shelfit@example.com';
 
 // --- subscriptions ---------------------------------------------------------
 // A browser PushSubscription.toJSON(): { endpoint, keys: { p256dh, auth } }.
-export function saveSubscription(userId, sub) {
-  upsertSubStmt.run(userId, sub.endpoint, JSON.stringify(sub.keys), Date.now());
+// `lang` is the UI language of that device (it | en), so what it receives reads
+// in it; a device that never said keeps the one it had, or the metadata one.
+export function saveSubscription(userId, sub, lang) {
+  const l = PUSH_LANGS.includes(lang) ? lang : null;
+  upsertSubStmt.run(userId, sub.endpoint, JSON.stringify(sub.keys), Date.now(), l);
+}
+
+export const PUSH_LANGS = ['it', 'en'];
+// The language of the caller's own device behind `endpoint` (another member's
+// device is never touched). Returns whether a row changed.
+export function setDeviceLang(userId, endpoint, lang) {
+  if (!PUSH_LANGS.includes(lang)) return false;
+  return setLangStmt.run(lang, userId, endpoint).changes > 0;
+}
+export function deviceLang(userId, endpoint) {
+  const row = endpoint ? deviceLangStmt.get(userId, endpoint) : null;
+  return row ? row.lang : null;
+}
+// A device with no language of its own reads the metadata language.
+function fallbackLang() {
+  return getTmdbLanguage().startsWith('it') ? 'it' : 'en';
+}
+
+// --- reminder switches (per member) ---------------------------------------
+// The occasional reminders in server/reminders.js, each one on unless the
+// member turned it off.
+export const REMINDER_KINDS = ['dusty', 'cinema', 'comeback'];
+export function getReminderPrefs(userId) {
+  let stored = {};
+  try {
+    const row = getRemindersStmt.get(userId);
+    stored = (row && row.push_reminders && JSON.parse(row.push_reminders)) || {};
+  } catch {
+    stored = {};
+  }
+  return Object.fromEntries(REMINDER_KINDS.map((k) => [k, stored[k] !== false]));
+}
+export function setReminderPrefs(userId, patch) {
+  const next = getReminderPrefs(userId);
+  for (const k of REMINDER_KINDS) if (typeof (patch || {})[k] === 'boolean') next[k] = patch[k];
+  setRemindersStmt.run(JSON.stringify(next), userId);
+  return next;
+}
+
+// What was sent, so once-only events stay once and reminders keep their budget.
+export function logNudge(userId, kind, itemId, key) {
+  logNudgeStmt.run(userId, kind, itemId || null, String(key), Date.now());
 }
 // Whether `userId` gets notifications on the device behind `endpoint` (or, with
 // no endpoint, on any device).
 export function isSubscribed(userId, endpoint) {
   if (endpoint) return !!hasSubStmt.get(userId, endpoint);
   return userSubsStmt.all(userId).length > 0;
+}
+// Members with at least one device to notify.
+export function subscribedUsers() {
+  return usersWithSubsStmt.all().map((r) => r.user_id);
 }
 // Stop notifications for `userId` on one device, or on all of them.
 export function removeSubscription(userId, endpoint) {
@@ -74,7 +132,7 @@ function subscriptionsOf(userId) {
     } catch {
       /* unusable row: delivery fails and it gets pruned */
     }
-    return { id: r.id, endpoint: r.endpoint, keys };
+    return { id: r.id, endpoint: r.endpoint, keys, lang: PUSH_LANGS.includes(r.lang) ? r.lang : fallbackLang() };
   });
 }
 
@@ -193,9 +251,12 @@ export async function sendPush(subscription, payloadObj, logger) {
 
 // Deliver one payload to every device of a member, dropping devices whose
 // subscription is gone (404/410). Returns how many deliveries succeeded.
-async function sendToUser(userId, payloadObj, logger) {
+// `payload` is the object itself, or a function of the device's language that
+// returns it, for a notification written in each device's own language.
+export async function sendToUser(userId, payload, logger) {
   let delivered = 0;
   for (const sub of subscriptionsOf(userId)) {
+    const payloadObj = typeof payload === 'function' ? payload(sub.lang) : payload;
     const status = await sendPush(sub, payloadObj, logger);
     if (status === 404 || status === 410) {
       deleteSubByIdStmt.run(sub.id);
@@ -312,8 +373,10 @@ async function notifyUser(userId, lastDate, todayDate, logger) {
       logger
     );
   }
-  if (newlyAired.length && logger) {
-    logger.info(`push: notified user ${userId} about ${newlyAired.length} series with new episodes`);
+  if (newlyAired.length) {
+    // Logged so an occasional reminder does not land on the same day.
+    logNudge(userId, 'episodes', null, todayDate);
+    if (logger) logger.info(`push: notified user ${userId} about ${newlyAired.length} series with new episodes`);
   }
 }
 

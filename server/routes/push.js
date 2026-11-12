@@ -10,6 +10,10 @@ import {
   isSubscribed,
   removeSubscription,
   sendTest,
+  getReminderPrefs,
+  setReminderPrefs,
+  setDeviceLang,
+  deviceLang,
 } from '../push.js';
 
 // Validate the shape the browser's PushSubscription.toJSON() produces.
@@ -33,18 +37,26 @@ export default async function pushRoutes(fastify) {
   // `subscribed`: whether this device notifies the signed-in member (without an
   // endpoint: whether any of their devices does).
   fastify.get('/api/push/config', async (request) => {
-    const subscribed = isSubscribed(request.user.id, endpointOf(request.query.endpoint));
-    return { enabled: subscribed, subscribed, publicKey: getVapidPublicKey() };
+    const endpoint = endpointOf(request.query.endpoint);
+    const subscribed = isSubscribed(request.user.id, endpoint);
+    return {
+      enabled: subscribed,
+      subscribed,
+      lang: deviceLang(request.user.id, endpoint),
+      publicKey: getVapidPublicKey(),
+      reminders: getReminderPrefs(request.user.id),
+    };
   });
 
-  // POST /api/push/subscribe { subscription }: this device now notifies the caller.
+  // POST /api/push/subscribe { subscription, lang? }: this device now notifies
+  // the caller, in `lang` (the device's UI language) when given.
   fastify.post('/api/push/subscribe', async (request, reply) => {
     const sub = request.body && request.body.subscription;
     if (!validSubscription(sub)) {
       reply.code(400);
       return { error: 'invalid subscription' };
     }
-    saveSubscription(request.user.id, sub);
+    saveSubscription(request.user.id, sub, request.body.lang);
     return { ok: true };
   });
 
@@ -54,6 +66,23 @@ export default async function pushRoutes(fastify) {
   fastify.post('/api/push/unsubscribe', async (request) => {
     removeSubscription(request.user.id, endpointOf((request.body || {}).endpoint));
     return { ok: true };
+  });
+
+  // PUT /api/push/lang { endpoint, lang }: the UI language of the caller's own
+  // device, so its notifications read in it.
+  fastify.put('/api/push/lang', async (request, reply) => {
+    const endpoint = endpointOf((request.body || {}).endpoint);
+    if (!endpoint || !setDeviceLang(request.user.id, endpoint, request.body.lang)) {
+      reply.code(404);
+      return { error: 'no such device' };
+    }
+    return { ok: true };
+  });
+
+  // PUT /api/push/reminders { dusty?, cinema?, comeback? }: the caller's
+  // occasional reminders on or off (all devices). Returns the full set.
+  fastify.put('/api/push/reminders', async (request) => {
+    return { reminders: setReminderPrefs(request.user.id, request.body || {}) };
   });
 
   // POST /api/push/test: a test notification to the caller's devices.
