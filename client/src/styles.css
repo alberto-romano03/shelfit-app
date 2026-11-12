@@ -10960,27 +10960,25 @@ textarea.lend-message-input:focus {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-/* Same clip-path and paper split as .cine-top, for the same iOS reason (here the
-   deal-in animation and the drop-shadow composite the banner). */
-.cine-mini-top {
-  border-radius: 10px 10px 0 0;
-  overflow: hidden;
-  clip-path: inset(0 round 10px 10px 0 0);
-}
-/* The banner is a mountPoster container: the .skeleton shimmer shows until the
-   backdrop decodes. Its corners come from .cine-mini-top, so the shimmer's own
-   radius is dropped. */
+/* The rounded top corners are drawn by the banner and its image themselves, with
+   no clip on an ancestor. In the collection, a scrolling grid of filtered,
+   animated miniatures, Safari dropped the clipped part of each ticket (a
+   clip-path, as .cine-top uses) and only the stub showed. An image's own radius
+   still clips it once Safari gives it a layer of its own. */
 .cine-mini-banner {
   aspect-ratio: 16 / 9;
+  border-radius: 10px 10px 0 0;
+  overflow: hidden;
 }
 .cine-mini-banner.skeleton {
-  border-radius: 0;
+  border-radius: 10px 10px 0 0;
 }
 .cine-mini-banner img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: 10px 10px 0 0;
 }
 .cine-mini-body {
   background: var(--paper);
