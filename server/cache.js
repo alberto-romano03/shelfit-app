@@ -377,7 +377,11 @@ export async function ensureMovieCollectionField(tmdbId) {
 
 // Download + persist a show, all aired seasons, their posters and episode
 // stills. Future seasons (no aired episodes) are skipped. Returns the meta.
-export async function cacheShow(tmdbId, { force = false, signal } = {}) {
+// `light` (a background refresh of a series nobody opened, see metaBackfill.js):
+// refetch the series, but only the seasons that are new or still airing (the
+// latest one), and download only the images not already on disk. A full refresh
+// re-downloads every still of every season, too much to run across a library.
+export async function cacheShow(tmdbId, { force = false, signal, light = false } = {}) {
   const existing = readMetaSync('show', tmdbId);
   if (existing && !force && !wrongLanguage(existing)) return existing;
 
@@ -385,18 +389,22 @@ export async function cacheShow(tmdbId, { force = false, signal } = {}) {
   const meta = normalizeShow(raw);
   const dir = itemDir('show', tmdbId);
   const custom = customSlots('show', tmdbId);
+  const missing = (folder, name) => !light || !fs.existsSync(path.join(folder, name));
   await Promise.all([
     writeJson(metaPath('show', tmdbId), meta),
-    custom.poster
+    custom.poster || !missing(dir, 'poster.webp')
       ? null
       : saveImage(dir, 'poster.webp', IMG_SIZES.poster, meta.poster_path, { signal, maxWidth: 500 }),
-    custom.backdrop
+    custom.backdrop || !missing(dir, 'backdrop.webp')
       ? null
       : saveImage(dir, 'backdrop.webp', IMG_SIZES.backdrop, meta.backdrop_path, { signal, maxWidth: 900 }),
   ]);
 
+  const latestSeason = Math.max(0, ...meta.seasons.filter((s) => s.episode_count > 0).map((s) => s.season_number));
   for (const s of meta.seasons) {
     if (s.episode_count <= 0) continue; // future / empty season
+    // Light: a finished season already on disk is left as it is.
+    if (light && s.season_number !== latestSeason && readSeasonMetaSync(tmdbId, s.season_number)) continue;
     // Stop the whole chain the moment the client disconnects — for a show with
     // dozens of seasons this is what frees the backend.
     throwIfAborted(signal);
@@ -410,11 +418,12 @@ export async function cacheShow(tmdbId, { force = false, signal } = {}) {
       // long season that's dozens of serial CDN round-trips (the biggest latency
       // when adding a series). Batch them ~6 at a time, with an abort check before
       // each batch so navigate-away still stops the chain promptly.
-      const jobs = [
-        () => saveImage(sDir, 'poster.webp', IMG_SIZES.seasonPoster, seasonMeta.poster_path, { signal }),
-      ];
+      const jobs = [];
+      if (missing(sDir, 'poster.webp')) {
+        jobs.push(() => saveImage(sDir, 'poster.webp', IMG_SIZES.seasonPoster, seasonMeta.poster_path, { signal }));
+      }
       for (const ep of seasonMeta.episodes) {
-        if (ep.still_path) {
+        if (ep.still_path && missing(sDir, `ep${ep.episode_number}.webp`)) {
           jobs.push(() =>
             saveImage(sDir, `ep${ep.episode_number}.webp`, IMG_SIZES.thumb, ep.still_path, { signal })
           );
@@ -440,13 +449,13 @@ export async function cacheShow(tmdbId, { force = false, signal } = {}) {
 // and hammers TMDB. When there is no concurrency the build runs directly with
 // the caller's signal, preserving abort-on-disconnect.
 const inflightBuilds = new Map(); // `${type}:${tmdbId}` -> Promise<meta>
-export async function ensureCached(type, tmdbId, { force = false, signal } = {}) {
+export async function ensureCached(type, tmdbId, { force = false, signal, light = false } = {}) {
   const key = `${type}:${tmdbId}`;
   const existing = inflightBuilds.get(key);
   if (existing) return existing;
   const build = (async () => {
     if (type === 'movie') return cacheMovie(tmdbId, { force, signal });
-    return cacheShow(tmdbId, { force, signal });
+    return cacheShow(tmdbId, { force, signal, light });
   })();
   inflightBuilds.set(key, build);
   try {

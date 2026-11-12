@@ -1,10 +1,11 @@
-// Upcoming timeline: GET /api/upcoming returns a merged feed for watching series
-// — Watch Next (each series' next aired-but-unwatched episode), Coming Soon
-// (episodes airing in the next 7 days), and On the Horizon (next episode to
-// air). The season-file scan is memoized; the progress overlay is per-request.
+// Upcoming timeline: GET /api/upcoming returns a merged feed: Watch Next (each
+// watching series' next aired-but-unwatched episode), Coming Soon (watching
+// series' episodes airing in the next 7 days), and On the Horizon (the next
+// episode to air of every series in the library, whatever its status). The
+// season-file scan is memoized; the progress overlay is per-request.
 
 import db from '../db.js';
-import { readMetaSync, readSeasonMetaSync } from '../cache.js';
+import { readMetaSync, readSeasonMetaSync, isStale } from '../cache.js';
 import { enqueueMeta } from '../metaBackfill.js';
 
 // Return YYYY-MM-DD for `offset` days from today (local date).
@@ -58,11 +59,11 @@ const memos = new Map();
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
 // All bound to the signed-in member: Up Next is built from their own series only.
-const watchingShowsStmt = db.prepare(
-  "SELECT * FROM items WHERE user_id = ? AND type = 'show' AND status = 'watching'"
-);
-const watchingShowIdsStmt = db.prepare(
-  "SELECT id, current_season FROM items WHERE user_id = ? AND type = 'show' AND status = 'watching'"
+// Every series is scanned (On the Horizon covers all of them); Watch Next and
+// Coming Soon keep to the ones being watched, read live on every request.
+const showsStmt = db.prepare("SELECT * FROM items WHERE user_id = ? AND type = 'show'");
+const showIdsStmt = db.prepare(
+  "SELECT id, status, current_season FROM items WHERE user_id = ? AND type = 'show'"
 );
 const progressOverlayStmt = db.prepare(
   `SELECT p.item_id, p.season, p.episode, p.watched_at, p.watch_count
@@ -74,32 +75,40 @@ const progressOverlayStmt = db.prepare(
 // window — logic UNCHANGED from the original endpoint — and (b) per-show ordered
 // episode lists that the fresh progress overlay turns into Watch Next entries.
 function buildScan(today, end, userId) {
-  const shows = watchingShowsStmt.all(userId);
+  const shows = showsStmt.all(userId);
 
   const upcoming = [];
   const scanned = [];
   let incomplete = false;
   for (const show of shows) {
+    // A series being watched holds the memo back until its data lands (What's
+    // Next needs it now); any other series just appears once it is fetched.
+    const watching = show.status === 'watching';
     const meta = readMetaSync('show', show.tmdb_id);
     if (!meta) {
       // Restored or imported but never fetched: fetch it in the background and
       // don't memoize, so the series appears as soon as its data lands.
-      incomplete = true;
+      if (watching) incomplete = true;
       enqueueMeta('show', show.tmdb_id);
       continue;
     }
+    // A series still airing whose cached data has aged learns about new episodes
+    // and seasons only through a refresh: queue one (paced, in the background), so
+    // a Shelved or Paused series reaches On the Horizon without being opened.
+    if (isStale(meta)) enqueueMeta('show', show.tmdb_id, { refresh: true });
     const orderedEps = [];
     for (const s of meta.seasons || []) {
       const sMeta = readSeasonMetaSync(show.tmdb_id, s.season_number);
       if (!sMeta) {
         if ((s.episode_count || 0) > 0) {
-          incomplete = true;
+          if (watching) incomplete = true;
           enqueueMeta('show', show.tmdb_id);
         }
         continue; // future season not cached → skip
       }
       for (const ep of sMeta.episodes) {
-        // --- Coming Soon: episodes airing within the next 7 days (unchanged) ---
+        // --- Coming Soon: episodes airing within the next 7 days (kept to the
+        // series being watched by the live filter below) ---
         if (ep.air_date && ep.air_date >= today && ep.air_date <= end) {
           upcoming.push({
             item_id: show.id,
@@ -156,10 +165,13 @@ export default async function upcomingRoutes(fastify) {
     const today = dayStr(0);
     const end = dayStr(7);
 
-    // Current watching membership + each show's current_season (fresh, cheap):
-    // read before the memo so a change in WHICH series are watching rebuilds it.
-    const watchingRows = watchingShowIdsStmt.all(userId);
-    const sig = watchingRows.map((r) => r.id).sort((a, b) => a - b).join(',');
+    // The library's series, their status and current_season (fresh, cheap): read
+    // before the memo so a series added or removed, or one moving in or out of
+    // Watching, rebuilds it.
+    const showRows = showIdsStmt.all(userId);
+    const watchingRows = showRows.filter((r) => r.status === 'watching');
+    const idList = (list) => list.map((r) => r.id).sort((a, b) => a - b).join(',');
+    const sig = `${idList(showRows)}|${idList(watchingRows)}`;
 
     let memo = memos.get(userId);
     if (
@@ -269,13 +281,15 @@ export default async function upcomingRoutes(fastify) {
       (e) => !nextIds.has(e.item_id) && watchingIds.has(e.item_id)
     );
 
-    // "On the Horizon" railway: each watching series' NEXT episode to air (the
-    // earliest episode with a FUTURE air date), derived entirely from the cached
-    // season data — no new TMDB calls. Ordered soonest-first. Series with no known
-    // future episode (ended, or next season not cached yet) are simply omitted.
+    // "On the Horizon" railway: the NEXT episode to air (the earliest episode with
+    // a FUTURE air date) of every series in the library, watching or not: a series
+    // you shelved or paused still has new episodes coming. Derived from the cached
+    // season data. Ordered soonest-first. Series with no known future episode
+    // (ended, or next season not cached yet) are simply omitted.
+    const inLibrary = new Set(showRows.map((r) => r.id));
     const horizon = [];
     for (const show of memo.shows) {
-      if (!watchingIds.has(show.id)) continue;
+      if (!inLibrary.has(show.id)) continue;
       let air = null;
       for (const ep of show.orderedEps) {
         // orderedEps is in season/episode order, i.e. broadcast order, so the

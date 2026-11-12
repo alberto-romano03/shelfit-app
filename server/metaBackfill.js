@@ -10,7 +10,7 @@
 // missing, and callers (library import, What's Next) enqueue titles on demand.
 
 import db from './db.js';
-import { ensureCached, readMetaSync, readSeasonMetaSync } from './cache.js';
+import { ensureCached, readMetaSync, readSeasonMetaSync, isStale } from './cache.js';
 import { scheduleStatsRecompute } from './stats.js';
 import { TMDB_API_KEY, TMDB_IMPORT_INTERVAL_MS } from './config.js';
 
@@ -44,7 +44,10 @@ export function metaState(type, tmdbId) {
   return null;
 }
 
-export function enqueueMeta(type, tmdbId) {
+// `refresh`: also refetch a series whose cached data is merely old (still airing,
+// past the cache age), not only one with missing files. On the Horizon uses it,
+// since it would otherwise never see a new season of a series nobody opens.
+export function enqueueMeta(type, tmdbId, { refresh = false } = {}) {
   if (!TMDB_API_KEY) return; // nothing could be fetched (tests, unconfigured install)
   const id = String(tmdbId);
   const key = `${type}:${id}`;
@@ -52,7 +55,7 @@ export function enqueueMeta(type, tmdbId) {
   const tried = lastTry.get(key);
   if (tried && Date.now() - tried < RETRY_MS) return;
   queued.add(key);
-  queue.push({ type, tmdbId: id });
+  queue.push({ type, tmdbId: id, refresh });
   drain();
 }
 
@@ -62,15 +65,16 @@ async function drain() {
   let fetched = 0;
   try {
     while (queue.length) {
-      const { type, tmdbId } = queue.shift();
+      const { type, tmdbId, refresh } = queue.shift();
       const key = `${type}:${tmdbId}`;
       lastTry.set(key, Date.now());
       try {
-        const state = metaState(type, tmdbId);
+        const state =
+          metaState(type, tmdbId) || (refresh && isStale(readMetaSync(type, tmdbId)) ? 'stale' : null);
         if (state) {
-          // force: a partial series already has its meta.json, which would
-          // otherwise make cacheShow return early without the missing seasons.
-          const meta = await ensureCached(type, tmdbId, { force: state === 'partial' });
+          // force: a partial or stale series already has its meta.json, which
+          // would otherwise make cacheShow return early without fetching again.
+          const meta = await ensureCached(type, tmdbId, { force: state !== 'missing', light: state === 'stale' });
           if (meta) {
             refreshTitlesStmt.run(
               meta.title_it || meta.title_orig || 'Untitled',
