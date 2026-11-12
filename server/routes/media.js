@@ -603,8 +603,9 @@ export default async function mediaRoutes(fastify) {
           watched: !!w,
           watch_count: w ? w.watch_count : 0,
           notes: w ? w.notes : null,
-          // Minute an unwatched episode was left at (watching it clears it).
-          stopped_at: w ? null : (stopMap[e.episode_number] ?? null),
+          // Minute the episode was left at, on a first watch or a rewatch
+          // (finishing it clears it).
+          stopped_at: stopMap[e.episode_number] ?? null,
         };
       });
 

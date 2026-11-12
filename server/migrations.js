@@ -342,6 +342,23 @@ export const MIGRATIONS = [
       `);
     },
   },
+  {
+    // A watched episode can be stopped partway too, when it is being rewatched:
+    // the minute then lasts until that rewatch is counted (its watch count goes
+    // up), whichever route counts it.
+    version: 9,
+    name: 'stopped at on a rewatch',
+    up(db) {
+      db.exec(`
+        CREATE TRIGGER episode_stop_cleared_when_rewatched AFTER UPDATE OF watch_count ON progress
+        WHEN NEW.watch_count > OLD.watch_count
+        BEGIN
+          DELETE FROM episode_stops
+           WHERE item_id = NEW.item_id AND season = NEW.season AND episode = NEW.episode;
+        END;
+      `);
+    },
+  },
 ];
 
 // Filesystem half of v1: the one custom profile photo moves from

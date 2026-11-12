@@ -66,8 +66,8 @@ const insertNoteRowStmt = db.prepare(
 const updateNoteStmt = db.prepare(
   'UPDATE progress SET notes = ? WHERE item_id = ? AND season = ? AND episode = ?'
 );
-// Stopped at, for an episode not yet watched (a progress row means watched, and
-// inserting one clears this through a trigger; see migration 8).
+// Stopped at, for an episode being watched or rewatched. Marking it watched, or
+// counting a rewatch, clears it through a trigger (migrations 8 and 9).
 const upsertStopStmt = db.prepare(
   `INSERT INTO episode_stops (item_id, season, episode, stopped_at, updated_at)
    VALUES (?, ?, ?, ?, ?)
@@ -388,8 +388,8 @@ export default async function progressRoutes(fastify) {
   );
 
   // PUT /api/progress/:item_id/:season/:episode/stop { stopped_at } → the minute
-  // an unwatched episode was left at; 0 or null clears it. A watched episode has
-  // nothing to resume, so it is refused.
+  // an episode was left at; 0 or null clears it. A watched episode takes one too
+  // (a rewatch stopped partway); counting the rewatch clears it (migration 9).
   fastify.put(
     '/api/progress/:item_id/:season/:episode/stop',
     async (request, reply) => {
@@ -404,10 +404,6 @@ export default async function progressRoutes(fastify) {
       if (!item || item.type !== 'show') {
         reply.code(404);
         return { error: 'show not found' };
-      }
-      if (getProgressIdStmt.get(item.id, season, episode)) {
-        reply.code(409);
-        return { error: 'episode already watched' };
       }
       if (minute === null) deleteStopStmt.run(item.id, season, episode);
       else upsertStopStmt.run(item.id, season, episode, minute, Date.now());

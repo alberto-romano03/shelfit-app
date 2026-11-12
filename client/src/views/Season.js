@@ -25,7 +25,6 @@ import {
   skelText,
   toast,
   confirmModal,
-  openSheet,
   openWatchCountModal,
   epLabel,
   formatDate,
@@ -33,7 +32,6 @@ import {
   lucideIcon,
   clear,
   stateBlock,
-  typewriterPlaceholder,
 } from '../ui.js';
 import { imageCache } from '../imageCache.js';
 import { isServerReachable, markDegraded } from '../network.js';
@@ -373,7 +371,7 @@ export default async function Season(container, params) {
       titleText.textContent = `${epLabel(data.season_number, ep.episode_number)} · ${ep.name || ''}`;
       noteDot.style.display = ep.notes ? '' : 'none';
       // An episode left partway reads where you stopped, in green, in place of its length.
-      const stopped = !ep.watched && ep.stopped_at > 0;
+      const stopped = ep.stopped_at > 0; // a first watch or a rewatch
       sub.textContent = ep.air_date ? formatDate(ep.air_date) : '';
       if (stopped) {
         if (ep.air_date) sub.append(' · ');
@@ -547,87 +545,40 @@ export default async function Season(container, params) {
 
   // --- Per-episode interactions (unchanged behaviour; row updates go through
   // refreshEp instead of replacing DOM nodes) --------------------------------
-  // Tapping an episode: its note, and for one not yet watched, where you stopped.
-  // Only what changed is saved. A note on an unwatched episode still records it as
-  // watched (as before), which also clears the minute.
+  // Tapping an episode: where you stopped (a first watch, or a rewatch of one
+  // already ticked) and its note. Only what changed is saved. A note on an
+  // unwatched episode still records it as watched (as before), which also clears
+  // the minute; counting a rewatch clears it the same way.
   function openEpisodeSheet(ep) {
     const existing = ep.notes || '';
-    const before = ep.watched ? 0 : ep.stopped_at || 0;
+    const before = ep.stopped_at || 0;
     const label = epLabel(data.season_number, ep.episode_number);
     const placeholder = t(NOTE_PLACEHOLDERS[Math.floor(Math.random() * NOTE_PLACEHOLDERS.length)]);
-    const note = { value: existing, placeholder };
-    const saveNote = async (value) => {
-      if (value === existing) return;
-      await api.episodeNotes(id, data.season_number, ep.episode_number, value);
-      ep.notes = value;
-      refreshEp(ep); // refresh the note dot
-      toast(value ? t('season.noteSaved') : t('season.noteDeleted'), 'ok');
-    };
-    if (ep.watched) {
-      // Nothing to resume in a watched episode: the note alone, as before.
-      openNoteOnly(ep, label, note, saveNote);
-      return;
-    }
     openStopSheet({
       title: `${label} · ${ep.name || ''}`,
       total: ep.runtime || 0,
       value: before,
-      note,
+      note: { value: existing, placeholder },
       onSave: async (minute, noteText) => {
         if (minute !== before) {
           await api.episodeStop(id, data.season_number, ep.episode_number, minute);
           ep.stopped_at = minute || null;
-          const len = ep.runtime > 0 ? ep.runtime : minute;
-          minutesLeft = minutesLeft === null ? null : Math.max(0, minutesLeft - Math.min(minute, len) + Math.min(before, len));
-          paintProgress();
+          // Only an episode still to watch counts toward the season's time left.
+          if (!ep.watched && minutesLeft !== null) {
+            const len = ep.runtime > 0 ? ep.runtime : minute;
+            minutesLeft = Math.max(0, minutesLeft - Math.min(minute, len) + Math.min(before, len));
+            paintProgress();
+          }
           refreshEp(ep);
         }
-        await saveNote(noteText);
+        if (noteText !== existing) {
+          await api.episodeNotes(id, data.season_number, ep.episode_number, noteText);
+          ep.notes = noteText;
+          refreshEp(ep); // refresh the note dot
+          toast(noteText ? t('season.noteSaved') : t('season.noteDeleted'), 'ok');
+        }
       },
     });
-  }
-  // The same sheet, holding only the note (a watched episode).
-  function openNoteOnly(ep, label, note, saveNote) {
-    openSheet(
-      (sheet, close) => {
-        const textarea = el('textarea', { class: 'text-field note-sheet-input', rows: '6' });
-        textarea.value = note.value;
-        const stopNoteTypewriter = typewriterPlaceholder(textarea, note.placeholder);
-        async function save(value) {
-          stopNoteTypewriter();
-          try {
-            await saveNote(value);
-          } catch (err) {
-            toast(err.message, 'bad');
-          }
-          close();
-        }
-        const footerChildren = [
-          el('div', { class: 'note-sheet-actions' }, [
-            el('button', { class: 'btn btn-secondary', onClick: () => { stopNoteTypewriter(); close(); } }, [
-              lucideIcon('x', 'btn-lucide'),
-              el('span', { text: t('common.cancel') }),
-            ]),
-            el('button', { class: 'btn btn-primary', onClick: () => save(textarea.value.trim()) }, [
-              lucideIcon('check', 'btn-lucide'),
-              el('span', { text: t('season.confirm') }),
-            ]),
-          ]),
-        ];
-        if (note.value) {
-          footerChildren.push(
-            el('button', { class: 'link-btn link-danger note-delete', text: t('season.deleteNote'), onClick: () => save('') })
-          );
-        }
-        sheet.append(
-          el('div', { class: 'sheet-header' }, [el('h3', { text: t('season.noteTitle', { ep: label }) })]),
-          el('div', { class: 'sheet-body' }, [textarea]),
-          el('div', { class: 'sheet-footer note-sheet-footer' }, footerChildren)
-        );
-        setTimeout(() => textarea.focus(), 60);
-      },
-      { compact: true }
-    );
   }
 
   async function onCheck(ep) {
@@ -666,6 +617,9 @@ export default async function Season(container, params) {
       onConfirm: async (count) => {
         const res = await api.setEpisodeCount(id, data.season_number, ep.episode_number, count);
         const newCount = res.watch_count || 0;
+        // A rewatch counted: the minute it was stopped at goes with it (the
+        // server clears it too).
+        if (newCount > (ep.watch_count || 0)) ep.stopped_at = null;
         if (newCount <= 0) {
           ep.watched = false;
           ep.watch_count = 0;

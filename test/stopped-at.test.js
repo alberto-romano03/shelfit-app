@@ -90,9 +90,25 @@ describe('stopped at', () => {
     assert.equal(h.db.prepare('SELECT COUNT(*) AS n FROM episode_stops').get().n, 0);
   });
 
-  it('refuses a minute on a watched episode', async () => {
+  it('keeps a minute on a watched episode being rewatched, until the rewatch counts', async () => {
     await a.post('/api/progress', { item_id: show, season: 1, episode: 1 });
-    assert.equal((await stop(1, 15)).status, 409);
+    await a.post('/api/progress', { item_id: show, season: 1, episode: 2 });
+    assert.equal((await stop(1, 15)).status, 200);
+    assert.equal((await stop(2, 25)).status, 200);
+    let s = await season();
+    assert.equal(s.episodes[0].stopped_at, 15);
+    assert.equal(s.minutes_left, 40); // a watched episode is not counted as left
+    await a.post('/api/progress/rewatch', { item_id: show, season: 1, episode: 1 });
+    await a.post('/api/progress/set-count', { item_id: show, season: 1, episode: 2, watch_count: 3 });
+    s = await season();
+    assert.deepEqual(s.episodes.map((e) => e.stopped_at), [null, null, null]);
+  });
+
+  it('keeps a rewatch minute when the count is only corrected down', async () => {
+    await a.post('/api/progress/set-count', { item_id: show, season: 1, episode: 1, watch_count: 3 });
+    await stop(1, 12);
+    await a.post('/api/progress/set-count', { item_id: show, season: 1, episode: 1, watch_count: 2 });
+    assert.equal((await season()).episodes[0].stopped_at, 12);
   });
 
   it('keeps one member out of another member\'s series', async () => {
