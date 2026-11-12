@@ -33,6 +33,7 @@ import { resetGridSection } from './views/grid.js';
 import { resetUpcoming, rebuildUpcoming } from './views/Upcoming.js';
 import { preloader } from './preloader.js';
 import { markBootSettled } from './warmup.js';
+import { getExplore } from './offlineCache.js';
 
 initTheme();
 initI18n();
@@ -300,6 +301,8 @@ preloader
   .catch(() => {})
   .finally(() => {
     markBootSettled(); // dialog warm-ups (warmup.js) may start now
+    // An Explore copy past its six hours is removed even if Search is not opened.
+    (window.requestIdleCallback || setTimeout)(() => getExplore());
     preloader.runTier2().catch(() => {});
   });
 

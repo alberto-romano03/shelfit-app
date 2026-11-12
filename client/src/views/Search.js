@@ -30,6 +30,7 @@ import {
 import { isServerReachable, markDegraded } from '../network.js';
 import { buildStatusBento } from '../statusSelect.js';
 import { pget, pset, PK } from '../persist.js';
+import { getExplore, saveExplore, markExploreDirty, EXPLORE_MAX_MS } from '../offlineCache.js';
 import { t } from '../i18n.js';
 
 // A query to pre-fill and run automatically the next time the Search view mounts.
@@ -41,22 +42,26 @@ export function setPendingSearch(q) {
   pendingQuery = typeof q === 'string' && q.trim() ? q.trim() : null;
 }
 
-// Explore payload, cached for the life of the tab so reopening Search paints the
-// rows instantly instead of refetching and rebuilding them on every visit.
+// Explore payload, valid for six hours (the same window as the server's TMDB
+// memo, which says how long it has left). Within it, Search paints the rows
+// straight from this copy, across visits and reloads (offlineCache keeps it per
+// member), without fetching. Once it runs out the copy is removed and the next
+// visit loads fresh rows.
 //
-// The server already memoizes the expensive TMDB half for ~90 min; this removes
-// the round-trip and the rebuild layered on top of it. A copy older than the TTL
-// still paints immediately and is revalidated behind the render, so the rows are
-// never blank while waiting.
-//
-// Invalidated on any library mutation: `already_added` is overlaid per request
-// server-side, so without this a title you just added would still show without
-// its "in your collection" mark when you came back.
-const EXPLORE_TTL_MS = 10 * 60 * 1000;
-let exploreCache = null; // { at, data } | null
+// A library change keeps the rows but flags their "in your library" marks
+// (`already_added`, overlaid per request server-side): the next visit paints the
+// copy and checks it behind the render, which costs the server no TMDB call.
+let exploreCache = null; // { expiresAt, data, dirty } | null
 window.addEventListener('shelfit:library-changed', () => {
-  exploreCache = null;
+  if (exploreCache) exploreCache.dirty = true;
+  markExploreDirty();
 });
+
+function currentExplore() {
+  if (exploreCache && exploreCache.expiresAt > Date.now()) return exploreCache;
+  exploreCache = getExplore(); // null, and the stored copy removed, once expired
+  return exploreCache;
+}
 
 // The rows that stay a plain shelf, in the order they appear. The eyebrow says
 // what the row IS; the title is the row's name.
@@ -655,21 +660,29 @@ export default async function Search(container) {
     // A cached payload paints straight away — no skeleton, no wait. Only a cold
     // cache shows the shimmer. `exploreLoaded` is set before the await either way,
     // so a second call within this mount can't start a duplicate fetch.
-    const cached = exploreCache;
+    const cached = currentExplore();
     if (cached) {
       exploreLoaded = true;
       renderExplore(cached.data);
-      if (Date.now() - cached.at < EXPLORE_TTL_MS) return; // fresh — done
-      // Stale: fall through and revalidate behind the render already on screen.
+      if (!cached.dirty) return; // valid and unchanged: no request at all
+      // The library changed: check the marks behind the render already on screen.
     } else {
       exploreSkeleton();
     }
     try {
-      const data = await api.explore();
+      const res = await api.explore();
       if (ac.signal.aborted) return;
-      exploreCache = { at: Date.now(), data };
+      const { expires_in: expiresIn, ...data } = res || {};
+      const sameRows = cached && JSON.stringify(data) === JSON.stringify(cached.data);
+      const left = Math.min(Number(expiresIn) || 0, EXPLORE_MAX_MS);
+      if (left > 0) {
+        saveExplore(data, left);
+        exploreCache = { expiresAt: Date.now() + left, data, dirty: false };
+      }
+      // left 0: rows served from an expired server copy after a failed rebuild.
+      // They are shown, not kept, so the next visit asks again.
       exploreLoaded = true;
-      crossfadeSwap(() => renderExplore(data));
+      if (!sameRows) crossfadeSwap(() => renderExplore(data));
     } catch (err) {
       if (isAbortError(err)) return;
       // A revalidation that fails leaves the copy already on screen alone — the

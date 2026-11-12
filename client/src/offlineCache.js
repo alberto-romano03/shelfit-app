@@ -42,6 +42,8 @@ export const OC = {
   upNext: 'up-next', // [ <watch_next entry>, … ]
   upcoming: 'upcoming', // { horizon, watch_next, upcoming } — the whole What's Next payload
   wall: 'wall', // { movie, show, person } — The Wall, images inlined as data URLs
+  explore: 'explore', // { expiresAt, data } — the Search page's Explore rows
+  exploreDirty: 'explore-dirty', // 1 when the library changed since they were saved
 };
 
 // How long a cached What's Next payload is trusted offline. The "On the Horizon"
@@ -623,6 +625,38 @@ export function getUpcoming(maxAgeMs = UPCOMING_TTL_MS) {
   if (!cur) return null;
   const fresh = cur.savedAt != null && Date.now() - cur.savedAt <= maxAgeMs;
   return { data: cur.data, savedAt: cur.savedAt, fresh };
+}
+
+// --- Explore (the Search page's rows) ---------------------------------------
+// Kept until the moment the server's own copy runs out (it says how long is
+// left), never longer than six hours. Past that the copy is removed outright,
+// not shown while a new one loads: the next visit starts from fresh rows.
+export const EXPLORE_MAX_MS = 6 * 60 * 60 * 1000;
+
+export function saveExplore(data, expiresInMs) {
+  const left = Math.min(Number(expiresInMs) || 0, EXPLORE_MAX_MS);
+  if (left <= 0) return false;
+  ocRemove(OC.exploreDirty);
+  return ocSet(OC.explore, { expiresAt: Date.now() + left, data });
+}
+
+// Returns { data, expiresAt, dirty } or null. An expired copy is deleted here.
+export function getExplore() {
+  const cur = ocGet(OC.explore);
+  if (!cur) return null;
+  const { expiresAt, data } = cur.data || {};
+  if (!data || !(expiresAt > Date.now())) {
+    ocRemove(OC.explore);
+    ocRemove(OC.exploreDirty);
+    return null;
+  }
+  return { data, expiresAt, dirty: !!ocGet(OC.exploreDirty) };
+}
+
+// The rows are kept, but their "in your library" marks may be out of date: the
+// next visit checks them behind the copy already on screen.
+export function markExploreDirty() {
+  ocSet(OC.exploreDirty, 1, { compress: false });
 }
 
 // --- The Wall -------------------------------------------------------------

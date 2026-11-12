@@ -480,7 +480,7 @@ All variables are read from `.env` at container startup. Only `TMDB_API_KEY` and
 | `FANART_API_KEY` | Fanart.tv key for clear logos / disc art. | No | — |
 | `CACHE_MAX_AGE_DAYS_MOVIES` | Days before cached movie metadata is refreshed. | No | `180` |
 | `CACHE_MAX_AGE_DAYS_SHOWS` | Days before cached show metadata is refreshed. | No | `7` |
-| `EXPLORE_TTL_MIN` | Minutes the Explore discovery rows are cached. | No | `90` |
+| `EXPLORE_TTL_MIN` | Minutes the Explore discovery rows are cached, on the server and in the app. | No | `360` |
 | `VAPID_SUBJECT` | Contact address for web-push VAPID headers (the keypair itself is generated once and stored in the DB). | No | `mailto:shelfit@example.com` |
 
 Not environment variables, but worth knowing they exist: the **mount path** (five

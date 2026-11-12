@@ -15,7 +15,10 @@ import { getTmdbLanguage } from '../language.js';
 // TMDB fetches are memoized in-memory with a TTL (like routes/upcoming.js); the
 // cheap, per-user "already in library" overlay is recomputed on every request.
 
-const TTL_MS = (parseInt(process.env.EXPLORE_TTL_MIN, 10) || 90) * 60 * 1000;
+// Six hours by default. The client keeps its copy until this same moment (the
+// response says how long is left), so the rows are rebuilt from TMDB once per
+// window and never outlive it on either side.
+const TTL_MS = (parseInt(process.env.EXPLORE_TTL_MIN, 10) || 360) * 60 * 1000;
 const PER_ROW = 20; // cap posters per row
 
 // The rows are fetched in the metadata language, so the memo remembers which one:
@@ -190,6 +193,13 @@ export default async function exploreRoutes(fastify) {
       }
     }
 
-    return { sections: annotate(memo ? memo.sections : [], request.user.id), capped: !allowed('tmdb') };
+    // How long these rows stay valid: what is left of the memo's window. A stale
+    // memo served after a failed rebuild reports 0, so the client does not keep it.
+    const expiresIn = memo ? Math.max(0, TTL_MS - (Date.now() - memo.at)) : 0;
+    return {
+      sections: annotate(memo ? memo.sections : [], request.user.id),
+      capped: !allowed('tmdb'),
+      expires_in: expiresIn,
+    };
   });
 }
