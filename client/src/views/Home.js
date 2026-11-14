@@ -166,9 +166,13 @@ export default async function Home(container) {
         class: 'icon-btn cover-btn edit-cover-btn',
         html: icons.userRoundPen,
         'aria-label': t('home.profile.edit'),
-        onClick: (e) => {
-          playOnce(e.currentTarget, 'pen-writes');
-          if (profileData) openProfileModal(profileData, () => navigate('/'));
+        // The pen writes once its dialog has gone, back in view, rather than on the
+        // tap the dialog then covers. Saving redraws Home, so the button is looked
+        // up then (and nothing plays if Home was left meanwhile).
+        onClick: () => {
+          if (profileData) {
+            openProfileModal(profileData, () => navigate('/'), afterDialog('.edit-cover-btn', 'pen-writes'));
+          }
         },
       }),
       themeBtn,
@@ -184,13 +188,11 @@ export default async function Home(container) {
       { style: { position: 'absolute', top: '8px', left: '8px', zIndex: 3, display: 'flex', gap: '8px' } },
       [
         el('button', {
-          class: 'icon-btn cover-btn',
+          class: 'icon-btn cover-btn help-cover-btn',
           html: icons.help,
           'aria-label': t('showcase.reopen'),
-          onClick: (e) => {
-            playOnce(e.currentTarget, 'help-tilt');
-            openShowcase();
-          },
+          // Like the pen: the tilt plays once the tour has closed.
+          onClick: () => openShowcase({ onClose: afterDialog('.help-cover-btn', 'help-tilt') }),
         }),
       ]
     )
@@ -551,9 +553,13 @@ export default async function Home(container) {
   // The flag is set immediately (not on finish) so a reload mid-tour won't reopen
   // it; the header "?" button reopens it any time thereafter. A short delay lets
   // the home paint settle behind the sheet so it slides up over real content.
+  // When it closes, the "?" tilts, so the way back to it is noticed.
   if (pget(PK.showcaseSeen) === undefined) {
     pset(PK.showcaseSeen, true);
-    const showcaseTimer = setTimeout(openShowcase, 400);
+    const showcaseTimer = setTimeout(
+      () => openShowcase({ onClose: afterDialog('.help-cover-btn', 'help-tilt') }),
+      400
+    );
     cleanups.push(() => clearTimeout(showcaseTimer));
   }
 
@@ -939,7 +945,18 @@ function pickTile(shapeCls, content, selected, label, onPick) {
   return node;
 }
 
-async function openProfileModal(profile, onSaved) {
+// A cover button's one-shot animation, played once the dialog it opened has gone
+// (however it was closed). The button is looked up then: saving the profile
+// redraws Home, and nothing plays if Home was left in the meantime.
+function afterDialog(selector, cls) {
+  return () => {
+    const btn = document.querySelector(selector);
+    if (btn) playOnce(btn, cls);
+  };
+}
+
+// `onClosed`: told once the dialog has gone, however it was closed.
+async function openProfileModal(profile, onSaved, onClosed) {
   let badges = { badges: [] };
   let favorites = { items: [] };
   // Independent deps: a failure of one must not drop the other (or blank the
@@ -1223,7 +1240,7 @@ async function openProfileModal(profile, onSaved) {
         ]),
       ])
     );
-  });
+  }, { onClose: onClosed });
 }
 
 // --- Back to the Shelf: transition timings --------------------------------

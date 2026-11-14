@@ -146,7 +146,8 @@ function buildPages() {
 
 let openInstance = null; // guard against a second sheet stacking on the first
 
-export function openShowcase() {
+// `onClose`: told once the sheet has gone, however it was closed.
+export function openShowcase({ onClose } = {}) {
   if (openInstance) return openInstance;
   const PAGES = buildPages();
   let index = 0;
@@ -254,6 +255,7 @@ export function openShowcase() {
       backdrop.remove();
       unlockScroll();
       openInstance = null;
+      if (onClose) onClose();
     };
     dialogLeave(sheet, backdrop, done);
   }
