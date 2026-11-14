@@ -11637,6 +11637,117 @@ textarea.lend-message-input:focus {
   width: 13px;
   height: 13px;
 }
+/* The action row: a full-width line under [poster | text]. The toast wraps for
+   it, and the text column takes a zero basis so a long title truncates beside
+   the poster instead of pushing the text onto a line of its own. */
+.np-toast {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+.np-toast > .np-toast-body {
+  flex: 1 1 0;
+}
+.np-act {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.np-act:empty {
+  display: none;
+}
+.np-act-btn {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: scale var(--dur-long) var(--ease-out), opacity var(--dur-short) var(--ease-state);
+}
+.np-act-btn:active {
+  scale: var(--press);
+}
+.np-act-btn.busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.np-act .np-act-ico {
+  width: 17px;
+  height: 17px;
+  vertical-align: 0;
+}
+.np-act-btn .np-act-ico {
+  color: var(--kodi-blue);
+}
+.np-act-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-act-aside {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.np-act-hint {
+  flex: 1 0 100%;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+/* A note (why there is nothing to record) or the done line: the same pill, read-only. */
+.np-act.is-note,
+.np-act.is-done {
+  flex-wrap: nowrap;
+  min-height: 42px;
+  padding: 4px 6px 4px 14px;
+  border-radius: 21px;
+  background: var(--surface);
+}
+.np-act.is-note .np-act-ico {
+  color: var(--text-secondary);
+}
+.np-act.is-done .np-act-ico {
+  color: var(--stop-ink);
+}
+.np-act-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-secondary);
+}
+.np-act.is-done .np-act-note {
+  color: var(--text-primary);
+}
+.np-act-link {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
 @media (prefers-reduced-motion: reduce) {
   .np-toast { transition: opacity var(--dur-short) var(--ease-state); }
 }

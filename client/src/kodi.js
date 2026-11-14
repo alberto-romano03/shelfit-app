@@ -59,6 +59,12 @@ async function pollNowOnce() {
   scheduleNow();
 }
 
+// Read Now Playing again right away (after the toast recorded or undid
+// something), instead of waiting for the next poll.
+export function refreshNowPlaying() {
+  return pollNowOnce();
+}
+
 function scheduleNow() {
   clearTimeout(nowTimer);
   nowTimer = null;

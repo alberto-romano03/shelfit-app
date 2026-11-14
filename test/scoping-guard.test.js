@@ -48,7 +48,7 @@ const ALLOWED = {
   ],
   'kodi.js': [
     'SELECT title_it, title_orig, year FROM items WHERE tmdb_id = ? AND type = ? LIMIT 1', // catalog title
-    'SELECT status, rewatch_count FROM items WHERE id = ?', // row already matched to the viewer
+    'SELECT status, rewatch_count, watch_date FROM items WHERE id = ?', // row already matched to the viewer
   ],
 };
 

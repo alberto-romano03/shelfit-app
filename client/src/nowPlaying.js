@@ -2,8 +2,8 @@
 //   • a small header indicator ("Now Playing") — tap to open the toast
 //   • the animated wavy avatar ring
 //   • a top-sliding toast (poster · Kodi instance · title · episode · audio and
-//     subtitle chips), read-only: it shows only what Kodi reports as playing,
-//     with no library actions
+//     subtitle chips) with one action row under it: record what is playing in
+//     the library (nowPlayingActions.js)
 // Everything reads the cached snapshot from kodi.js (getNowPlaying) and updates
 // on the shared `shelfit:kodi-nowplaying` event. Both the header indicator and
 // the profile avatar open the SAME toast; when nothing is playing they do
@@ -13,6 +13,7 @@ import { el, cachedImg, lucideIcon } from './ui.js';
 import { getNowPlaying } from './kodi.js';
 import { createWavyRing } from './wavyRing.js';
 import { t, onLangChange } from './i18n.js';
+import { fillActions } from './nowPlayingActions.js';
 
 const KODI_BLUE = '#17B2E8';
 const PLAY = // filled play glyph (inlined so it renders solid, no mask/caching)
@@ -54,7 +55,8 @@ export function initNowPlaying(headerActionsEl) {
   if (headerActionsEl) headerActionsEl.prepend(indicator);
 
   // Toast (built once, reused):
-  // [poster] [ tv · Kodi instance / title / SxxExx · episode / audio + subtitle chips ].
+  // [poster] [ tv · Kodi instance / title / SxxExx · episode / audio + subtitle chips ]
+  // [ action row: record it in the library ].
   const poster = el('div', { class: 'np-toast-poster' });
   const sourceName = el('span', { class: 'np-toast-source-name' });
   const source = el('div', { class: 'np-toast-source' }, [lucideIcon('tv', 'btn-lucide'), sourceName]);
@@ -63,12 +65,30 @@ export function initNowPlaying(headerActionsEl) {
   const chips = el('div', { class: 'np-toast-chips' });
   const text = el('div', { class: 'np-toast-text' }, [source, title, meta, chips]);
   const body = el('div', { class: 'np-toast-body' }, [text]);
+  const acts = el('div', { class: 'np-act' });
   toastEl = el('div', { class: 'np-toast', role: 'dialog', 'aria-label': t('nowPlaying.label') }, [
     poster,
     body,
+    acts,
   ]);
   document.body.appendChild(toastEl);
-  els = { poster, source, sourceName, title, meta, chips };
+  els = { poster, source, sourceName, title, meta, chips, acts };
+
+  // A finger or pointer on the toast holds it open (there is a button to reach
+  // now); leaving it starts the peek again.
+  const hold = () => clearTimeout(autoCloseTimer);
+  const release = () => {
+    clearTimeout(autoCloseTimer);
+    if (toastOpen) autoCloseTimer = setTimeout(closeToast, TOAST_AUTO_CLOSE_MS);
+  };
+  toastEl.addEventListener('pointerenter', hold);
+  toastEl.addEventListener('pointerdown', hold);
+  toastEl.addEventListener('pointerleave', release);
+  // An Undo resets the row: rebuild it from the latest snapshot.
+  toastEl.addEventListener('np-act-reset', () => {
+    const np = getNowPlaying();
+    if (toastOpen && np && np.active) fillToast(np);
+  });
 
   // Outside-tap dismiss.
   document.addEventListener('click', (e) => {
@@ -231,6 +251,8 @@ function fillToast(np) {
       trackChip('captions', sub),
     ].filter(Boolean)
   );
+
+  fillActions(els.acts, np, { onBusy: () => clearTimeout(autoCloseTimer) });
 }
 
 // --- Open / close ---------------------------------------------------------

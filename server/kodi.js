@@ -18,6 +18,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import db from './db.js';
 import { DATA_DIR, CLIENT_DIST } from './config.js';
+import { readSeasonMetaSync } from './cache.js';
+import { findByImdb, findShowByTvdb } from './tmdb.js';
+import { allowed } from './usage.js';
 
 // --- Password encryption --------------------------------------------------
 const KEY_PATH = path.join(DATA_DIR, 'kodi.key');
@@ -296,15 +299,95 @@ const findItemByTmdbStmt = db.prepare(
   'SELECT id, type, tmdb_id FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?'
 );
 const findItemByTitleStmt = db.prepare(
-  `SELECT id, type, tmdb_id FROM items
-    WHERE user_id = ? AND type = ? AND (lower(title_it) = ? OR lower(title_orig) = ?)
-    LIMIT 1`
+  `SELECT id, type, tmdb_id, year FROM items
+    WHERE user_id = ? AND type = ? AND (lower(title_it) = ? OR lower(title_orig) = ?)`
 );
-// "Already seen?" lookups so the toast can offer Add-rewatch instead of Mark-watched.
-const getEpisodeProgressStmt = db.prepare(
-  'SELECT watch_count FROM progress WHERE item_id = ? AND season = ? AND episode = ?'
+const getEpisodeRowStmt = db.prepare(
+  'SELECT watch_count, watched_at FROM progress WHERE item_id = ? AND season = ? AND episode = ?'
 );
-const getItemStateStmt = db.prepare('SELECT status, rewatch_count FROM items WHERE id = ?');
+const todayRewatchStmt = db.prepare(
+  'SELECT id FROM movie_rewatches WHERE item_id = ? AND watched_at = ? ORDER BY id DESC LIMIT 1'
+);
+// "Already seen?" lookups so the toast can offer a rewatch instead of a first watch.
+const getItemStateStmt = db.prepare('SELECT status, rewatch_count, watch_date FROM items WHERE id = ?');
+
+// --- Which title is playing ----------------------------------------------------
+// Kodi labels titles with whichever ids its scraper uses: TMDB, IMDb or (series)
+// TVDB. A TMDB id is used as is; the others are looked up on TMDB once and kept
+// for the life of the process, so the 8-second Now Playing poll never repeats a
+// lookup. A failed lookup is not kept (it is tried again on a later poll).
+const resolvedIds = new Map(); // `${type}:${source}:${id}` -> TMDB id | null
+async function resolveTmdbId(type, ids) {
+  const own = ids.tmdb || ids.themoviedb;
+  if (own && /^\d+$/.test(String(own))) return String(own);
+  const tries = [['imdb', ids.imdb]];
+  if (type === 'show') tries.push(['tvdb', ids.tvdb]);
+  for (const [source, value] of tries) {
+    if (!value) continue;
+    const key = `${type}:${source}:${value}`;
+    if (resolvedIds.has(key)) {
+      if (resolvedIds.get(key)) return resolvedIds.get(key);
+      continue;
+    }
+    if (!allowed('tmdb')) continue;
+    try {
+      let found = null;
+      if (source === 'imdb') {
+        const hits = await findByImdb(String(value));
+        const hit = (type === 'movie' ? hits.movies : hits.shows)[0];
+        found = hit ? String(hit.id) : null;
+      } else {
+        found = await findShowByTvdb(String(value));
+      }
+      if (resolvedIds.size > 500) resolvedIds.clear();
+      resolvedIds.set(key, found);
+      if (found) return found;
+    } catch {
+      /* TMDB unreachable: try again on a later poll */
+    }
+  }
+  return null;
+}
+
+// A series' Kodi ids and title, asked once per series (episodes only).
+const showDetailsMemo = new Map(); // tvshowid -> { uniqueid, title }
+async function showDetails(inst, tvshowid) {
+  const key = `${inst.id}:${tvshowid}`;
+  if (showDetailsMemo.has(key)) return showDetailsMemo.get(key);
+  try {
+    const res = await rpc(inst, 'VideoLibrary.GetTVShowDetails', { tvshowid, properties: ['uniqueid', 'title'] }, 3000);
+    const det = (res && res.tvshowdetails) || null;
+    if (showDetailsMemo.size > 200) showDetailsMemo.clear();
+    showDetailsMemo.set(key, det);
+    return det;
+  } catch {
+    return null;
+  }
+}
+
+// The library title by name, only when Kodi gave no id at all. A film's year
+// must agree (one year either way, for festival vs release dates) when both are
+// known: Dune (2021) is not the Dune (1984) on the list.
+function findByTitle(userId, type, title, year) {
+  const lc = title.toLowerCase();
+  const rows = findItemByTitleStmt.all(userId, type, lc, lc);
+  if (!rows.length) return null;
+  if (type !== 'movie' || !year) return rows.length === 1 ? rows[0] : null;
+  const fits = rows.filter((r) => !r.year || Math.abs(Number(r.year) - Number(year)) <= 1);
+  return fits.length === 1 ? fits[0] : null;
+}
+
+// The local calendar day, and a stored UTC timestamp's local day.
+function localDay(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function localDayOf(stamp) {
+  if (!stamp) return '';
+  const s = String(stamp).trim().replace(' ', 'T');
+  const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) || s.length <= 10 ? s : `${s}Z`);
+  return Number.isFinite(t) ? localDay(new Date(t)) : '';
+}
 
 // Pull "S02E04" / "2x04" / "Episode 7" out of a filename-ish label when Kodi
 // gives no structured season/episode fields.
@@ -437,6 +520,7 @@ export async function nowPlaying(userId) {
           'VideoPlayer.Season',
           'VideoPlayer.Episode',
           'VideoPlayer.Year',
+          'VideoPlayer.IMDBNumber',
         ],
       }, 3000).catch(() => ({})),
     ]);
@@ -485,25 +569,25 @@ export async function nowPlaying(userId) {
   const looksEpisode = it.type === 'episode' || episode > 0 || showTitle !== '';
   const mediaType = looksEpisode ? 'episode' : it.type === 'movie' ? 'movie' : 'other';
 
-  // Resolve the TMDB id used to match a shelfIt library row. Movies carry it on
-  // the item; episodes need the parent show's uniqueid (one extra call, episodes
-  // only), so the matched poster/mark-watched target is the SHOW.
-  let tmdb = it.uniqueid && (it.uniqueid.tmdb || it.uniqueid.themoviedb);
-  if (mediaType === 'episode' && it.tvshowid) {
-    try {
-      const show = await rpc(inst, 'VideoLibrary.GetTVShowDetails', {
-        tvshowid: it.tvshowid,
-        properties: ['uniqueid', 'title'],
-      }, 3000);
-      const det = show && show.tvshowdetails;
+  // The TMDB id of what is playing: the film's own, or for an episode the SERIES'
+  // (an episode's own ids name the episode, never the series). Library series
+  // carry theirs on Kodi's series record; IMDb and TVDB ids are looked up once.
+  const wantType = mediaType === 'episode' ? 'show' : 'movie';
+  let ids = {};
+  if (mediaType === 'episode') {
+    if (it.tvshowid) {
+      const det = await showDetails(inst, it.tvshowid);
       if (det) {
-        if (det.uniqueid) tmdb = det.uniqueid.tmdb || det.uniqueid.themoviedb || tmdb;
+        ids = det.uniqueid || {};
         if (!showTitle && det.title) showTitle = String(det.title).trim();
       }
-    } catch {
-      /* leave tmdb / showTitle as-is */
     }
+  } else {
+    ids = { ...(it.uniqueid || {}) };
+    const imdbLabel = infoStr('VideoPlayer.IMDBNumber');
+    if (!ids.imdb && /^tt\d+$/.test(imdbLabel)) ids.imdb = imdbLabel;
   }
+  let tmdb = await resolveTmdbId(wantType, ids);
 
   // The title we try to match against the library: the SHOW for an episode,
   // otherwise the movie/item title (or its label).
@@ -511,36 +595,56 @@ export async function nowPlaying(userId) {
 
   let match = null;
   let row = null;
-  const wantType = mediaType === 'episode' ? 'show' : 'movie';
-  if (tmdb != null) row = findItemByTmdbStmt.get(userId, wantType, String(tmdb));
-  // Fallback: no usable TMDB id (e.g. a non-TMDB scraper, or direct playback):
-  // match the library by title instead so Mark-watched still works.
-  if (!row && matchTitle) {
-    const lc = matchTitle.toLowerCase();
-    row = findItemByTitleStmt.get(userId, wantType, lc, lc);
+  let confidence = null;
+  if (tmdb != null) {
+    row = findItemByTmdbStmt.get(userId, wantType, String(tmdb));
+    if (row) confidence = 'id';
+  } else if (matchTitle) {
+    // No id at all (an add-on or a file played directly): the name, with the
+    // year for a film. A known id that is not in the library is a new title.
+    row = findByTitle(userId, wantType, matchTitle, year);
+    if (row) confidence = 'title';
   }
   if (row) {
     const folder = row.type === 'movie' ? 'movies' : 'shows';
+    const today = localDay();
     match = {
       item_id: row.id,
       type: row.type,
       poster_url: `/assets/${folder}/${row.tmdb_id}/poster.webp`,
+      confidence,
     };
     // Whether this exact title is already watched in shelfIt, and how many times
     // in total (episode watch_count, or movie plays = rewatch_count + 1). Drives
-    // the toast button: not seen → Mark watched; already seen → Add rewatch.
+    // the toast's row: not seen → Mark watched / Shelve; seen → Add a rewatch.
+    // done_today: already counted today (the row shows it, with an Undo).
+    const st = getItemStateStmt.get(row.id);
+    match.status = st ? st.status : null;
     if (mediaType === 'episode') {
       match.season = season > 0 ? season : 0;
       match.episode = episode > 0 ? episode : 0;
-      const prog = getEpisodeProgressStmt.get(row.id, match.season, match.episode);
+      const prog = getEpisodeRowStmt.get(row.id, match.season, match.episode);
       match.seen = !!prog;
       match.plays = prog ? prog.watch_count : 0;
+      match.done_today = !!prog && localDayOf(prog.watched_at) === today;
+      // Kodi may number episodes differently from TMDB (another order, or one
+      // absolute count): only an episode TMDB lists, already out, can be marked.
+      const sMeta = match.season > 0 && match.episode > 0 ? readSeasonMetaSync(row.tmdb_id, match.season) : null;
+      const ep = sMeta && (sMeta.episodes || []).find((e) => e.episode_number === match.episode);
+      if (!ep) match.uncertain = 'not_in_tmdb';
+      else if (!ep.air_date || ep.air_date > today) match.uncertain = 'not_aired';
     } else {
-      const st = getItemStateStmt.get(row.id);
       match.seen = !!(st && st.status === 'completed');
       match.plays = match.seen ? (st.rewatch_count || 0) + 1 : 0;
+      const rewatch = match.seen ? todayRewatchStmt.get(row.id, today) : null;
+      if (rewatch) {
+        match.done_today = true;
+        match.rewatch_id = rewatch.id;
+      } else {
+        match.done_today = match.seen && st.watch_date === today;
+      }
     }
-    if (tmdb == null) tmdb = String(row.tmdb_id); // enable Add too, and a stable id
+    if (tmdb == null) tmdb = String(row.tmdb_id); // a stable id for the poster key
   }
 
   const audioStream = props && props.currentaudiostream;
