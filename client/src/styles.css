@@ -2522,13 +2522,16 @@ body.season-active #app {
   -webkit-mask: center / contain no-repeat;
   mask: center / contain no-repeat;
 }
-/* The status button fills up to where the movie stopped. */
+/* The status button fills up to where the movie stopped. The fill spans the whole
+   box, border included: sized to the padding box it repeated under the see-through
+   border, and its unfilled end showed as a sliver at the left edge. */
 .status-select.has-stop {
   background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--sc, var(--accent)) 16%, var(--surface)) var(--stop, 0%),
-    var(--surface) var(--stop, 0%)
-  );
+      90deg,
+      color-mix(in srgb, var(--sc, var(--accent)) 16%, var(--surface)) var(--stop, 0%),
+      var(--surface) var(--stop, 0%)
+    )
+    border-box no-repeat;
 }
 .status-stop {
   color: var(--stop-ink);
