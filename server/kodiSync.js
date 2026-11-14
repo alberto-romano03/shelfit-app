@@ -18,11 +18,26 @@ const VALID_STATUS = ['watching', 'completed', 'paused', 'dropped', 'plan_to_wat
 
 // The sync writes into ONE member's library: the sync owner (see syncOwnerId).
 const findByTmdb = db.prepare(
-  'SELECT id, type, status FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?'
+  'SELECT id, type, status, tmdb_id FROM items WHERE user_id = ? AND type = ? AND tmdb_id = ?'
 );
 const findByTitle = db.prepare(
-  'SELECT id, type, status FROM items WHERE user_id = ? AND type = ? AND (title_it = ? OR title_orig = ?)'
+  'SELECT id, type, status, tmdb_id FROM items WHERE user_id = ? AND type = ? AND (title_it = ? OR title_orig = ?)'
 );
+// What Kodi last reported per title (a movie's play count, a series' watched
+// episodes), so a sync acts on a new viewing only (migration 11).
+const getMarkStmt = db.prepare('SELECT plays FROM kodi_marks WHERE item_id = ?');
+const setMarkStmt = db.prepare(
+  `INSERT INTO kodi_marks (item_id, plays) VALUES (?, ?)
+   ON CONFLICT(item_id) DO UPDATE SET plays = excluded.plays`
+);
+// Whether Kodi saw something new for this title since the last sync. The first
+// time a title is met there is nothing to compare with: then only a title still
+// on the list moves on, and one you set back to Watching (a rewatch) is left be.
+function newViewing(existing, plays) {
+  const row = getMarkStmt.get(existing.id);
+  setMarkStmt.run(existing.id, plays);
+  return row ? plays > row.plays : existing.status === 'plan_to_watch';
+}
 const masterIdStmt = db.prepare("SELECT id FROM users WHERE role = 'master'");
 
 // Kodi tracks "watched" per Kodi profile, not per person, so its library syncs
@@ -70,11 +85,16 @@ function showRec(s) {
     imdb: u.imdb || '',
   };
 }
-// Proposed status for a show from Kodi's watched-episode counts.
-function showTarget(rec) {
-  if (rec.episode > 0 && rec.watchedepisodes >= rec.episode) return 'completed';
-  if (rec.watchedepisodes > 0) return 'watching';
-  return null;
+// Proposed status for a show from Kodi's watched-episode counts. Kodi only knows
+// the episodes in its own library, so "all watched there" is not "finished": the
+// series is shelved only when TMDB says it has ended and the watched count covers
+// every episode it lists. Otherwise it is being watched.
+const ENDED = new Set(['Ended', 'Canceled', 'Cancelled']);
+function showTarget(rec, meta) {
+  if (rec.watchedepisodes <= 0) return null;
+  const total = meta && meta.number_of_episodes;
+  if (meta && ENDED.has(meta.status) && total > 0 && rec.watchedepisodes >= total) return 'completed';
+  return 'watching';
 }
 
 // Resolve a TMDB id (Kodi almost always carries one; fall back to IMDb/title
@@ -92,13 +112,12 @@ async function resolve(kind, rec) {
   return rec.resolvedTmdb;
 }
 
-// Match against shelfIt: TMDB id primary, title fallback.
+// Match against shelfIt: TMDB id, or the title when Kodi gave no id at all. A
+// known id not in the library is a new title, never a same-named one (Kodi's
+// Dune (2021) is not the Dune (1984) on your list).
 function existingFor(kind, rec) {
   const owner = syncOwnerId();
-  if (rec.resolvedTmdb) {
-    const byId = findByTmdb.get(owner, kind, String(rec.resolvedTmdb));
-    if (byId) return byId;
-  }
+  if (rec.resolvedTmdb) return findByTmdb.get(owner, kind, String(rec.resolvedTmdb)) || null;
   const rows = findByTitle.all(owner, kind, rec.title, rec.originaltitle || rec.title);
   return rows[0] || null;
 }
@@ -167,7 +186,7 @@ async function doSync() {
     const watched = rec.playcount > 0;
     const existing = existingFor('movie', rec);
     if (existing) {
-      if (existing.type === 'movie' && watched) {
+      if (existing.type === 'movie' && newViewing(existing, rec.playcount) && watched) {
         const next = advancedStatus(existing.status, 'completed');
         if (next) {
           setStatus.run(next, existing.id);
@@ -183,10 +202,10 @@ async function doSync() {
   for (const ks of kodiShows) {
     const rec = showRec(ks);
     await resolve('show', rec);
-    const target = showTarget(rec);
     const existing = existingFor('show', rec);
     if (existing) {
-      if (existing.type === 'show' && target) {
+      const target = showTarget(rec, readMetaSync('show', existing.tmdb_id));
+      if (existing.type === 'show' && newViewing(existing, rec.watchedepisodes) && target) {
         const next = advancedStatus(existing.status, target);
         if (next) {
           setStatus.run(next, existing.id);
@@ -195,6 +214,7 @@ async function doSync() {
       }
       continue;
     }
+    const target = showTarget(rec, rec.resolvedTmdb ? readMetaSync('show', rec.resolvedTmdb) : null);
     const disc = await discover('show', rec, target || 'plan_to_watch');
     if (disc) discoveries.push(disc);
   }

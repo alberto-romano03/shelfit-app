@@ -29,10 +29,13 @@ import { enqueueMeta, metaState } from '../metaBackfill.js';
 //   • a <custom_lists> block with EVERY list, empty ones included, its creation
 //     time and each title's added time (v1-v3 carried only per-title memberships),
 //   • a <wall movie="…" show="…" person="…"/> element for The Wall.
+// v5 adds where things were left: <stopped_at> per movie (the minute a movie
+// being watched or rewatched was stopped at) and stopped_at="..." per episode,
+// including episodes not watched yet (<episode ... watched="false" stopped_at="..."/>).
 // Deliberately left out: profile photo, cover and badge (the account's look, not
 // the library), custom artwork (shared by the household), pending loans.
-const EXPORT_VERSION = 4;
-const SUPPORTED_VERSIONS = new Set([1, 2, 3, 4]);
+const EXPORT_VERSION = 5;
+const SUPPORTED_VERSIONS = new Set([1, 2, 3, 4, 5]);
 
 // DB status <-> XML status. The data value 'completed' surfaces as 'shelved'.
 const STATUS_DB_TO_XML = {
@@ -49,9 +52,15 @@ const STATUS_XML_TO_DB = {
   paused: 'paused',
   dropped: 'dropped',
 };
-// "Advancement" order for the merge (higher wins): a shelved title beats a
-// watching one, watching beats plan, etc.
-const STATUS_RANK = { plan_to_watch: 0, dropped: 1, paused: 2, watching: 3, completed: 4 };
+// The status a merge keeps. A file can move a title on only from where nothing
+// was decided yet: off the list (to whatever the file says), or from Watching to
+// Shelved. A title you paused, dropped or shelved keeps that, since the file may
+// well be older than the choice.
+function mergedStatus(existing, incoming) {
+  if (existing === 'plan_to_watch') return incoming || existing;
+  if (existing === 'watching' && incoming === 'completed') return incoming;
+  return existing;
+}
 
 // --- Prepared statements (compiled once at module load, reused thereafter) ---
 // A backup is one member's library: export reads the signed-in member's rows and
@@ -108,10 +117,31 @@ const insertItemStmt = db.prepare(
 const exportRewatchesStmt = db.prepare(
   'SELECT watched_at FROM movie_rewatches WHERE item_id = ? ORDER BY watched_at, id'
 );
-const insertRewatchIgnoreStmt = db.prepare(
-  `INSERT INTO movie_rewatches (item_id, watched_at, created_at)
-   SELECT ?, ?, ?
-   WHERE NOT EXISTS (SELECT 1 FROM movie_rewatches WHERE item_id = ? AND watched_at = ?)`
+// Rewatches merge by how many there are on each date, so two on the same day
+// stay two (and a re-import adds none).
+const insertRewatchStmt = db.prepare(
+  'INSERT INTO movie_rewatches (item_id, watched_at, created_at) VALUES (?, ?, ?)'
+);
+const countRewatchesOnStmt = db.prepare(
+  'SELECT COUNT(*) AS n FROM movie_rewatches WHERE item_id = ? AND watched_at = ?'
+);
+function mergeRewatchDates(itemId, dates) {
+  const wanted = new Map();
+  for (const d of dates || []) wanted.set(d, (wanted.get(d) || 0) + 1);
+  const now = Date.now();
+  for (const [d, n] of wanted) {
+    const have = countRewatchesOnStmt.get(itemId, d).n;
+    for (let k = have; k < n; k++) insertRewatchStmt.run(itemId, d, now);
+  }
+}
+// Stopped minutes (v5): a movie's, and an episode's in episode_stops.
+const exportStopsStmt = db.prepare(
+  'SELECT season, episode, stopped_at FROM episode_stops WHERE item_id = ? ORDER BY season, episode'
+);
+const setMovieStopStmt = db.prepare('UPDATE items SET stopped_at = ? WHERE id = ?');
+const insertStopIgnoreStmt = db.prepare(
+  `INSERT OR IGNORE INTO episode_stops (item_id, season, episode, stopped_at, updated_at)
+   VALUES (?, ?, ?, ?, ?)`
 );
 const countRewatchesStmt = db.prepare('SELECT COUNT(*) AS n FROM movie_rewatches WHERE item_id = ?');
 const setRewatchCountStmt = db.prepare('UPDATE items SET rewatch_count = ? WHERE id = ?');
@@ -124,10 +154,14 @@ const insertProgressStmt = db.prepare(
   `INSERT INTO progress (item_id, season, episode, watch_count, watched_at, notes)
    VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')), ?)`
 );
+// updated_at moves only when the status does (it is the "watched on" fallback and
+// the status-change time); the CASE reads the row's status before this update.
 const updateItemMergeStmt = db.prepare(
   `UPDATE items SET status = ?, rating = ?, notes = ?, owned = ?, rewatch_count = ?,
      favorite = ?, watched_in_cinema = ?, cinema_date = ?, cinema_time = ?, cinema_name = ?,
-     current_season = ?, watch_date = ?, updated_at = datetime('now') WHERE id = ?`
+     current_season = ?, watch_date = ?,
+     updated_at = CASE WHEN status = ? THEN updated_at ELSE datetime('now') END
+   WHERE id = ?`
 );
 const updateProgressMergeStmt = db.prepare(
   'UPDATE progress SET watch_count = ?, notes = ? WHERE id = ?'
@@ -195,6 +229,7 @@ function movieXml(it, rewatchDates) {
   if (it.cinema_name && it.cinema_name.trim()) s += `      <cinema_name>${escXml(it.cinema_name)}</cinema_name>\n`;
   if (it.notes && it.notes.trim()) s += `      <notes>${escXml(it.notes)}</notes>\n`;
   if (watchDate) s += `      <watch_date>${watchDate}</watch_date>\n`;
+  if (it.stopped_at > 0) s += `      <stopped_at>${it.stopped_at}</stopped_at>\n`;
   // Dated rewatch events (movies only). Omitted entirely when there are none.
   if (rewatchDates && rewatchDates.length) {
     s += `      <rewatches>\n`;
@@ -205,7 +240,7 @@ function movieXml(it, rewatchDates) {
   return s;
 }
 
-function showXml(it, eps) {
+function showXml(it, eps, stops = []) {
   const status = STATUS_DB_TO_XML[it.status] || 'plan';
   let s = `    <show tmdb_id="${escXml(it.tmdb_id)}">\n`;
   s += `      <title>${escXml(it.title_it || '')}</title>\n`;
@@ -218,9 +253,18 @@ function showXml(it, eps) {
   // Next rewatch resolution. Only emitted when set so v1-style rows stay clean.
   if (it.current_season != null) s += `      <current_season>${escXml(it.current_season)}</current_season>\n`;
   if (it.notes && it.notes.trim()) s += `      <notes>${escXml(it.notes)}</notes>\n`;
-  if (eps.length) {
+  // Episodes not watched yet but stopped partway ride along as watched="false".
+  const stopOf = new Map(stops.map((x) => [`${x.season}:${x.episode}`, x.stopped_at]));
+  const watchedKeys = new Set(eps.map((e) => `${e.season}:${e.episode}`));
+  const rows = [
+    ...eps,
+    ...stops
+      .filter((x) => !watchedKeys.has(`${x.season}:${x.episode}`))
+      .map((x) => ({ season: x.season, episode: x.episode, unwatched: true })),
+  ].sort((a, b) => a.season - b.season || a.episode - b.episode);
+  if (rows.length) {
     const bySeason = new Map();
-    for (const e of eps) {
+    for (const e of rows) {
       if (!bySeason.has(e.season)) bySeason.set(e.season, []);
       bySeason.get(e.season).push(e);
     }
@@ -228,12 +272,18 @@ function showXml(it, eps) {
     for (const [num, list] of [...bySeason.entries()].sort((a, b) => a[0] - b[0])) {
       s += `        <season number="${num}">\n`;
       for (const e of list) {
+        const stop = stopOf.get(`${e.season}:${e.episode}`);
+        if (e.unwatched) {
+          s += `          <episode number="${e.episode}" watched="false" stopped_at="${stop}"/>\n`;
+          continue;
+        }
         const attrs = [`number="${e.episode}"`, `watched="true"`, `play_count="${e.watch_count || 1}"`];
         const wd = dateOnly(e.watched_at);
         if (wd) attrs.push(`watch_date="${wd}"`);
         // The full moment too (v4): What's Next orders series by it.
         if (e.watched_at && String(e.watched_at) !== wd) attrs.push(`watched_at="${escXml(e.watched_at)}"`);
         if (e.notes && e.notes.trim()) attrs.push(`notes="${escXml(e.notes)}"`);
+        if (stop > 0) attrs.push(`stopped_at="${stop}"`);
         s += `          <episode ${attrs.join(' ')}/>\n`;
       }
       s += `        </season>\n`;
@@ -290,7 +340,7 @@ function buildLibrary(userId) {
     if (it.type === 'movie') {
       const rewatchDates = exportRewatchesStmt.all(it.id).map((r) => dateOnly(r.watched_at)).filter(Boolean);
       inner += movieXml(it, rewatchDates);
-    } else inner += showXml(it, exportProgressStmt.all(it.id));
+    } else inner += showXml(it, exportProgressStmt.all(it.id), exportStopsStmt.all(it.id));
   }
   inner += customListsXml(userId);
   inner += wallXml(userId);
@@ -360,6 +410,7 @@ function parseEntries(libraryContent) {
       cinema_name: tagText(b, 'cinema_name') || null,
       notes: tagText(b, 'notes'),
       watch_date: tagText(b, 'watch_date'),
+      stopped_at: parseMinute(tagText(b, 'stopped_at')),
       added_at: stampOrNull(tagText(b, 'added_at')),
       rewatches: parseRewatchDates(b),
       lists: parseListNames(b),
@@ -370,6 +421,7 @@ function parseEntries(libraryContent) {
     const tmdbId = m[1];
     const b = m[2];
     const episodes = [];
+    const stops = [];
     const seasonRe = /<season\s+number="(\d+)"\s*>([\s\S]*?)<\/season>/g;
     let sm;
     while ((sm = seasonRe.exec(b))) {
@@ -378,7 +430,14 @@ function parseEntries(libraryContent) {
       let em;
       while ((em = epRe.exec(sm[2]))) {
         const a = em[1];
-        if (attrOf(a, 'watched') === 'false') continue; // only watched episodes carry state
+        const stop = parseMinute(attrOf(a, 'stopped_at'));
+        const unwatched = attrOf(a, 'watched') === 'false';
+        const epNum = parseInt(attrOf(a, 'number'), 10);
+        if (stop && Number.isInteger(epNum)) {
+          const plays = parseInt(attrOf(a, 'play_count'), 10) || 1;
+          stops.push({ season, episode: epNum, minute: stop, unwatched, play_count: plays });
+        }
+        if (unwatched) continue; // otherwise only watched episodes carry state
         episodes.push({
           season,
           episode: parseInt(attrOf(a, 'number'), 10),
@@ -401,6 +460,7 @@ function parseEntries(libraryContent) {
       notes: tagText(b, 'notes'),
       added_at: stampOrNull(tagText(b, 'added_at')),
       episodes,
+      stops,
       lists: parseListNames(b),
     });
   }
@@ -439,6 +499,12 @@ function parseWall(libraryContent) {
     return /^\d+$/.test(v) ? v : null;
   };
   return { movie: id('movie'), show: id('show'), person: id('person') };
+}
+
+// A stopped minute: a whole number of minutes from 1 to 999, else null.
+function parseMinute(v) {
+  const n = Number(String(v == null ? '' : v).trim());
+  return Number.isInteger(n) && n >= 1 && n <= 999 ? n : null;
 }
 
 function parseRating(v) {
@@ -616,15 +682,21 @@ function applyImport(entries, userId, { customLists = [], wall = null } = {}) {
               if (!Number.isInteger(ep.episode)) continue;
               insertProgressIgnoreStmt.run(itemId, ep.season, ep.episode, ep.play_count || 1, ep.watch_date || null, ep.notes || null);
             }
+            // After the episodes: marking one watched clears its minute (trigger).
+            for (const st of entry.stops || []) {
+              insertStopIgnoreStmt.run(itemId, st.season, st.episode, st.minute, Date.now());
+            }
           }
 
-          // Dated rewatch events (movies) → insert then set rewatch_count to the
-          // authoritative row count (play_count = rewatch rows + 1).
+          // Dated rewatch events (movies), every one of them; the count is the
+          // higher of the rows and the file's play count, so a rewatch counted
+          // without a date (an older import) is not lost.
           if (entry.type === 'movie' && entry.rewatches && entry.rewatches.length) {
-            const now = Date.now();
-            for (const d of entry.rewatches) insertRewatchIgnoreStmt.run(itemId, d, now, itemId, d);
-            setRewatchCountStmt.run(countRewatchesStmt.get(itemId).n, itemId);
+            mergeRewatchDates(itemId, entry.rewatches);
+            setRewatchCountStmt.run(Math.max(rewatch, countRewatchesStmt.get(itemId).n), itemId);
           }
+          // After the rewatches: recording one clears the minute (trigger).
+          if (entry.type === 'movie' && entry.stopped_at) setMovieStopStmt.run(entry.stopped_at, itemId);
 
           ensureListMembership(entry, { v: true });
           newItems.push({ id: itemId, type: entry.type, tmdb_id: String(entry.tmdb_id) });
@@ -633,11 +705,8 @@ function applyImport(entries, userId, { customLists = [], wall = null } = {}) {
           // --- Existing title: additive, non-destructive merge. ---
           const changed = { v: false };
 
-          // Status → keep the more advanced.
-          const bestStatus =
-            (STATUS_RANK[entry.status] || 0) > (STATUS_RANK[existing.status] || 0)
-              ? entry.status
-              : existing.status;
+          // Status → see mergedStatus: never undoes a pause, a drop or the shelf.
+          const bestStatus = mergedStatus(existing.status, entry.status);
           // Rating → keep existing if set.
           const rating = existing.rating != null ? existing.rating : entry.rating;
           // Notes → append imported below existing (never overwrite).
@@ -675,12 +744,11 @@ function applyImport(entries, userId, { customLists = [], wall = null } = {}) {
             const existingPlays = (existing.rewatch_count || 0) + (existing.status === 'completed' ? 1 : 0);
             const mergedPlays = Math.max(existingPlays, entry.play_count || 0);
             rewatch = Math.max(0, mergedPlays - (bestStatus === 'completed' ? 1 : 0));
-            // Dated rewatch events → merge idempotently (by item + date); the row
-            // count then becomes authoritative for rewatch_count.
+            // Dated rewatch events → merge by how many per date (a re-import adds
+            // none); the count never drops below the rows or the play count.
             if (entry.rewatches && entry.rewatches.length) {
-              const now = Date.now();
-              for (const d of entry.rewatches) insertRewatchIgnoreStmt.run(existing.id, d, now, existing.id, d);
-              rewatch = countRewatchesStmt.get(existing.id).n;
+              mergeRewatchDates(existing.id, entry.rewatches);
+              rewatch = Math.max(rewatch, countRewatchesStmt.get(existing.id).n);
             }
           }
 
@@ -711,9 +779,26 @@ function applyImport(entries, userId, { customLists = [], wall = null } = {}) {
               cinemaName,
               currentSeason ?? null,
               watchDate,
+              bestStatus,
               existing.id
             );
             changed.v = true;
+          }
+          // Stopped minute (movies) → keep the one already here, else take the
+          // file's; adding rewatches above cleared it (trigger), so it is put back.
+          // Not when this merge just shelved the movie: finishing clears it.
+          if (isMovie) {
+            // The file's minute only while nothing moved on here since: same
+            // status, and no rewatch recorded after it.
+            const fileRewatches = Math.max(0, (entry.play_count || 0) - (entry.status === 'completed' ? 1 : 0));
+            const fileStopFits =
+              entry.stopped_at && existing.status === entry.status && (existing.rewatch_count || 0) <= fileRewatches;
+            const stop = existing.stopped_at || (fileStopFits ? entry.stopped_at : null);
+            const justShelved = bestStatus === 'completed' && existing.status !== 'completed';
+            if (stop && !justShelved) {
+              setMovieStopStmt.run(stop, existing.id);
+              if (!existing.stopped_at) changed.v = true;
+            }
           }
           // Added date → the earlier of the two: the title has been in the
           // library at least since then.
@@ -737,6 +822,17 @@ function applyImport(entries, userId, { customLists = [], wall = null } = {}) {
                   updateProgressMergeStmt.run(wc, mNotes, prev.id);
                   changed.v = true;
                 }
+              }
+            }
+            // Stopped minutes → only where nothing moved on since the file: an
+            // episode still unwatched, or a rewatch not counted here yet. A minute
+            // already here is kept.
+            for (const st of entry.stops || []) {
+              const prev = findProgress.get(existing.id, st.season, st.episode);
+              const stillThere = st.unwatched ? !prev : prev && (prev.watch_count || 1) <= st.play_count;
+              if (!stillThere) continue;
+              if (insertStopIgnoreStmt.run(existing.id, st.season, st.episode, st.minute, Date.now()).changes) {
+                changed.v = true;
               }
             }
           }

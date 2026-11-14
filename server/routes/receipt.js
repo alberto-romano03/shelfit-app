@@ -11,13 +11,14 @@ const DEFAULT_EPISODE_MINUTES = 30;
 
 // Prepared once at module load and reused (better-sqlite3 compiles on prepare).
 // First watches this month. The "watched on" date is the editable watch_date,
-// falling back to updated_at when it was never set (pre-feature rows).
+// falling back to updated_at when it was never set (pre-feature rows). watch_date
+// is a day, so films seen the same day keep the order they were shelved in.
 const monthMoviesStmt = db.prepare(
   `SELECT id, tmdb_id, type, title_it, genres
      FROM items
     WHERE user_id = ? AND type = 'movie' AND status = 'completed'
       AND substr(COALESCE(watch_date, updated_at), 1, 7) = ?
-    ORDER BY COALESCE(watch_date, updated_at) DESC`
+    ORDER BY COALESCE(watch_date, updated_at) DESC, updated_at DESC`
 );
 // Rewatch events this month — one dated row per rewatch, each its own line item.
 const monthRewatchesStmt = db.prepare(

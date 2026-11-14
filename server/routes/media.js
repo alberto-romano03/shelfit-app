@@ -621,10 +621,14 @@ export default async function mediaRoutes(fastify) {
     const runtimes = allEpisodes.map((e) => e.runtime).filter((n) => Number.isFinite(n) && n > 0);
     const avgRuntime = runtimes.length ? runtimes.reduce((a, b) => a + b, 0) / runtimes.length : 0;
     const unwatched = allEpisodes.filter((e) => !e.watched);
+    // What "Watched all" would mark: only episodes already out.
+    const today = new Date().toISOString().slice(0, 10);
+    const airedUnwatched = unwatched.filter((e) => e.air_date && e.air_date <= today).length;
 
     const baseResp = {
       item_id: row.id,
       watched_count: allEpisodes.length - unwatched.length,
+      aired_unwatched: airedUnwatched,
       // An episode stopped partway counts only what is left of it.
       minutes_left: Math.round(
         unwatched.reduce((sum, e) => {
@@ -807,7 +811,16 @@ export default async function mediaRoutes(fastify) {
     });
     apply();
 
-    return { ok: true };
+    // What the change left behind (a trigger may have stamped the watch date or
+    // cleared the stopped minute), so the page shows it without a reload.
+    const after = getItemByIdStmt.get(row.id, row.user_id);
+    return {
+      ok: true,
+      status: after.status,
+      watch_date: after.watch_date || null,
+      updated_at: after.updated_at,
+      stopped_at: after.stopped_at ?? null,
+    };
   });
 
   // PATCH /api/media/:id/watch-date  { date: 'YYYY-MM-DD' }  (movies only)

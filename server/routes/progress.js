@@ -87,6 +87,30 @@ function getItem(id, userId) {
   return getItemStmt.get(id, userId);
 }
 
+// A series still on the list starts being watched with its first episode.
+const startWatchingStmt = db.prepare(
+  "UPDATE items SET status = 'watching', updated_at = datetime('now') WHERE id = ? AND user_id = ? AND status = 'plan_to_watch'"
+);
+const backToListStmt = db.prepare(
+  "UPDATE items SET status = 'plan_to_watch' WHERE id = ? AND user_id = ? AND status = 'watching'"
+);
+// Called inside a mark's transaction: `firstWatch` is whether the mark added an
+// episode never watched before (a rewatch or a correction is not one). Returns
+// the new status when it changed, else null.
+function startedWatching(item, firstWatch) {
+  if (!firstWatch || item.status !== 'plan_to_watch') return null;
+  startWatchingStmt.run(item.id, item.user_id);
+  item.status = 'watching';
+  return 'watching';
+}
+// A shelved, paused or dropped series that gets a new episode watched is offered
+// back to Watching (the client asks; nothing changes on its own), unless that
+// episode finished a series that has ended.
+const RESUMABLE = new Set(['completed', 'paused', 'dropped']);
+function offerWatching(item, firstWatch, caughtUp, info) {
+  return !!firstWatch && RESUMABLE.has(item.status) && !(caughtUp && info.series_ended);
+}
+
 // Per-request memo for the cached-meta disk reads. isCaughtUp() and
 // previousGap()/orderedEpisodes() each walk every season's cached meta from
 // disk; without memoization a single write reads the same JSON files two or
@@ -221,9 +245,12 @@ export default async function progressRoutes(fastify) {
       reply.code(404);
       return { error: 'item not found' };
     }
+    let firstWatch = false;
+    let statusChanged = null;
     const apply = db.transaction(() => {
-      insertWatchedStmt.run(item_id, season, episode, notes ?? null);
+      firstWatch = insertWatchedStmt.run(item_id, season, episode, notes ?? null).changes > 0;
       setCurrentSeasonStmt.run(season, item_id);
+      statusChanged = startedWatching(item, firstWatch);
       scheduleStatsRecompute(db);
     });
     apply();
@@ -239,12 +266,16 @@ export default async function progressRoutes(fastify) {
     } catch {
       /* non-fatal — just skip the catch-up prompt */
     }
+    const caughtUp = isCaughtUp(item, metaCache); // → client confetti when the last aired ep lands
+    const info = finishInfo(item, metaCache);
     return {
       ok: true,
       watch_count: rowNow ? rowNow.watch_count : 1,
       previous_unseen,
-      caught_up: isCaughtUp(item, metaCache), // → client confetti when the last aired ep lands
-      ...finishInfo(item, metaCache),
+      caught_up: caughtUp,
+      ...info,
+      status_changed: statusChanged,
+      offer_watching: offerWatching(item, firstWatch, caughtUp, info),
     };
   });
 
@@ -264,12 +295,16 @@ export default async function progressRoutes(fastify) {
     }
     const metaCache = makeMetaCache();
     const gap = previousGap(item, Number(season), Number(episode), metaCache);
+    let statusChanged = null;
     const apply = db.transaction(() => {
       for (const e of gap) insertWatchedNoNotesStmt.run(item_id, e.season, e.episode);
       setCurrentSeasonStmt.run(Number(season), item_id);
+      statusChanged = startedWatching(item, gap.length > 0);
       scheduleStatsRecompute(db);
     });
     apply();
+    const caughtUp = isCaughtUp(item, metaCache);
+    const info = finishInfo(item, metaCache);
     // `marked_episodes` lets the client update just those rows in place instead
     // of re-fetching the whole season (purely additive to the response).
     return {
@@ -277,8 +312,10 @@ export default async function progressRoutes(fastify) {
       marked: gap.length,
       marked_episodes: gap,
       previous_current_season: item.current_season ?? null,
-      caught_up: isCaughtUp(item, metaCache),
-      ...finishInfo(item, metaCache),
+      caught_up: caughtUp,
+      ...info,
+      status_changed: statusChanged,
+      offer_watching: offerWatching(item, gap.length > 0, caughtUp, info),
     };
   });
 
@@ -330,22 +367,28 @@ export default async function progressRoutes(fastify) {
       return { error: 'item not found' };
     }
     let result = 0;
+    let statusChanged = null;
     const apply = db.transaction(() => {
+      const before = getWatchCountStmt.get(item_id, season, episode);
+      const prevCount = before ? before.watch_count : 0;
       if (n <= 0) {
         deleteEpisodeStmt.run(item_id, season, episode); // count 0 → fully unwatch
         result = 0;
-      } else if (getWatchCountStmt.get(item_id, season, episode)) {
+      } else if (before) {
         setWatchCountStmt.run(n, n, item_id, season, episode);
         result = n;
       } else {
         insertWatchCountStmt.run(item_id, season, episode, n);
         result = n;
       }
-      if (n > 0) setCurrentSeasonStmt.run(season, item_id); // watched/rewatched
+      // Only a new viewing moves where the series is being watched: correcting a
+      // count down, or confirming it unchanged, leaves current_season alone.
+      if (n > prevCount) setCurrentSeasonStmt.run(season, item_id);
+      statusChanged = startedWatching(item, n > 0 && !before);
       scheduleStatsRecompute(db);
     });
     apply();
-    return { ok: true, watch_count: result };
+    return { ok: true, watch_count: result, status_changed: statusChanged };
   });
 
   // DELETE /api/progress/:item_id/:season/:episode → fully unwatch.
@@ -442,32 +485,44 @@ export default async function progressRoutes(fastify) {
     const watchedBefore = new Set(
       watchedKeysStmt.all(item.id).map((r) => `${r.season}:${r.episode}`)
     );
+    // Only episodes already out: one still to air is not watched, and marking it
+    // would hide it from What's Next the day it airs.
+    const today = new Date().toISOString().slice(0, 10);
     const marked_episodes = sMeta.episodes
+      .filter((ep) => ep.air_date && ep.air_date <= today)
       .filter((ep) => !watchedBefore.has(`${seasonNum}:${ep.episode_number}`))
       .map((ep) => ({ season: seasonNum, episode: ep.episode_number }));
+    let statusChanged = null;
     const apply = db.transaction(() => {
-      for (const ep of sMeta.episodes) {
-        insertWatchedNoNotesStmt.run(item_id, seasonNum, ep.episode_number);
+      for (const ep of marked_episodes) {
+        insertWatchedNoNotesStmt.run(item_id, seasonNum, ep.episode);
       }
-      setCurrentSeasonStmt.run(seasonNum, item_id);
+      if (marked_episodes.length) setCurrentSeasonStmt.run(seasonNum, item_id);
+      statusChanged = startedWatching(item, marked_episodes.length > 0);
       scheduleStatsRecompute(db);
     });
     apply();
     // isCaughtUp reuses the season meta already read above via the shared cache.
+    const caughtUp = isCaughtUp(item, metaCache);
+    const info = finishInfo(item, metaCache);
     return {
       ok: true,
       marked_episodes,
       previous_current_season: item.current_season ?? null,
-      caught_up: isCaughtUp(item, metaCache),
-      ...finishInfo(item, metaCache),
+      caught_up: caughtUp,
+      ...info,
+      status_changed: statusChanged,
+      offer_watching: offerWatching(item, marked_episodes.length > 0, caughtUp, info),
     };
   });
 
   // POST /api/progress/undo-marks → the Undo after Watched all or a catch up: removes
   // only the episodes that action reported marking, and puts current_season back.
   // DELETE /api/progress/season can't do this: it would clear the whole season.
+  // `restore_status: 'plan_to_watch'` also puts back a series that the marks
+  // moved from the list to Watching.
   fastify.post('/api/progress/undo-marks', async (request, reply) => {
-    const { item_id, episodes, current_season } = request.body || {};
+    const { item_id, episodes, current_season, restore_status } = request.body || {};
     const positive = (n) => Number.isInteger(n) && n >= 1;
     if (
       !item_id ||
@@ -486,6 +541,7 @@ export default async function progressRoutes(fastify) {
     const apply = db.transaction(() => {
       for (const e of episodes) deleteEpisodeStmt.run(item_id, e.season, e.episode);
       setCurrentSeasonStmt.run(current_season ?? null, item_id);
+      if (restore_status === 'plan_to_watch') backToListStmt.run(item_id, request.user.id);
       scheduleStatsRecompute(db);
     });
     apply();

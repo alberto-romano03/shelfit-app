@@ -17,30 +17,36 @@ function dayStr(offset) {
 
 // The next episode to propose when a series has no unwatched aired episodes but is
 // still being watched/rewatched. Scoped by the series' `current_season` (updated on
-// every mark/rewatch). Within that season the rewatch position is the frontier by
-// watch_count — the LAST episode (highest episode number) at the season's maximum
-// watch_count, i.e. the episode the user most recently (re)watched — and we return
-// the one immediately following it in broadcast order (next episode in the same
-// season, or episode 1 of the next season). So rewatching S11E1 of a fully-watched
-// S11 (its count → 2) proposes S11E2, not S12E1. Returns null when current_season
-// is unset, has no watched episode, or there's no following episode in local data.
-function currentSeasonNext(orderedEps, counts, currentSeason) {
+// every new viewing). Within that season the rewatch position is the episode
+// watched most recently (`stamps`: watched_at per episode, re-dated on every
+// rewatch; a tie goes to the later episode), and we return the one immediately
+// following it in broadcast order (next episode in the same season, or episode 1
+// of the next season). So rewatching S11E1 of a fully-watched S11 (its count → 2)
+// proposes S11E2, not S12E1, and an old episode seen many times long ago does not
+// hold the position back.
+// Only a rewatch under way proposes anything: the episode watched last must itself
+// have been seen more than once. Filling a gap in an old season, or correcting a
+// count, leaves that episode at one viewing, so nothing is proposed and a caught-up
+// series stays out of Watch Next.
+// Returns null when current_season is unset, has no watched episode, there's no
+// following episode in local data, or no rewatch is under way.
+function currentSeasonNext(orderedEps, counts, currentSeason, stamps = new Map()) {
   if (currentSeason == null) return null;
-  let maxCount = 0;
-  for (const e of orderedEps) {
-    if (e.season !== currentSeason) continue;
-    const c = counts.get(`${e.season}:${e.episode}`) || 0;
-    if (c > maxCount) maxCount = c;
-  }
-  if (maxCount <= 0) return null; // nothing watched in that season
-  let frontierIdx = -1; // index of the last episode at maxCount within the season
+  const key = (e) => `${e.season}:${e.episode}`;
+  const stampOf = (e) => String(stamps.get(key(e)) || '').replace('T', ' ');
+  let frontierIdx = -1;
+  let latest = '';
   for (let i = 0; i < orderedEps.length; i++) {
     const e = orderedEps[i];
-    if (e.season === currentSeason && (counts.get(`${e.season}:${e.episode}`) || 0) === maxCount) {
+    if (e.season !== currentSeason || !(counts.get(key(e)) > 0)) continue;
+    const at = stampOf(e);
+    if (frontierIdx < 0 || at >= latest) {
       frontierIdx = i;
+      latest = at;
     }
   }
   if (frontierIdx < 0 || frontierIdx + 1 >= orderedEps.length) return null; // last in local data
+  if ((counts.get(key(orderedEps[frontierIdx])) || 0) < 2) return null; // not a rewatch
   return orderedEps[frontierIdx + 1];
 }
 
@@ -192,12 +198,14 @@ export default async function upcomingRoutes(fastify) {
     for (const r of rows) {
       let e = byItem.get(r.item_id);
       if (!e) {
-        e = { watched: new Set(), last: null, counts: new Map() };
+        e = { watched: new Set(), last: null, counts: new Map(), stamps: new Map() };
         byItem.set(r.item_id, e);
       }
       e.watched.add(`${r.season}:${r.episode}`);
-      // Per-episode watch_count locates the rewatch frontier within current_season.
+      // Per-episode watch_count and latest viewing locate the rewatch position
+      // within current_season.
       e.counts.set(`${r.season}:${r.episode}`, r.watch_count || 1);
+      e.stamps.set(`${r.season}:${r.episode}`, r.watched_at || '');
       if (r.watched_at && (!e.last || r.watched_at > e.last)) e.last = r.watched_at;
     }
 
@@ -229,7 +237,7 @@ export default async function upcomingRoutes(fastify) {
       // Case 3 (edge): currentSeasonNext returns null when there's no following
       // episode in the local data — fall through to the drop below.
       if (!next) {
-        const cand = currentSeasonNext(show.orderedEps, prog.counts, currentSeasonById.get(show.id));
+        const cand = currentSeasonNext(show.orderedEps, prog.counts, currentSeasonById.get(show.id), prog.stamps);
         // Keep Watch Next to episodes you can actually watch now: a rewatch target
         // (already watched → definitely aired) or any episode that has aired. A
         // future successor (a caught-up series awaiting its next season) is left to

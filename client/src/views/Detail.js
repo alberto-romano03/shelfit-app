@@ -702,9 +702,12 @@ export default async function Detail(container, params) {
         ? t('detail.endsAtLeft', { length: hoursAndMinutes(left), time: endsAt(left) })
         : t('detail.endsAt', { length: hoursAndMinutes(meta.runtime), time: endsAt(meta.runtime) });
   }
+  // A movie takes a stopped minute while it is being watched, or rewatched once
+  // it is on the shelf (recording the rewatch clears it, like finishing it).
+  const stopsHere = (status) => d.type === 'movie' && (status === 'watching' || status === 'completed');
   // Minutes left of a movie being watched and stopped partway, else null.
   function resumeMinutesLeft() {
-    if (d.type !== 'movie' || d.status !== 'watching' || !(d.stopped_at > 0) || !(meta.runtime > 0)) return null;
+    if (!stopsHere(d.status) || !(d.stopped_at > 0) || !(meta.runtime > 0)) return null;
     return Math.max(0, meta.runtime - d.stopped_at);
   }
   paintRuntime();
@@ -749,18 +752,25 @@ export default async function Detail(container, params) {
   const statusControl = createStatusSelect({
     status: d.status,
     suffix: (st) =>
-      d.type === 'movie' && st === 'watching' && d.stopped_at > 0
+      stopsHere(st) && d.stopped_at > 0
         ? el('span', { class: 'status-stop', text: stopLabel(d.stopped_at, meta.runtime || 0) })
         : null,
     onSelect: async (key) => {
+      let res;
       try {
-        await api.updateMedia(id, { status: key });
+        res = await api.updateMedia(id, { status: key });
       } catch (err) {
         toast(err.message, 'bad');
         throw err; // keep the chooser open, leave the button unchanged
       }
       d.status = key;
-      if (key === 'completed') d.stopped_at = null; // finishing clears it (the server does too)
+      // What the server kept: the first-watch date it stamped, the change time,
+      // and the minute (finishing clears it).
+      if (res && 'watch_date' in res) {
+        d.watch_date = res.watch_date;
+        d.updated_at = res.updated_at;
+        d.stopped_at = res.stopped_at;
+      } else if (key === 'completed') d.stopped_at = null;
       renderRewatch(); // show/hide the movie's date and rewatch keys with completion
       paintRuntime();
       paintStop();
@@ -975,6 +985,7 @@ export default async function Detail(container, params) {
               for (let k = 0; k < delta; k++) {
                 const res = await api.addRewatch(id, date);
                 if (res && typeof res.rewatch_count === 'number') d.rewatch_count = res.rewatch_count;
+                d.stopped_at = null; // the rewatch is done: its minute goes (the server clears it too)
               }
             } else {
               // Remove the newest rewatch events (list is newest-first).
@@ -987,6 +998,8 @@ export default async function Detail(container, params) {
             toast(delta > 0 ? t('detail.rewatchAdded') : t('detail.rewatchRemoved'), 'ok');
           } finally {
             renderRewatch();
+            paintStop();
+            paintRuntime();
           }
         },
       });
@@ -1027,9 +1040,10 @@ export default async function Detail(container, params) {
   kodiBtn.innerHTML =
     `<img class="kodi-logo-img" src="${withBase('/icons/kodi.svg')}" alt="" aria-hidden="true"><span>${t('detail.playOnKodi')}</span>`;
   const kodiSlot = el('div', { class: 'kodi-slot' });
-  // --- Stopped at (movies, while Watching): a round key beside the status opens the
-  // sheet to type the minute you left it at; the status button reads it out and
-  // fills up to it. Any other status hides the key and keeps the minute.
+  // --- Stopped at (movies, while Watching or rewatching one on the shelf): a round
+  // key beside the status opens the sheet to type the minute you left it at; the
+  // status button reads it out and fills up to it. Any other status hides the key
+  // and keeps the minute.
   const stopKey =
     d.type === 'movie'
       ? el('button', { class: 'stop-key', type: 'button', 'aria-label': t('stop.title') }, [lucideIcon('timer', 'stop-key-ico')])
@@ -1052,7 +1066,7 @@ export default async function Detail(container, params) {
   }
   function paintStop() {
     if (!stopKey) return;
-    const watching = d.status === 'watching';
+    const watching = stopsHere(d.status);
     stopKey.hidden = !watching;
     const p = watching && d.stopped_at > 0 && meta.runtime > 0 ? Math.min(1, d.stopped_at / meta.runtime) : 0;
     statusBtn.classList.toggle('has-stop', p > 0);

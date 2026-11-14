@@ -42,7 +42,13 @@ export function markedToast(res, msg, { id, prompt, reload } = {}) {
     msg,
     undo: async (a) => {
       if (prompt) prompt.close(); // "Move it to the shelf?" no longer applies
-      await a.undoMarks(id, episodes, res.previous_current_season ?? null);
+      // Marks that moved a series off the list put it back there too.
+      await a.undoMarks(
+        id,
+        episodes,
+        res.previous_current_season ?? null,
+        res.status_changed ? 'plan_to_watch' : undefined
+      );
       if (reload) reload();
     },
   });

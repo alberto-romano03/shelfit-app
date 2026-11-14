@@ -385,6 +385,47 @@ export const MIGRATIONS = [
       `);
     },
   },
+  {
+    // Library history that must not drift:
+    //   • A watched movie keeps the day it was first watched. Until now a movie
+    //     with no edited date used its last status change as that day, so moving
+    //     it away from Shelved and back (or a Kodi sync, or a restore) moved an
+    //     old film into this month's receipt. Every Shelved movie now carries its
+    //     date, and becoming Shelved stamps today on one that has none.
+    //   • Recording a rewatch of a movie clears the minute it was stopped at,
+    //     the way counting an episode rewatch does (migration 9).
+    //   • kodi_marks: the play count Kodi last reported per title, so a sync acts
+    //     only on a new viewing and never undoes a status set by hand.
+    version: 11,
+    name: 'library history',
+    up(db) {
+      db.exec(`
+        UPDATE items SET watch_date = substr(updated_at, 1, 10)
+         WHERE type = 'movie' AND status = 'completed' AND watch_date IS NULL AND updated_at IS NOT NULL;
+        CREATE TRIGGER movie_watch_date_on_complete AFTER UPDATE OF status ON items
+        WHEN NEW.type = 'movie' AND NEW.status = 'completed' AND NEW.watch_date IS NULL
+        BEGIN
+          UPDATE items SET watch_date = date('now', 'localtime') WHERE id = NEW.id;
+        END;
+        -- An import inserts a watched movie with the day it was watched in
+        -- updated_at (TV Time); that day is kept rather than today.
+        CREATE TRIGGER movie_watch_date_on_insert AFTER INSERT ON items
+        WHEN NEW.type = 'movie' AND NEW.status = 'completed' AND NEW.watch_date IS NULL
+        BEGIN
+          UPDATE items SET watch_date = COALESCE(substr(NEW.updated_at, 1, 10), date('now', 'localtime'))
+           WHERE id = NEW.id;
+        END;
+        CREATE TRIGGER movie_stop_cleared_on_rewatch AFTER INSERT ON movie_rewatches
+        BEGIN
+          UPDATE items SET stopped_at = NULL WHERE id = NEW.item_id AND stopped_at IS NOT NULL;
+        END;
+        CREATE TABLE kodi_marks (
+          item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+          plays   INTEGER NOT NULL
+        );
+      `);
+    },
+  },
 ];
 
 // Filesystem half of v1: the one custom profile photo moves from

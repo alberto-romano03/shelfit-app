@@ -158,6 +158,10 @@ export default async function Season(container, params) {
   // The count and time left. A copy saved before these existed simply shows neither.
   let watchedCount = Number.isFinite(first.watched_count) ? first.watched_count : null;
   let minutesLeft = Number.isFinite(first.minutes_left) ? first.minutes_left : null;
+  // Episodes out and not yet watched: what "Watched all" marks (it skips the ones
+  // still to air). Kept in step with the ticks below.
+  let airedLeft = Number.isFinite(first.aired_unwatched) ? first.aired_unwatched : null;
+  const todayStr = new Date().toISOString().slice(0, 10);
   const episodes = new Array(total); // position → episode object (or empty)
   const indexByEp = new Map(); // episode_number → absolute index (loaded eps only)
   const pageStatus = new Array(totalPages + 1); // 1-indexed: undefined | 'loading' | 'loaded' | 'error'
@@ -208,7 +212,7 @@ export default async function Season(container, params) {
       onClick: () =>
         confirmModal({
           title: t('season.watchedAllTitle'),
-          body: t('season.watchedAllBody', { n: total }),
+          body: t('season.watchedAllBody', { n: airedLeft ?? total }),
           confirmLabel: t('season.watchedAllConfirm'),
           confirmIcon: 'check-check',
           danger: false,
@@ -526,6 +530,10 @@ export default async function Season(container, params) {
     if (delta > 0 && ep) ep.stopped_at = null;
     watchedCount = Math.max(0, Math.min(total, watchedCount + delta));
     minutesLeft = Math.max(0, minutesLeft - delta * runtime + seen);
+    // An episode whose page isn't loaded (a catch up) has already aired.
+    if (airedLeft !== null && (!ep || (ep.air_date && ep.air_date <= todayStr))) {
+      airedLeft = Math.max(0, airedLeft - delta);
+    }
     paintProgress();
     if (delta < 0 && ep && ep._i < nextIndex) nextIndex = ep._i;
     while (nextIndex < total - 1 && episodes[nextIndex] && episodes[nextIndex].watched) nextIndex += 1;
@@ -597,7 +605,11 @@ export default async function Season(container, params) {
         }
         if (res.caught_up) confetti.trigger(); // finished the last available episode
         const gap = (res.previous_unseen || []).length;
-        if (gap > 0) promptCatchUp(ep, gap);
+        if (gap > 0) {
+          // The catch up asks first; the status news is not lost meanwhile.
+          if (res.status_changed) toast(t('finish.started'), 'ok');
+          promptCatchUp(ep, gap);
+        }
         else offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
       } catch (err) {
         if (isAbortError(err)) return; // navigated away — leave the optimistic tick

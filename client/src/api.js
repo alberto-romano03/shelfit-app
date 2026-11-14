@@ -199,8 +199,8 @@ function buildApi(signal) {
     // Minute an unwatched episode was left at; 0 clears it.
     episodeStop: (item_id, season, episode, stopped_at) =>
       api.put(`/api/progress/${item_id}/${season}/${episode}/stop`, { stopped_at }),
-    undoMarks: (item_id, episodes, current_season) =>
-      api.post('/api/progress/undo-marks', { item_id, episodes, current_season }),
+    undoMarks: (item_id, episodes, current_season, restore_status) =>
+      api.post('/api/progress/undo-marks', { item_id, episodes, current_season, restore_status }),
     markSeason: (item_id, season) =>
       api.post('/api/progress/season', { item_id, season }),
     unmarkSeason: (item_id, season) =>

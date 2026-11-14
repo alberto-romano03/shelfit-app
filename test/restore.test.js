@@ -63,8 +63,8 @@ describe('library backup v4: a member restores a complete library', () => {
     if (h) await h.close();
   });
 
-  it('exports version 4 with added dates, episode times, every list and The Wall', () => {
-    assert.match(xml, /<version>4<\/version>/);
+  it('exports version 5 with added dates, episode times, every list and The Wall', () => {
+    assert.match(xml, /<version>5<\/version>/);
     assert.match(xml, /<added_at>2024-03-01 09:30:00<\/added_at>/);
     assert.match(xml, /watched_at="2025-06-07 22:15:00"/);
     assert.match(xml, /<list name="Someday" type="show" created_at="\d+"\/>/);
