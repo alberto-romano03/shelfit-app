@@ -322,11 +322,14 @@ export default async function Season(container, params) {
     const stopStrip = el('span', { class: 'ep-stop-strip' }, [stopFill]);
     const thumb = el('div', { class: 'thumb' }, [img, stopStrip]);
     const titleText = el('span', { class: 'ep-title-text' });
-    const noteDot = el('span', { class: 'ep-note-dot', title: t('season.hasNote') });
-    noteDot.style.display = 'none';
-    const titleRow = el('div', { class: 'ep-title' }, [titleText, noteDot]);
+    const titleRow = el('div', { class: 'ep-title' }, [titleText]);
     const sub = el('div', { class: 'ep-sub' });
-    const main = el('div', { class: 'ep-main' }, [titleRow, sub]);
+    // An episode with a note shows its first words under date and length, behind a
+    // pencil; one without has no line at all. It fits the row's fixed height.
+    const noteText = el('span', { class: 'ep-note-text' });
+    const noteLine = el('div', { class: 'ep-note' }, [lucideIcon('square-pen', 'btn-lucide ep-note-ico'), noteText]);
+    noteLine.hidden = true;
+    const main = el('div', { class: 'ep-main' }, [titleRow, sub, noteLine]);
     const check = el('div', { class: 'check' });
     const right = el('div', { class: 'ep-right' }, [check]);
     const real = el('div', { class: 'ep-real' }, [thumb, main, right]);
@@ -373,7 +376,9 @@ export default async function Season(container, params) {
       retryHandler = null;
       node.classList.remove('is-skel', 'is-retry');
       titleText.textContent = `${epLabel(data.season_number, ep.episode_number)} · ${ep.name || ''}`;
-      noteDot.style.display = ep.notes ? '' : 'none';
+      const note = (ep.notes || '').trim().replace(/\s+/g, ' ');
+      noteText.textContent = note;
+      noteLine.hidden = !note;
       // An episode left partway reads where you stopped, in green, in place of its length.
       const stopped = ep.stopped_at > 0; // a first watch or a rewatch
       sub.textContent = ep.air_date ? formatDate(ep.air_date) : '';
@@ -427,7 +432,8 @@ export default async function Season(container, params) {
     const ep = episodes[i];
     const p = pageOf(i);
     let sig;
-    if (ep) sig = `e${ep.episode_number}:${ep.watched ? 1 : 0}:${ep.watch_count || 0}:${ep.notes ? 1 : 0}:${ep.stopped_at || 0}`;
+    // The note's text is part of it: editing a note redraws its preview.
+    if (ep) sig = `e${ep.episode_number}:${ep.watched ? 1 : 0}:${ep.watch_count || 0}:${ep.stopped_at || 0}:${ep.notes || ''}`;
     else if (pageStatus[p] === 'error') sig = `r${p}`;
     else sig = 's';
     if (r._i === i && r._sig === sig) return;
