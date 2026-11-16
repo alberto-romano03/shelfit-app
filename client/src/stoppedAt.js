@@ -85,7 +85,6 @@ export function openStopSheet({ title, total = 0, value = 0, note = null, onSave
         input.classList.remove('is-over');
         glow.classList.remove('is-over');
         syncGlow();
-        input.focus();
         clear.classList.add('is-lit'); // the lamp stays on a moment after the press
         clearTimeout(litTimer);
         litTimer = setTimeout(() => clear.classList.remove('is-lit'), 450);
@@ -136,14 +135,9 @@ export function openStopSheet({ title, total = 0, value = 0, note = null, onSave
         footer.append(el('button', { class: 'link-btn link-danger note-delete', text: t('season.deleteNote'), onClick: () => save('') }));
       }
 
+      // Nothing takes focus on its own: the keyboard comes up only when the display
+      // is tapped, not when the sheet opens just to look, clear or close.
       sheet.append(el('div', { class: 'sheet-header' }, [el('h3', { text: title })]), body, footer);
-      // With no note to write, the field is ready to type into straight away.
-      if (!note) {
-        setTimeout(() => {
-          input.focus();
-          input.select();
-        }, 60);
-      }
     },
     { compact: true }
   );
