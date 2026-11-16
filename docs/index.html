@@ -42,16 +42,42 @@
   --header-h: 64px;
   --dur-short: 180ms;
   --dur-medium: 280ms;
-  --dur-long: 300ms;
+  --dur-long: 240ms;
+  --dur-instant: 90ms;
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
   --ease-in: cubic-bezier(0.55, 0, 0.68, 0.2);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-state: ease;
+  --ease-glide: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-play: cubic-bezier(0.34, 1.3, 0.64, 1);
+  --press: 0.97;
+  --press-wide: 0.985;
+  --press-small: 0.9;
+  --shadow-sm: 0 2px 8px var(--shadow);
+  --shadow-md: 0 4px 16px var(--shadow);
+  --shadow-lg: 0 8px 28px var(--shadow);
+  --disabled: 0.4;
+  --on-accent: #000;
+  --stop-ink: #7ed99a;
+  --kodi-blue: #17b2e8;
+  --ink-ok: #a5d6a7;
+  --ink-bad: #ef9a9a;
+  --ink-info: #e5c07b;
+  --rp5-colors: #ff5e62, #ff9966, #ffd36e, #7ee8fa, #a18cd1, #ff5e62;
+  --rp5-glow: drop-shadow(0 0 4px rgba(255, 165, 70, 0.6));
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
   --r-pill: 999px;
   --frame-gold-label: #e0b43c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --press: 1;
+    --press-wide: 1;
+    --press-small: 1;
+  }
 }
 
 /* ---- styles.css · Reset ---- */
@@ -152,12 +178,15 @@ a {
   border-radius: 50%;
   color: var(--text-primary);
 }
+.icon-btn {
+  transition: scale var(--dur-long) var(--ease-out);
+}
 .icon-btn:active {
-  background: var(--surface-elevated);
+  scale: var(--press-small);
 }
 .icon-btn svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 
 /* ---- styles.css · App logo idle slide (the disc slides into the slot) ---- */
@@ -215,7 +244,7 @@ a {
   width: 148px;
   height: 148px;
   will-change: transform;
-  animation: splash-logo 1.5s forwards;
+  animation: splash-logo 0.9s forwards;
 }
 .splash-slot {
   width: 190px;
@@ -224,7 +253,7 @@ a {
   background: linear-gradient(90deg, #2a2a2a, #e5a00d, #2a2a2a);
   transform: scaleX(0);
   opacity: 0;
-  animation: splash-slot 1.5s forwards;
+  animation: splash-slot 0.9s forwards;
 }
 .splash-word {
   margin-top: 22px;
@@ -235,7 +264,7 @@ a {
   letter-spacing: -0.5px;
   color: #ffffff;
   opacity: 0;
-  animation: splash-word 1.5s forwards;
+  animation: splash-word 0.9s forwards;
 }
 .splash-word span {
   color: #e5a00d;
@@ -288,34 +317,49 @@ a {
 
 /* ---- styles.css · Buttons ---- */
 .btn {
+  /* Primary/secondary/danger fills, the disabled dim, and the press all animate. */
   transition: background-color var(--dur-short) var(--ease-state),
     color var(--dur-short) var(--ease-state),
     opacity var(--dur-short) var(--ease-state),
-    transform var(--dur-short) var(--ease-state);
+    scale var(--dur-long) var(--ease-out);
   flex: 1;
+  /* A row rather than centred text: every action carries its verb's glyph to the
+     left of the label, and the gap keeps the pair spaced without per-icon
+     margins. */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 13px;
+  /* Fully rounded, like every other control in the app, the segmented tracks,
+     the filter pills, the toast, the Kodi active chip. */
   border-radius: var(--r-pill);
   font-weight: 600;
   min-height: 48px;
   text-align: center;
 }
 .btn:active:not(:disabled) {
-  transform: scale(0.97);
+  scale: var(--press);
+}
+/* A press lands at once and lets go slowly, so even a quick tap shows. */
+button:active,
+[role='button']:active,
+.chip:active,
+.btn:active,
+.icon-btn:active,
+.poster-card:active {
+  transition-duration: var(--dur-instant);
 }
 .btn-primary {
   background: var(--accent);
-  color: #000;
+  color: var(--on-accent);
 }
 .btn-secondary {
   background: var(--surface-elevated);
   color: var(--text-primary);
 }
 .btn:disabled {
-  opacity: 0.4;
+  opacity: var(--disabled);
 }
 .btn svg {
   width: 18px;
@@ -389,11 +433,6 @@ a {
 }
 
 /* ---- styles.css · Showcase illustrations (.sc-*) ---- */
-@keyframes backdropIn {
-  from {
-    opacity: 0;
-  }
-}
 .sc-status {
   display: inline-flex;
   align-items: center;
@@ -588,9 +627,9 @@ a {
   border-radius: var(--r-pill);
   font-weight: 600;
   font-size: 14px;
-  background: color-mix(in srgb, #17b2e7 15%, transparent);
-  border: 1.5px solid color-mix(in srgb, #17b2e7 55%, transparent);
-  color: color-mix(in srgb, #17b2e7 82%, var(--text-primary));
+  background: color-mix(in srgb, var(--kodi-blue) 15%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--kodi-blue) 55%, transparent);
+  color: color-mix(in srgb, var(--kodi-blue) 82%, var(--text-primary));
 }
 .sc-kodi-chip svg { width: 17px; height: 17px; }
 @keyframes sc-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
@@ -632,14 +671,16 @@ a {
 }
 .dvd-spine {
   position: relative;
-  height: 178px;
+  height: 178px; /* identical across all three spines */
   border: none;
   padding: 0;
+  /* A slight moulded rounding at the top of the case. */
   border-radius: 3px 3px 2px 2px;
   cursor: pointer;
   overflow: hidden;
   color: var(--text-primary);
-  transition: transform 0.2s var(--ease-out);
+  /* The per-spine background-color below is the whole surface treatment. */
+  transition: transform var(--dur-short) var(--ease-out);
 }
 .dvd-spine-band {
   position: absolute;
@@ -731,16 +772,16 @@ a {
 /* ---- styles.css · The Desk: POS receipt printer ---- */
 .pos-printer {
   display: block;
-  width: min(420px, 94%);
+  width: min(420px, 100%);
   margin: 20px auto 0;
   padding: 0;
   background: none;
   border: none;
   cursor: pointer;
-  transition: transform 0.12s ease;
+  transition: scale var(--dur-long) var(--ease-out);
 }
 .pos-printer:active {
-  transform: scale(0.97);
+  scale: var(--press); /* whole widget reacts as one unit */
 }
 .pos-body {
   position: relative;
@@ -785,11 +826,15 @@ a {
   display: block;
   position: relative;
   z-index: 1;
-  width: 60%;
+  width: 60%; /* narrower than the slot → looks fed through it */
   height: 52px;
-  margin: -8px auto 0;
+  margin: -8px auto 0; /* tuck the top right up to the slot line */
   background: var(--pos-paper-edge);
+  /* drop-shadow, not box-shadow: a box-shadow is clipped away with everything
+     else outside the polygon, while a filter follows the torn silhouette. */
   filter: var(--pos-paper-shadow);
+  /* Torn thermal-paper bottom edge (pure CSS zigzag). Held in a custom property
+     so the sheet inside can be cut with the exact same shape. */
   --torn-edge: polygon(
     0% 0%, 100% 0%,
     100% calc(100% - 5px),
@@ -800,8 +845,10 @@ a {
     15% 100%, 10% calc(100% - 5px), 5% 100%, 0% calc(100% - 5px)
   );
   clip-path: var(--torn-edge);
+  /* Hidden (tucked up behind the slot) until the widget scrolls into view; then
+     the `.printed` class slides it down out of the slot, once. */
   transform: translateY(-44px);
-  transition: transform 1.05s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 1.05s var(--ease-glide);
 }
 .pos-paper-sheet {
   position: absolute;
@@ -966,19 +1013,21 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* button reset */
   padding: 0;
   border: none;
   background: none;
   cursor: pointer;
-  color: #17b2e8;
+  color: var(--kodi-blue);
   font-family: inherit;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.5px;
   line-height: 1;
+  /* Space always reserved, no layout shift on appear/disappear. */
   visibility: hidden;
   opacity: 0;
-  transition: opacity 0.25s ease;
+  transition: opacity var(--dur-medium) var(--ease-state);
 }
 .np-indicator::after {
   content: '';
@@ -995,17 +1044,16 @@ a {
   white-space: nowrap;
   background: linear-gradient(
     100deg,
-    #17b2e8 0%,
-    #17b2e8 40%,
-    color-mix(in srgb, #17b2e8 40%, var(--text-primary)) 50%,
-    #17b2e8 60%,
-    #17b2e8 100%
+    var(--kodi-blue) 0%,
+    var(--kodi-blue) 40%,
+    color-mix(in srgb, var(--kodi-blue) 40%, var(--text-primary)) 50%,
+    var(--kodi-blue) 60%,
+    var(--kodi-blue) 100%
   );
   background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: np-sweep 16s ease-in-out infinite;
 }
 @keyframes np-sweep {
   0% { background-position: 100% 0; }
@@ -1016,6 +1064,11 @@ a {
   height: 13px;
   flex-shrink: 0;
   display: inline-flex;
+}
+.np-indicator.active .np-indicator-label {
+  animation: np-sweep 16s ease-in-out infinite;
+}
+.np-indicator.active .np-audio {
   animation: np-audio-pulse 4.8s ease-in-out infinite;
 }
 .np-indicator:active .np-audio,
@@ -1035,8 +1088,10 @@ a {
 /* ---- styles.css · Network status pill (offline toast that collapses to a disc) ---- */
 .net-toast {
   --net-toast-icon: 18px;
-  --net-toast-collapsed: 44px;
+  --net-toast-collapsed: 44px; /* the circle's diameter, matches min-height */
   position: fixed;
+  /* Centred via auto side-margins (not a transform) so the width-only collapse
+     stays centred while the transform remains translateY only. */
   left: 0;
   right: 0;
   margin-inline: auto;
@@ -1055,10 +1110,11 @@ a {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
-  box-shadow: 0 8px 28px var(--shadow);
+  box-shadow: var(--shadow-lg);
   z-index: 300;
   opacity: 0;
   pointer-events: none;
+  /* Off-screen below the viewport; .show slides it up. Appear: ease-out. */
   transform: translateY(calc(100% + var(--nav-h) + env(safe-area-inset-bottom) + 32px));
   transition:
     transform var(--dur-medium) var(--ease-out),
@@ -1086,8 +1142,8 @@ a {
   width: 100%;
   height: 100%;
 }
-.net-toast-disc--broken { opacity: 1; color: #ef9a9a; }
-.net-toast-disc--spark { opacity: 0; color: #a5d6a7; }
+.net-toast-disc--broken { opacity: 1; color: var(--ink-bad); }
+.net-toast-disc--spark { opacity: 0; color: var(--ink-ok); }
 .net-toast.online .net-toast-disc--broken { opacity: 0; }
 .net-toast.online .net-toast-disc--spark { opacity: 1; }
 .net-toast-text {
@@ -1127,6 +1183,18 @@ a {
 
 
 /* ---- styles.css · Rating controls (stars, favourite heart, phrase) ---- */
+.stars {
+  display: flex;
+  gap: 4px;
+  margin: 10px 0;
+}
+.stars button {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .stars svg {
   width: 30px;
   height: 30px;
@@ -1138,10 +1206,22 @@ a {
   color: var(--text-secondary);
   opacity: 0.4;
 }
+.star-sweep {
+  animation: star-sweep var(--dur-short) var(--ease-out) both;
+  animation-delay: calc(var(--i) * 35ms);
+}
+@keyframes star-sweep {
+  from {
+    transform: scale(0.72);
+    opacity: 0.4;
+  }
+}
 
 .rating-wrap { text-align: center; margin-top: 16px; }
 .rating-wrap .field-label { text-align: center; }
 .rating-wrap .stars { display: flex; justify-content: center; }
+.rating-wrap .stars button { transition: scale var(--dur-long) var(--ease-out); }
+.rating-wrap .stars button:active { scale: var(--press-small); }
 /* Stars + favourite heart share a centered row. */
 .rating-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
 /* Favourite: a red heart sitting in a grey circle (muted until active). */
@@ -1158,11 +1238,13 @@ a {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.15s ease, color var(--dur-short) var(--ease-state), background-color var(--dur-short) var(--ease-state);
+  transition: color var(--dur-short) var(--ease-state),
+    background-color var(--dur-short) var(--ease-state),
+    scale var(--dur-long) var(--ease-out);
 }
 .fav-btn svg { width: 20px; height: 20px; }
-.fav-btn.active { color: #e5484d; }
-.fav-btn:active { transform: scale(0.88); }
+.fav-btn.active { color: var(--danger); }
+.fav-btn:active { scale: var(--press-small); }
 /* Heartbeat "da-dum" when a title is added to favourites (triggered in
    Detail.js): two quick scale pulses (in sync with the double haptic) plus a
    radiating ring burst. */
@@ -1183,7 +1265,7 @@ a {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 2px solid #e5484d;
+  border: 2px solid var(--danger);
   pointer-events: none;
   animation: fav-ring 700ms ease-out forwards;
 }
@@ -1211,7 +1293,6 @@ a {
   font-weight: 700;
   color: var(--accent);
   transform-origin: center;
-  will-change: transform, opacity;
 }
 
 /* ---- 1★ "Not for me": droops in, loses energy, sags dimmed. ---- */
@@ -1262,7 +1343,7 @@ a {
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: rp-pop 760ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+  animation: rp-pop 760ms var(--ease-play) both,
     rp-sweep 760ms ease-out both;
 }
 @keyframes rp-pop {
@@ -1279,15 +1360,16 @@ a {
 
 /* ---- 5★ "Excellent!": bursts in spinning, rainbow-cycles, then glows. ---- */
 .rating-phrase.rp-5 {
-  background: linear-gradient(90deg, #ff5e62, #ff9966, #ffd36e, #7ee8fa, #a18cd1, #ff5e62);
+  background: linear-gradient(90deg, var(--rp5-colors));
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: rp-burst 820ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
-    rp-rainbow 3s linear infinite,
-    rp-glow 2.2s ease-in-out 820ms infinite;
+  /* One pass of the colours, then at rest. It used to loop for as long as the page
+     was open, repainting and running a filter on every frame. */
+  filter: var(--rp5-glow);
+  animation: rp-burst 820ms var(--ease-play) both, rp-rainbow 3s linear both;
 }
 @keyframes rp-burst {
   0% { opacity: 0; transform: scale(0.3) rotate(-12deg); }
@@ -1298,10 +1380,6 @@ a {
 @keyframes rp-rainbow {
   from { background-position: 0% 50%; }
   to { background-position: 220% 50%; }
-}
-@keyframes rp-glow {
-  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 190, 80, 0.45)); }
-  50% { filter: drop-shadow(0 0 8px rgba(255, 140, 60, 0.85)); }
 }
 
 /* Respect reduced-motion: land straight on the visible resting state. */
@@ -1333,9 +1411,9 @@ a {
   border-radius: var(--r-lg);
   overflow: hidden;
   background: var(--surface-elevated);
-  box-shadow: 0 10px 30px var(--shadow);
+  box-shadow: var(--shadow-lg);
   transform-origin: center;
-  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.38s ease;
+  transition: transform var(--dur-medium) var(--ease-glide), opacity var(--dur-medium) var(--ease-state);
   touch-action: none; /* we own the horizontal drag gesture */
   will-change: transform, opacity;
 }
@@ -1373,14 +1451,14 @@ a {
   padding: 2px 8px;
   border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.18);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
 }
 .rom-title {
-  font-size: 19px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1.15;
   text-wrap: balance;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
@@ -1397,43 +1475,6 @@ a {
 }
 /* What letting go will do, stamped across the card while it is dragged: the
    accent "★ n · Save", or a dark outlined "Skip". */
-.rom-stamp {
-  position: absolute;
-  left: 50%;
-  top: 34%;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: var(--r-pill);
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-.rom-stamp-star {
-  display: inline-flex;
-}
-.rom-stamp-star svg {
-  width: 18px;
-  height: 18px;
-}
-.rom-stamp.is-save {
-  background: color-mix(in srgb, var(--accent) 88%, transparent);
-  color: #000;
-}
-.rom-stamp.is-skip {
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  border: 1.5px solid rgba(255, 255, 255, 0.6);
-}
 /* The one rating row, fixed under the deck; height reserved for the stars plus
    the rating phrase, so choosing a rating never nudges the footer. */
 .rom-rate {
@@ -1451,7 +1492,7 @@ a {
   background: #000;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.38s ease;
+  transition: opacity var(--dur-medium) var(--ease-state);
 }
 .rom-front {
   z-index: 2;
@@ -1487,12 +1528,123 @@ a {
   padding: var(--np-pad);
   background: var(--surface-elevated);
   border-radius: calc(var(--r-sm) + var(--np-pad));
-  box-shadow: 0 8px 28px var(--shadow);
+  box-shadow: var(--shadow-lg);
   /* Vertical equivalent of the server toast: slide down from above. */
   transform: translateY(calc(-100% - 120px));
   opacity: 0;
   pointer-events: none;
   transition: transform var(--dur-medium) var(--ease-out), opacity var(--dur-medium) var(--ease-out);
+}
+/* The action row: a full-width line under [poster | text]. The toast wraps for
+   it, and the text column takes a zero basis so a long title truncates beside
+   the poster instead of pushing the text onto a line of its own. */
+.np-toast {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+.np-toast > .np-toast-body {
+  flex: 1 1 0;
+}
+.np-act {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.np-act:empty {
+  display: none;
+}
+.np-act-btn {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: scale var(--dur-long) var(--ease-out), opacity var(--dur-short) var(--ease-state);
+}
+.np-act-btn:active {
+  scale: var(--press);
+}
+.np-act-btn.busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.np-act .np-act-ico {
+  width: 17px;
+  height: 17px;
+  vertical-align: 0;
+}
+.np-act-btn .np-act-ico {
+  color: var(--kodi-blue);
+}
+.np-act-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-act-aside {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.np-act-hint {
+  flex: 1 0 100%;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+/* A note (why there is nothing to record) or the done line: the same pill, read-only. */
+.np-act.is-note,
+.np-act.is-done {
+  flex-wrap: nowrap;
+  min-height: 42px;
+  padding: 4px 6px 4px 14px;
+  border-radius: 21px;
+  background: var(--surface);
+}
+.np-act.is-note .np-act-ico {
+  color: var(--text-secondary);
+}
+.np-act.is-done .np-act-ico {
+  color: var(--stop-ink);
+}
+.np-act-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-secondary);
+}
+.np-act.is-done .np-act-note {
+  color: var(--text-primary);
+}
+.np-act-link {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 }
 .np-toast.show {
   transform: translateY(0);
@@ -1545,14 +1697,14 @@ a {
   min-width: 0;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
 .np-toast-source .btn-lucide {
   width: 14px;
   height: 14px;
-  color: #17b2e8;
+  color: var(--kodi-blue);
 }
 .np-toast-source-name {
   min-width: 0;
@@ -1609,27 +1761,39 @@ a {
 
 /* ---- styles.css · Skeleton (ghost-frame) loading ---- */
 @keyframes shimmer {
-  0% {
-    background-position: 200% 0;
+  from {
+    transform: translateX(-100%);
   }
-  100% {
-    background-position: -200% 0;
+  to {
+    transform: translateX(100%);
   }
 }
+:where(.skeleton) {
+  position: relative;
+  isolation: isolate;
+}
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--surface) 25%,
-    var(--surface-elevated) 50%,
-    var(--surface) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
+  overflow: hidden;
+  background: var(--skel-fill, var(--surface));
   border-radius: var(--r-sm);
+}
+.skeleton::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(90deg, transparent, var(--skel-sheen, var(--surface-elevated)), transparent);
+  animation: shimmer 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::before {
+    animation: none;
+    opacity: 0;
+  }
 }
 .skel-line {
   height: 12px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   display: block;
 }
 .skel-line.lg {
@@ -1652,6 +1816,9 @@ a {
   display: flex;
   align-items: center;
   gap: 10px;
+  /* Grows to a second line rather than clipping: the longest messages in the app
+     ("Enable Kodi and set an active instance first") overflow a phone width at
+     this size, and a truncated error is worse than a two-line pill. */
   min-height: 44px;
   padding: 11px 18px;
   border-radius: var(--r-pill);
@@ -1660,18 +1827,28 @@ a {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
-  box-shadow: 0 8px 28px var(--shadow);
+  box-shadow: var(--shadow-lg);
   animation: toast-in var(--dur-medium) var(--ease-out);
 }
 @keyframes toast-in {
   from {
-    transform: translateY(16px);
+    transform: translateY(12px);
     opacity: 0;
   }
 }
 @keyframes toast-out {
   to {
     transform: translateY(12px);
+    opacity: 0;
+  }
+}
+@keyframes toast-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes toast-fade-out {
+  to {
     opacity: 0;
   }
 }
@@ -1682,9 +1859,15 @@ a {
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 .toast--ok .toast-ico {
-  color: #a5d6a7;
+  background-color: var(--ink-ok);
 }
 
 /* ---- server/auth.js · Profile picker ("Who's at the counter?"), scoped to .counter ---- */
@@ -1712,10 +1895,11 @@ a {
 .poster-card {
   position: relative;
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   overflow: hidden;
   background: var(--surface-elevated);
-  box-shadow: 0 2px 8px var(--shadow);
+  box-shadow: var(--shadow-sm);
+  transition: scale var(--dur-long) var(--ease-out);
 }
 .detail-disc-hub {
   position: absolute;
@@ -1834,6 +2018,350 @@ a {
   }
 }
 
+/* ---- styles.css · Status button (statusSelect.js) ---- */
+.status-select {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.status-sel-ico {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+  background-color: var(--sc, var(--accent));
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.status-cur {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status-caret {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.status-caret svg { width: 18px; height: 18px; color: var(--text-secondary); }
+
+/* ---- styles.css · Rewind to (stoppedAt.js) ---- */
+/* The field is a player's front-panel display you type the minute into. It runs
+   from the sheet's left edge to the clear key; the counter sits in its middle. */
+.stop-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+.stop-display {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 16px 9px;
+  border-radius: var(--r-md);
+  background: #070908; /* the display stays dark in both themes, like the device */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 6px 14px rgba(0, 0, 0, 0.6);
+  font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  cursor: text;
+  transition: box-shadow var(--dur-short) var(--ease-state);
+}
+.stop-display:focus-within {
+  box-shadow: inset 0 0 0 1.5px rgba(126, 217, 154, 0.55), inset 0 6px 14px rgba(0, 0, 0, 0.6);
+}
+.stop-display-lbl {
+  flex: 1; /* label and total share the sides equally, so the counter is centred */
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  /* Dimmed through its colour rather than opacity, so the red light over it keeps
+     its full brightness. */
+  color: rgba(126, 217, 154, 0.55);
+  /* The light and the word, as one group, sit in the middle of the display's
+     height (the counter and the total keep their shared baseline). A flex box,
+     so the group is not set on a line of text that would push it down. */
+  align-self: center;
+  display: flex;
+  align-items: center;
+}
+/* The light stacked over the word, both centred on the word's width. The left
+   padding matches the letter-spacing trailing after the W, so the centre is the
+   letters' own. */
+.stop-rew {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-left: 0.16em;
+  line-height: 1;
+}
+/* A VCR front-panel indicator: a tiny domed red lens in a dark socket. Unlit it
+   is a deep red with a glint on its glass; lit, its core runs hot and it throws
+   a soft red halo onto the panel. It blinks like a deck's REW lamp, easing on and
+   off the way a small lamp does rather than snapping. */
+.stop-led {
+  position: relative; /* holds its lit layer and glint */
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #6b1a14 0%, #3a0805 55%, #1c0302 100%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.6);
+}
+/* The lit state on a layer of its own, faded in and out over the unlit lens. */
+.stop-led::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff1e8 0%, #ff8a73 22%, #f0261b 55%, #9c0d08 100%);
+  box-shadow:
+    0 0 3px 1px rgba(255, 52, 36, 0.85),
+    0 0 9px 2px rgba(255, 36, 24, 0.45),
+    0 0 16px 4px rgba(255, 30, 20, 0.18);
+  animation: stop-led-blink 2.4s ease-in-out infinite;
+}
+/* The glint on the lens glass, lit or not. */
+.stop-led::before {
+  content: '';
+  position: absolute;
+  top: 0.8px;
+  left: 1.1px;
+  width: 1.6px;
+  height: 1.2px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  z-index: 1;
+}
+/* A slow pulse: it holds lit, fades out over about half a second, rests dark,
+   then warms back up just as slowly. */
+@keyframes stop-led-blink {
+  0%, 30% { opacity: 1; }
+  52%, 78% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stop-led::after { animation: none; }
+}
+.stop-counter {
+  position: relative;
+  display: inline-block;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+/* The glow, on a copy of the digits behind the input: an input clips its own text,
+   so a text-shadow on it would be cut at its edges. */
+.stop-glow {
+  position: absolute;
+  inset: 0;
+  text-align: right;
+  white-space: pre;
+  color: transparent;
+  text-shadow: 0 0 10px rgba(126, 217, 154, 0.6);
+  pointer-events: none;
+}
+.stop-glow.is-over {
+  text-shadow: none;
+}
+.stop-input {
+  position: relative; /* above its glow */
+  width: 3ch;
+  padding: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  text-align: right;
+  color: #7ed99a;
+  caret-color: #7ed99a;
+}
+.stop-input::placeholder {
+  color: #7ed99a;
+  opacity: 0.18;
+}
+.stop-input::selection {
+  background: rgba(126, 217, 154, 0.3);
+  color: #7ed99a;
+}
+.stop-input.is-over {
+  color: var(--danger);
+  text-shadow: none;
+}
+.stop-display-of {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: #7ed99a;
+  opacity: 0.5;
+  white-space: nowrap;
+}
+/* Clear: a 90s hi-fi deck's soft-touch key. The recess is the hole in the front
+   panel it sits in (a shadowed well, on the dark sheet and the light one alike);
+   the key is flat gunmetal, square-cornered like the hardware, with a lamp strip
+   along its top and its symbol and legend printed at the bottom left. Held, it sinks 2px into
+   the well and the strip lights red; it stays lit a moment after (JS, .is-lit).
+   The key keeps the device's colours in both themes, like the display. */
+.stop-clear-well {
+  flex: none;
+  display: flex;
+  width: 72px;
+  height: 55px;
+  padding: 4px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.stop-clear {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 5px;
+  padding: 0 0 7px 8px;
+  border: 0;
+  border-radius: 2px;
+  background: linear-gradient(#45484e, #2a2c30);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 2px 0 #121316,
+    0 3px 5px rgba(0, 0, 0, 0.5);
+  color: #c9ccd1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: translate 70ms ease-out, box-shadow 70ms ease-out;
+}
+.stop-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+/* The lamp strip: dark red glass, lit while held and for a moment after. */
+.stop-clear::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  border-radius: 1px;
+  background: #3d0a07;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.6);
+  transition: background 150ms var(--ease-state), box-shadow 150ms var(--ease-state);
+}
+.stop-clear.is-down,
+.stop-clear:active {
+  translate: 0 2px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 0 0 #121316,
+    0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.stop-clear.is-down::before,
+.stop-clear:active::before,
+.stop-clear.is-lit::before {
+  background: linear-gradient(#ff8a73, #f0261b);
+  box-shadow: 0 0 6px 1px rgba(255, 40, 28, 0.7);
+}
+/* The printed rewind-to-start symbol over the legend, both at the bottom left
+   like a hi-fi deck's printing, clear of the lamp. */
+.stop-clear-ico {
+  display: block;
+  width: 15px;
+  height: 12.5px;
+}
+.stop-clear-ico svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.stop-clear-legend {
+  font-family: 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  font-stretch: condensed;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stop-clear,
+  .stop-clear::before {
+    transition: none;
+  }
+}
+.stop-sep {
+  margin: 14px 0 10px;
+}
+/* The movie's key beside its status: round, only while Watching. */
+.stop-key {
+  flex: none;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--stop-ink);
+  cursor: pointer;
+  transition: scale var(--dur-long) var(--ease-out);
+}
+.stop-key:active {
+  scale: var(--press);
+}
+.stop-key[hidden] {
+  display: none;
+}
+.stop-key-ico {
+  width: 20px;
+  height: 20px;
+  /* The timer's dial sits below the glyph's centre (its button is on top), so it reads
+     low in a circle: lift it to centre the dial itself. */
+  transform: translateY(-1.5px);
+  background-color: currentColor;
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+}
+.status-select.has-stop {
+  background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--sc, var(--accent)) 16%, var(--surface)) var(--stop, 0%),
+      var(--surface) var(--stop, 0%)
+    )
+    border-box no-repeat;
+}
+.status-stop {
+  color: var(--stop-ink);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- styles.css · Reduced motion (the app's own fallbacks) ---- */
 @media (prefers-reduced-motion: reduce) {
   .splash-logo,
@@ -1852,9 +2380,12 @@ a {
   .np-indicator-label { animation: none; }
   .seg-chip,
   .seg-opt { transition: none; }
-  .skeleton { animation: none; }
-  .toast,
-  .toast.toast-out { animation-name: backdropIn; }
+  .toast {
+    animation: toast-fade-in var(--dur-short) linear;
+  }
+  .toast.toast-out {
+    animation: toast-fade-out var(--dur-short) linear forwards;
+  }
 }
 
 /* ==========================================================================
@@ -1977,17 +2508,57 @@ body { overflow-x: hidden; }
 .tile-copy h4 { font-size: 17px; letter-spacing: -0.2px; margin: 0 0 4px; }
 .tile-copy p { font-size: 14px; line-height: 1.5; color: var(--text-secondary); margin: 0; }
 @media (max-width: 900px) {
-  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: dense; }
   .tile, .tile.w3 { grid-column: span 1; }
-  .tile.w4 { grid-column: span 2; }
+  .tile.w4, .tile.tab-wide { grid-column: span 2; }
 }
 @media (max-width: 600px) {
   .tiles { grid-template-columns: minmax(0, 1fr); }
-  .tile, .tile.w3, .tile.w4 { grid-column: span 1; }
+  .tile, .tile.w3, .tile.w4, .tile.tab-wide { grid-column: span 1; }
   .tile.tall { grid-row: auto; }
 }
 
 /* Tile visuals: app components, sized for a tile */
+.rewind-viz { width: min(380px, 100%); display: flex; flex-direction: column; gap: 14px; }
+.rewind-row { display: flex; align-items: center; gap: 10px; }
+.rewind-row .status-select { flex: 1 1 0; min-width: 0; margin-bottom: 0; }
+/* The filter and the timeline follow the tile on narrow columns instead of
+   keeping the app's phone-width minimums. */
+.track-viz .seg { grid-template-columns: repeat(var(--seg-count), minmax(0, 1fr)); max-width: 100%; }
+.track-viz .seg-opt { padding: 0 8px; }
+.viz .sc-next { width: min(260px, 100%); }
+/* Narrow tiles (small phones, and the narrowest tablet columns): the app's
+   components stay whole, a little tighter, measured against the tile itself. */
+/* One column the width of the tile: an auto column sizes itself to its content, so
+   a component at 100% width there could never be narrower than its own content. */
+.viz { container-type: inline-size; grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 380px) {
+  .viz { padding-left: 12px; padding-right: 12px; }
+}
+@container (max-width: 290px) {
+  .rate-viz .stars button { width: 32px; }
+  .rewind-viz .stop-display { padding-left: 10px; padding-right: 10px; gap: 6px; }
+  .rewind-viz .stop-clear-well { width: 62px; }
+}
+@container (max-width: 270px) {
+  .shelf-viz { zoom: 0.86; }
+}
+/* The sign-in picker keeps its three profiles on one row: the app's page is wider
+   than a phone tile, so here the gaps close up and, on the narrowest, the avatars
+   step down a size. */
+@container (max-width: 340px) {
+  .counter .profiles { gap: 24px 12px; }
+  .counter .profile { width: 88px; }
+}
+@container (max-width: 290px) {
+  .counter .profile { width: 76px; }
+  .counter .avatar { width: 72px; height: 72px; font-size: 30px; }
+}
+@container (max-width: 250px) {
+  .counter .profiles { gap: 24px 10px; }
+  .counter .profile { width: 70px; }
+  .counter .avatar { width: 64px; height: 64px; font-size: 27px; }
+}
 .counter { width: 100%; }
 .lend-stage { padding: 20px 0 10px; }
 .lend-art { background: linear-gradient(150deg, #0e7c6b, #08322c); }
@@ -2035,7 +2606,15 @@ body { overflow-x: hidden; }
 .btn-lucide { display: inline-flex; flex: none; }
 .btn-lucide svg { width: 100%; height: 100%; display: block; }
 .kodi-viz .sc-kodi-chip { padding: 8px 16px; font-size: 13px; }
-.ghost { width: min(240px, 100%); display: grid; gap: 10px; }
+/* The tile is a card, already the plain skeleton colour: the app's card rule makes
+   the blocks a step lighter so they can be seen. */
+.ghost {
+  width: min(240px, 100%);
+  display: grid;
+  gap: 10px;
+  --skel-fill: var(--surface-elevated);
+  --skel-sheen: color-mix(in srgb, var(--surface-elevated) 88%, var(--text-primary));
+}
 .ghost .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .ghost .row span { height: 78px; }
 .net-viz .net-toast {
@@ -2327,19 +2906,32 @@ footer { margin-top: 112px; padding: 32px 0 calc(40px + env(safe-area-inset-bott
         <div class="tile-copy"><h4>Your library</h4><p>Status, ownership and progress, down to the episode.</p></div>
       </article>
 
-      <article class="tile">
+
+      <article class="tile w3 tab-wide" id="rewind">
         <div class="viz">
-          <div class="pos-viz">
-            <button class="pos-printer" id="printer" type="button" aria-label="Print the receipt">
-              <span class="pos-body"><span class="pos-label">Your Monthly Receipt</span><span class="pos-slot" aria-hidden="true"></span></span>
-              <span class="pos-paper" aria-hidden="true"><span class="pos-paper-sheet"></span></span>
-            </button>
+          <div class="rewind-viz">
+            <div class="rewind-row">
+              <button class="status-select has-stop" type="button" id="stopStatus" style="--sc: #7ed99a; --stop: 37%">
+                <span class="status-sel-ico" data-mask="eye"></span>
+                <span class="status-cur">Watching<span id="stopSuffix"> · <span class="status-stop">37 / 100 min</span></span></span>
+                <span class="status-caret" data-ico="chevron-down"></span>
+              </button>
+              <button class="stop-key" type="button" id="stopKey" aria-label="Rewind to"><span class="stop-key-ico" data-mask="timer"></span></button>
+            </div>
+            <div class="stop-field">
+              <label class="stop-display">
+                <span class="stop-display-lbl" aria-hidden="true"><span class="stop-rew"><i class="stop-led"></i>REW</span></span>
+                <span class="stop-counter"><span class="stop-glow" aria-hidden="true" id="stopGlow">37</span><input class="stop-input" id="stopInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" placeholder="0" aria-label="Minute to pick up from" value="37" /></span>
+                <span class="stop-display-of">/ 100 min</span>
+              </label>
+              <span class="stop-clear-well"><button class="stop-clear" type="button" id="stopClear" aria-label="Clear the minute"><span class="stop-clear-ico" aria-hidden="true"><svg viewBox="0 0 12 10" fill="currentColor"><rect x="0.5" y="1" width="1.6" height="8"/><path d="M7 1v8L2.6 5zM11.5 1v8L7.1 5z"/></svg></span><span class="stop-clear-legend">Clear</span></button></span>
+            </div>
           </div>
         </div>
-        <div class="tile-copy"><h4>Monthly receipt</h4><p>Your month as a 90s rental receipt, ready to share.</p></div>
+        <div class="tile-copy"><h4>Rewind to</h4><p>Stopped halfway? Note the minute and pick it up from there.</p></div>
       </article>
 
-      <article class="tile">
+      <article class="tile w3">
         <div class="viz">
           <div class="kodi-viz">
             <span class="np-indicator active"><span class="np-audio" data-ico="play-fill"></span><span class="np-indicator-label">Now playing</span></span>
@@ -2351,14 +2943,27 @@ footer { margin-top: 112px; padding: 32px 0 calc(40px + env(safe-area-inset-bott
                 <div class="np-toast-meta">S02 · E04 · Woe's Hollow</div>
                 <div class="np-toast-chips"><span class="np-chip"><span class="btn-lucide" data-ico="volume-2"></span><span>English · 5.1</span></span><span class="np-chip"><span class="btn-lucide" data-ico="captions"></span><span>English</span></span></div>
               </div></div>
+              <div class="np-act" id="npAct"></div>
             </div>
             <div class="sc-kodi-chip"><span data-ico="circle-play"></span><span>Play on Kodi</span></div>
           </div>
         </div>
-        <div class="tile-copy"><h4>Kodi</h4><p>Play any title on your TV and see what's playing.</p></div>
+        <div class="tile-copy"><h4>Kodi</h4><p>Play any title on your TV, then log what's playing in one tap.</p></div>
       </article>
 
-      <article class="tile">
+      <article class="tile w3">
+        <div class="viz">
+          <div class="pos-viz">
+            <button class="pos-printer" id="printer" type="button" aria-label="Print the receipt">
+              <span class="pos-body"><span class="pos-label">Your Monthly Receipt</span><span class="pos-slot" aria-hidden="true"></span></span>
+              <span class="pos-paper" aria-hidden="true"><span class="pos-paper-sheet"></span></span>
+            </button>
+          </div>
+        </div>
+        <div class="tile-copy"><h4>Monthly receipt</h4><p>Your month as a 90s rental receipt, ready to share.</p></div>
+      </article>
+
+      <article class="tile w3">
         <div class="viz net-viz">
           <div class="ghost" aria-hidden="true">
             <span class="skeleton skel-line lg" style="width:60%"></span>
@@ -2482,6 +3087,9 @@ docker compose up -d --build</pre>
   var STAR_ON = '<svg viewBox="0 0 24 24" class="star-on" fill="currentColor" stroke="currentColor" stroke-width="1.5"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 17.8 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z"/></svg>';
 
   ICONS.heart = HEART;
+  ICONS.check = L('<path d="M20 6 9 17l-5-5"/>', 2.4);
+  ICONS.eye = L('<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>');
+  ICONS.timer = L('<line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/>');
   ICONS['globe-off'] = L('<path d="M10.114 4.462A14.5 14.5 0 0 1 12 2a10 10 0 0 1 9.313 13.643"/><path d="M15.557 15.556A14.5 14.5 0 0 1 12 22 10 10 0 0 1 4.929 4.929"/><path d="M15.892 10.234A14.5 14.5 0 0 0 12 2a10 10 0 0 0-3.643.687"/><path d="M17.656 12H22"/><path d="M19.071 19.071A10 10 0 0 1 12 22 14.5 14.5 0 0 1 8.44 8.45"/><path d="M2 12h10"/><path d="m2 2 20 20"/>');
   ICONS.eject = L('<path d="M4 13a1 1 0 0 1-.72-1.695l7.257-7.668a2 2 0 0 1 2.926 0l7.256 7.668A1 1 0 0 1 20 13z"/><rect x="3" y="17" width="18" height="4" rx="1"/>');
   ICONS['volume-2'] = L('<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>');
@@ -2491,6 +3099,14 @@ docker compose up -d --build</pre>
   var STAR_OFF = STAR_ON.replace('class="star-on" fill="currentColor"', 'class="star-off" fill="none"');
 
   var $ = function (id) { return document.getElementById(id); };
+  // The app paints some glyphs as a mask over a colour (lucideIcon): the same here,
+  // from the inline icon.
+  var mask = function (el, name) {
+    var url = 'url("data:image/svg+xml,' + encodeURIComponent(ICONS[name].replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')) + '")';
+    el.style.webkitMaskImage = url;
+    el.style.maskImage = url;
+  };
+  document.querySelectorAll('[data-mask]').forEach(function (n) { mask(n, n.getAttribute('data-mask')); });
   var paint = function (root) {
     (root || document).querySelectorAll('[data-ico]').forEach(function (n) {
       var svg = ICONS[n.getAttribute('data-ico')];
@@ -2521,7 +3137,7 @@ docker compose up -d --build</pre>
     var play = function (v) { logo.style.animation = 'none'; void logo.offsetWidth; logo.style.animation = v; };
     logo.addEventListener('animationend', function () {
       setTimeout(function () {
-        play(into ? 'splash-logo 1.5s reverse both' : 'splash-logo 1.5s forwards');
+        play(into ? 'splash-logo 0.9s reverse both' : 'splash-logo 0.9s forwards');
         into = !into;
       }, into ? 900 : 5200);
     });
@@ -2594,6 +3210,70 @@ docker compose up -d --build</pre>
     setTimeout(function () { printer.classList.add('printed'); }, 450);
   });
 
+  // Rewind to: the display from stoppedAt.js, filling the status button like a film's
+  // remote does ("Watching · 37 / 100 min"). Past the runtime the number turns red,
+  // and settles on the runtime once you leave the field.
+  (function () {
+    var TOTAL = 100;
+    var input = $('stopInput'), glow = $('stopGlow'), status = $('stopStatus'), suffix = $('stopSuffix'), clear = $('stopClear');
+    var typed = function () { return parseInt(input.value, 10) || 0; };
+    var show = function () {
+      var m = Math.min(typed(), TOTAL);
+      glow.textContent = input.value;
+      status.classList.toggle('has-stop', m > 0);
+      status.style.setProperty('--stop', (m / TOTAL * 100) + '%');
+      suffix.hidden = !m;
+      suffix.querySelector('.status-stop').textContent = m + ' / ' + TOTAL + ' min';
+    };
+    input.addEventListener('input', function () {
+      input.value = input.value.replace(/\D/g, '').slice(0, 3);
+      var over = typed() > TOTAL;
+      input.classList.toggle('is-over', over);
+      glow.classList.toggle('is-over', over);
+      show();
+    });
+    input.addEventListener('blur', function () {
+      if (input.value) input.value = String(Math.min(typed(), TOTAL));
+      input.classList.remove('is-over');
+      glow.classList.remove('is-over');
+      show();
+    });
+    $('stopKey').addEventListener('click', function () { input.focus(); input.select(); });
+    var lift = function () { clear.classList.remove('is-down'); };
+    clear.addEventListener('pointerdown', function () { clear.classList.add('is-down'); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (t) { clear.addEventListener(t, lift); });
+    var litTimer = 0;
+    clear.addEventListener('click', function () {
+      input.value = '';
+      input.classList.remove('is-over');
+      glow.classList.remove('is-over');
+      show();
+      input.focus();
+      clear.classList.add('is-lit');
+      clearTimeout(litTimer);
+      litTimer = setTimeout(function () { clear.classList.remove('is-lit'); }, 450);
+    });
+  })();
+
+  // Kodi: the Now Playing popup's action row (nowPlayingActions.js), with its done
+  // line and Undo.
+  (function () {
+    var row = $('npAct');
+    var offer = function () {
+      row.className = 'np-act';
+      row.innerHTML = '<button class="np-act-btn" type="button"><span class="btn-lucide np-act-ico">' + ICONS.check
+        + '</span><span class="np-act-label">Mark S02 E04 as watched</span></button>';
+      row.firstChild.addEventListener('click', function (e) {
+        e.stopPropagation();
+        row.className = 'np-act is-done';
+        row.innerHTML = '<span class="btn-lucide np-act-ico">' + ICONS.check + '</span><span class="np-act-note">S02 E04 marked</span>'
+          + '<button class="np-act-link" type="button">Undo</button>';
+        row.querySelector('.np-act-link').addEventListener('click', function () { toast('Undone'); offer(); });
+      });
+    };
+    offer();
+  })();
+
   // Works offline: the network pill's sequence from network.js
   // (message, then a disc, then recovered, then the message again).
   var net = $('netToast'), netText = $('netText'), timers = [];
@@ -2635,7 +3315,7 @@ docker compose up -d --build</pre>
     ['book-search', '#7db6f0', 'Search & Explore', 'Preview before you add'],
     ['users', '#9aa2f0', 'Favourite Person', "Their career and what you've seen"],
     ['list-plus', '#6fd4c4', 'Collections & lists', 'Box sets and your own lists'],
-    ['bell', '#7ed99a', 'Notifications', 'New episodes as they air'],
+    ['bell', '#7ed99a', 'Notifications', 'New episodes and a few reminders'],
     ['file-up', '#e6bd5c', 'Imports', 'From TV Time and Kodi'],
     ['file-down', '#57c98a', 'Backups', 'Merge-only XML export'],
     ['languages', '#74d0e0', 'English & Italian', 'Switch any time'],
@@ -2678,7 +3358,8 @@ docker compose up -d --build</pre>
     toastEl = document.createElement('div');
     toastEl.className = 'toast toast--ok';
     toastEl.setAttribute('role', 'status');
-    toastEl.innerHTML = '<span class="toast-ico">' + ICONS['circle-check'] + '</span><span class="toast-msg"></span>';
+    toastEl.innerHTML = '<span class="toast-ico"></span><span class="toast-msg"></span>';
+    mask(toastEl.querySelector('.toast-ico'), 'circle-check');
     toastEl.querySelector('.toast-msg').textContent = msg;
     document.body.appendChild(toastEl);
     var el = toastEl;
