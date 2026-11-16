@@ -32,6 +32,7 @@ import {
   lucideIcon,
   clear,
   stateBlock,
+  playOnce,
 } from '../ui.js';
 import { imageCache } from '../imageCache.js';
 import { isServerReachable, markDegraded } from '../network.js';
@@ -58,6 +59,17 @@ const NOTE_PLACEHOLDERS = [
   'season.notePlaceholder13',
   'season.notePlaceholder14',
 ];
+
+// An episode not out yet: dated after today on this device's calendar, and not
+// already ticked (one marked before this rule can still be unticked). One with no
+// date at all is left tickable: old series often miss them.
+function localToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function isUpcoming(ep) {
+  return !!ep && !ep.watched && !!ep.air_date && ep.air_date > localToday();
+}
 
 // Virtual-scroll tuning.
 const PAGE_SIZE = 50; // episodes fetched per request
@@ -235,15 +247,72 @@ export default async function Season(container, params) {
     [lucideIcon('check-check', 'btn-lucide'), el('span', { text: t('season.watchedAll') })]
   );
 
+  // The opposite of Watched all: every episode of the season back to unwatched.
+  // Deleting the progress also deletes each episode's rewatch count, dates and
+  // note, so it asks first, in red, and says so.
+  const unmarkAllBtn = el(
+    'button',
+    {
+      class: 'btn btn-secondary season-unmark',
+      onClick: () =>
+        confirmModal({
+          title: t('season.unwatchAllTitle'),
+          body:
+            watchedCount === 1
+              ? t('season.unwatchAllBodyOne')
+              : t('season.unwatchAllBody', { n: watchedCount ?? total }),
+          confirmLabel: t('season.unwatchAll'),
+          confirmIcon: 'circle-dashed',
+          danger: true,
+          onConfirm: async (close) => {
+            try {
+              await api.unmarkSeason(id, parseInt(n, 10));
+              close();
+              toast(t('season.unwatchedAll'), 'ok');
+              navigate(location.pathname, { replace: true }); // re-mount with the season reset
+            } catch (err) {
+              toast(err.message, 'bad');
+              throw err;
+            }
+          },
+        }),
+    },
+    [lucideIcon('circle-dashed', 'btn-lucide'), el('span', { text: t('season.unwatchAll') })]
+  );
+
   // Jump straight to where the viewer left off — the next unwatched episode (or
   // the last one, once caught up). Invaluable for very long single-season shows
   // (e.g. Detective Conan) where scrolling to the frontier by hand is painful.
+  // Just its icon, round, beside the two season-wide commands. Now and then the
+  // signpost spins once on its pole, like a street sign turning in the wind, to
+  // say it is there: 5s after the page opens, then every 10s while it stays open
+  // and in view.
+  const signpost = lucideIcon('signpost', 'btn-lucide season-jump-ico');
   const jumpBtn = el(
     'button',
-    { class: 'btn btn-secondary season-jump', onClick: () => jumpToCurrent() },
-    [lucideIcon('signpost', 'btn-lucide'), el('span', { text: t('season.jumpLatest') })]
+    {
+      class: 'btn btn-secondary season-jump',
+      'aria-label': t('season.jumpLatest'),
+      title: t('season.jumpLatest'),
+      onClick: () => jumpToCurrent(),
+    },
+    [signpost]
   );
-  const actionRow = el('div', { class: 'season-actions' }, [markAllBtn, jumpBtn]);
+  const spinSign = () => {
+    if (!document.hidden) playOnce(signpost, 'sign-spin');
+  };
+  let signTimer = setTimeout(function next() {
+    spinSign();
+    signTimer = setTimeout(next, 10000);
+  }, 5000);
+  onCleanup(() => clearTimeout(signTimer));
+  const actionRow = el('div', { class: 'season-actions' }, [markAllBtn, unmarkAllBtn, jumpBtn]);
+  // A command with nothing to do steps back: Watched all once every episode out is
+  // watched, Unmark all while none is.
+  function paintActions() {
+    if (airedLeft !== null) markAllBtn.disabled = airedLeft === 0;
+    if (watchedCount !== null) unmarkAllBtn.disabled = watchedCount === 0;
+  }
 
   // --- Virtual scroller scaffolding ---------------------------------------
   const spacer = el('div', { class: 'ep-spacer' });
@@ -256,6 +325,7 @@ export default async function Season(container, params) {
     el('div', { class: 'season-progress-bar' }, [progressFill]),
   ]);
   function paintProgress() {
+    paintActions();
     if (watchedCount === null) return;
     const count = t('season.progress', { watched: watchedCount, total });
     const left = timeHintsOn() && minutesLeft > 0 ? t('time.leftExact', { time: hoursAndMinutes(minutesLeft) }) : '';
@@ -360,6 +430,11 @@ export default async function Season(container, params) {
     });
     check.addEventListener('click', () => {
       if (!currentEp) return;
+      // Not out yet: nothing to tick, only when it comes out.
+      if (isUpcoming(currentEp)) {
+        toast(t('season.notOutYet', { date: formatDate(currentEp.air_date) }));
+        return;
+      }
       const marking = !currentEp.watched;
       onCheck(currentEp); // paints the tick before its first await
       if (marking) {
@@ -381,8 +456,14 @@ export default async function Season(container, params) {
       noteLine.hidden = !note;
       // An episode left partway reads where you stopped, in green, in place of its length.
       const stopped = ep.stopped_at > 0; // a first watch or a rewatch
+      // Not out yet: the row says when it comes out, and its tick waits for that day.
+      const upcoming = isUpcoming(ep);
+      node.classList.toggle('is-upcoming', upcoming);
+      check.classList.toggle('is-locked', upcoming);
       sub.textContent = ep.air_date ? formatDate(ep.air_date) : '';
-      if (stopped) {
+      if (upcoming) {
+        sub.textContent = t('season.airsOn', { date: formatDate(ep.air_date) });
+      } else if (stopped) {
         if (ep.air_date) sub.append(' · ');
         sub.append(el('span', { class: 'ep-stop', text: stopLabel(ep.stopped_at, ep.runtime || 0) }));
       } else if (ep.runtime) {

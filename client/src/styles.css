@@ -2066,6 +2066,7 @@ textarea.notes {
   font-size: 13px;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+  text-align: right; /* reads at the bar's end, where it fills toward */
 }
 .season-progress-bar {
   height: 4px;
@@ -2081,6 +2082,16 @@ textarea.notes {
   background: var(--accent);
   transform-origin: left;
   transition: transform var(--dur-medium) var(--ease-out);
+}
+/* Not out yet: the row reads its release date in the accent, and its tick is a
+   faint dashed ring that can't be ticked until that day. */
+.episode.is-upcoming .ep-sub {
+  color: var(--accent);
+  font-weight: 600;
+}
+.check.is-locked {
+  border-style: dashed;
+  opacity: 0.4;
 }
 /* Watched rows step back. */
 .episode.is-watched .thumb img {
@@ -2227,7 +2238,7 @@ body.season-active #app {
 .season-actions {
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 6px;
 }
 /* Season header: back button, then the series link (an .ai-eyebrow-style label)
@@ -2293,6 +2304,38 @@ body.season-active #app {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+/* Watched all and Unmark all share the row with the round jump key: they give up
+   a little side padding so each label stays on one line on a phone. (After the
+   rule above, which they refine.) */
+.season-actions .btn:not(.season-jump) {
+  padding: 13px 8px;
+  gap: 6px;
+}
+/* Unmark all deletes: its label and icon are red. */
+.season-actions .season-unmark {
+  color: var(--danger);
+}
+/* Just the icon: the jump to where you are. */
+.season-actions .season-jump {
+  flex: 0 0 48px;
+  padding: 0;
+  perspective: 120px; /* depth for the signpost's turn */
+}
+/* Now and then (Season.js: 5s after opening, then every 10s) the signpost turns
+   once on its pole (the icon's vertical centre line), fast at first and slowing,
+   swings a touch past and settles back, like a street sign set spinning. */
+.season-jump-ico.sign-spin {
+  animation: sign-spin 760ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@keyframes sign-spin {
+  0% { transform: rotateY(0deg); }
+  72% { transform: rotateY(385deg); }
+  88% { transform: rotateY(352deg); }
+  100% { transform: rotateY(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .season-jump-ico.sign-spin { animation: none; }
 }
 /* Separator between the action buttons and the episode list. The action row
    already provides the gap above, so drop the rule's default top margin. */
