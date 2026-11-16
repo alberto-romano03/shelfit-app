@@ -2371,7 +2371,7 @@ body.season-active #app {
   opacity: 0.7;
 }
 /* The note focuses like every other field: its thin border turns accent. */
-/* Note sheet footer: Cancel + Confirm side by side (equal width), Delete below. */
+/* Note sheet footer: Cancel + Confirm side by side (equal width). */
 .note-sheet-footer {
   display: flex;
   flex-direction: column;
@@ -2384,9 +2384,6 @@ body.season-active #app {
 .note-sheet-actions .btn {
   flex: 1 1 0;
   width: auto;
-}
-.note-delete {
-  align-self: center;
 }
 
 /* ===================== Stopped at ===================== */
@@ -6961,9 +6958,6 @@ img.mood-emoji {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.link-danger {
-  color: var(--danger);
 }
 .switch {
   position: relative;

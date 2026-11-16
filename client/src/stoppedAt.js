@@ -130,10 +130,7 @@ export function openStopSheet({ title, total = 0, value = 0, note = null, onSave
           ]),
         ]),
       ]);
-      // An episode that already has a note keeps its Delete note link.
-      if (note && note.value) {
-        footer.append(el('button', { class: 'link-btn link-danger note-delete', text: t('season.deleteNote'), onClick: () => save('') }));
-      }
+      // No separate Delete: emptying the note and confirming deletes it.
 
       // Nothing takes focus on its own: the keyboard comes up only when the display
       // is tapped, not when the sheet opens just to look, clear or close.
