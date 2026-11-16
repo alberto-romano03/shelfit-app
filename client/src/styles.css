@@ -2068,6 +2068,10 @@ textarea.notes {
   font-variant-numeric: tabular-nums;
   text-align: right; /* reads at the bar's end, where it fills toward */
 }
+/* Its loading shimmer sits there too (a block, so moved by its margin). */
+.season-progress-text .skel-text {
+  margin-left: auto;
+}
 .season-progress-bar {
   height: 4px;
   margin-top: 6px;

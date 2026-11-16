@@ -83,23 +83,29 @@ const FALLBACK_ROW_H = 77; // used only if a live row can't be measured
 const scrollMemory = new Map();
 
 // Ghost-frame for the season view. Mirrors the real layout so nothing shifts when
-// the data swaps in: header (real back button + title line), the two action
-// buttons ("Watched all" / "Jump to latest") as equal-width shimmer blocks, the
-// separator, then the episode rows.
+// the data swaps in: header (real back button, the series name over the title),
+// the progress line read on the right, the action row (Watched all and Unmark all
+// as equal pills, then the round jump key), the separator, then the episode rows.
 function seasonSkeleton() {
   const view = el('div', { class: 'season-view' });
 
-  // Header: the back button is chrome (available immediately); only the title is a shimmer.
+  // Header: the back button is chrome (available immediately); the series name and
+  // the title are shimmers.
   view.append(
     el('div', { class: 'season-head' }, [
       el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
-      el('div', { class: 'season-head-text' }, [skelLine({ width: '170px', height: '20px', margin: '2px 0' })]),
+      el('div', { class: 'season-head-text' }, [
+        // 11 + 8 + 22 + 4 = 45px, the real series link over the 20px title.
+        skelLine({ width: '96px', height: '11px', margin: '0 0 8px' }),
+        skelLine({ width: '150px', height: '22px', margin: '0 0 4px' }),
+      ]),
     ]),
     el('div', { class: 'season-progress' }, [
-      el('div', { class: 'season-progress-text' }, [skelText('130px')]),
+      // On the right, like the real line (a block, so pushed there by its margin).
+      el('div', { class: 'season-progress-text' }, [skelText('180px')]),
       el('div', { class: 'season-progress-bar' }),
     ]),
-    el('div', { class: 'season-actions' }, [skelPill(48), skelPill(48)]),
+    el('div', { class: 'season-actions' }, [skelPill(48), skelPill(48), skelCircle(48)]),
     el('hr', { class: 'status-sep season-sep' })
   );
 
