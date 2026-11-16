@@ -6,6 +6,10 @@
 import { el, lucideIcon, openSheet, toast, typewriterPlaceholder } from './ui.js';
 import { t } from './i18n.js';
 
+// The Clear key's printed symbol: rewind to the start (a bar and two triangles).
+const TO_ZERO =
+  '<svg viewBox="0 0 12 10" fill="currentColor"><rect x="0.5" y="1" width="1.6" height="8"/><path d="M7 1v8L2.6 5zM11.5 1v8L7.1 5z"/></svg>';
+
 // "37 / 100 min", or "37 min" when TMDB has no runtime for it.
 export function stopLabel(min, total) {
   return total ? t('stop.ofTotal', { n: min, total }) : t('stop.min', { n: min });
@@ -55,24 +59,41 @@ export function openStopSheet({ title, total = 0, value = 0, note = null, onSave
       });
 
       const display = el('label', { class: 'stop-display' }, [
-        el('span', { class: 'stop-display-lbl', text: t('stop.display'), 'aria-hidden': 'true' }),
+        // REW with the deck's red indicator light over it, blinking.
+        el('span', { class: 'stop-display-lbl', 'aria-hidden': 'true' }, [
+          el('span', { class: 'stop-rew' }, [el('i', { class: 'stop-led' }), t('stop.display')]),
+        ]),
         el('span', { class: 'stop-counter' }, [glow, input]),
         el('span', { class: 'stop-display-of', text: total ? t('stop.displayOf', { total }) : t('stop.displayMin') }),
       ]);
-      const clear = el('button', { class: 'rewatch-step-btn stop-clear', type: 'button', 'aria-label': t('stop.clear') }, [
-        lucideIcon('circle-x', 'btn-lucide'),
+      // Clear: a hi-fi deck's soft-touch key, set in a recess in the panel. It sinks
+      // while held and its lamp strip lights. Printed on it, the rewind-to-start
+      // symbol (the counter goes back to 0) over the legend, the hardware's word; the
+      // name read aloud is the full one.
+      const clear = el('button', { class: 'stop-clear', type: 'button', 'aria-label': t('stop.clear') }, [
+        el('span', { class: 'stop-clear-ico', 'aria-hidden': 'true', html: TO_ZERO }),
+        el('span', { class: 'stop-clear-legend', text: t('stop.clearKey') }),
       ]);
+      const lift = () => clear.classList.remove('is-down');
+      clear.addEventListener('pointerdown', () => clear.classList.add('is-down'));
+      clear.addEventListener('pointerup', lift);
+      clear.addEventListener('pointerleave', lift);
+      clear.addEventListener('pointercancel', lift);
+      let litTimer = 0;
       clear.addEventListener('click', () => {
         input.value = '';
         input.classList.remove('is-over');
         glow.classList.remove('is-over');
         syncGlow();
         input.focus();
+        clear.classList.add('is-lit'); // the lamp stays on a moment after the press
+        clearTimeout(litTimer);
+        litTimer = setTimeout(() => clear.classList.remove('is-lit'), 450);
       });
 
       const body = el('div', { class: 'sheet-body' }, [
         el('div', { class: 'field-label', text: t('stop.title') }),
-        el('div', { class: 'stop-field' }, [display, clear]),
+        el('div', { class: 'stop-field' }, [display, el('span', { class: 'stop-clear-well' }, [clear])]),
       ]);
 
       let textarea = null;

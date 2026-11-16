@@ -900,6 +900,7 @@ const it = {
   'stop.displayOf': '/ {total} min',
   'stop.displayMin': 'min',
   'stop.clear': 'Cancella il minuto',
+  'stop.clearKey': 'Clear', // the deck key's legend, English like the hardware
   'stop.note': 'Nota',
   'stop.ofTotal': '{n} / {total} min',
   'stop.min': '{n} min',
@@ -2009,6 +2010,7 @@ const en = {
   'stop.displayOf': '/ {total} min',
   'stop.displayMin': 'min',
   'stop.clear': 'Clear the minute',
+  'stop.clearKey': 'Clear',
   'stop.note': 'Note',
   'stop.ofTotal': '{n} / {total} min',
   'stop.min': '{n} min',

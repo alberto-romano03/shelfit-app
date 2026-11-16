@@ -2421,9 +2421,76 @@ body.season-active #app {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.16em;
-  color: #7ed99a;
-  opacity: 0.55;
-  transform: translateY(-6px);
+  /* Dimmed through its colour rather than opacity, so the red light over it keeps
+     its full brightness. */
+  color: rgba(126, 217, 154, 0.55);
+  /* The light and the word, as one group, sit in the middle of the display's
+     height (the counter and the total keep their shared baseline). A flex box,
+     so the group is not set on a line of text that would push it down. */
+  align-self: center;
+  display: flex;
+  align-items: center;
+}
+/* The light stacked over the word, both centred on the word's width. The left
+   padding matches the letter-spacing trailing after the W, so the centre is the
+   letters' own. */
+.stop-rew {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-left: 0.16em;
+  line-height: 1;
+}
+/* A VCR front-panel indicator: a tiny domed red lens in a dark socket. Unlit it
+   is a deep red with a glint on its glass; lit, its core runs hot and it throws
+   a soft red halo onto the panel. It blinks like a deck's REW lamp, easing on and
+   off the way a small lamp does rather than snapping. */
+.stop-led {
+  position: relative; /* holds its lit layer and glint */
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #6b1a14 0%, #3a0805 55%, #1c0302 100%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.6);
+}
+/* The lit state on a layer of its own, faded in and out over the unlit lens. */
+.stop-led::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff1e8 0%, #ff8a73 22%, #f0261b 55%, #9c0d08 100%);
+  box-shadow:
+    0 0 3px 1px rgba(255, 52, 36, 0.85),
+    0 0 9px 2px rgba(255, 36, 24, 0.45),
+    0 0 16px 4px rgba(255, 30, 20, 0.18);
+  animation: stop-led-blink 2.4s ease-in-out infinite;
+}
+/* The glint on the lens glass, lit or not. */
+.stop-led::before {
+  content: '';
+  position: absolute;
+  top: 0.8px;
+  left: 1.1px;
+  width: 1.6px;
+  height: 1.2px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  z-index: 1;
+}
+/* A slow pulse: it holds lit, fades out over about half a second, rests dark,
+   then warms back up just as slowly. */
+@keyframes stop-led-blink {
+  0%, 30% { opacity: 1; }
+  52%, 78% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stop-led::after { animation: none; }
 }
 .stop-counter {
   position: relative;
@@ -2480,12 +2547,102 @@ body.season-active #app {
   opacity: 0.5;
   white-space: nowrap;
 }
-.stop-field .stop-clear {
-  color: var(--danger); /* over the round button's own text colour, defined later */
+/* Clear: a 90s hi-fi deck's soft-touch key. The recess is the hole in the front
+   panel it sits in (a shadowed well, on the dark sheet and the light one alike);
+   the key is flat gunmetal, square-cornered like the hardware, with a lamp strip
+   along its top and its symbol and legend printed at the bottom left. Held, it sinks 2px into
+   the well and the strip lights red; it stays lit a moment after (JS, .is-lit).
+   The key keeps the device's colours in both themes, like the display. */
+.stop-clear-well {
+  flex: none;
+  display: flex;
+  width: 72px;
+  height: 55px;
+  padding: 4px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-.stop-clear .btn-lucide {
-  width: 20px;
-  height: 20px;
+.stop-clear {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 5px;
+  padding: 0 0 7px 8px;
+  border: 0;
+  border-radius: 2px;
+  background: linear-gradient(#45484e, #2a2c30);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 2px 0 #121316,
+    0 3px 5px rgba(0, 0, 0, 0.5);
+  color: #c9ccd1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: translate 70ms ease-out, box-shadow 70ms ease-out;
+}
+.stop-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+/* The lamp strip: dark red glass, lit while held and for a moment after. */
+.stop-clear::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  border-radius: 1px;
+  background: #3d0a07;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.6);
+  transition: background 150ms var(--ease-state), box-shadow 150ms var(--ease-state);
+}
+.stop-clear.is-down,
+.stop-clear:active {
+  translate: 0 2px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 0 0 #121316,
+    0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.stop-clear.is-down::before,
+.stop-clear:active::before,
+.stop-clear.is-lit::before {
+  background: linear-gradient(#ff8a73, #f0261b);
+  box-shadow: 0 0 6px 1px rgba(255, 40, 28, 0.7);
+}
+/* The printed rewind-to-start symbol over the legend, both at the bottom left
+   like a hi-fi deck's printing, clear of the lamp. */
+.stop-clear-ico {
+  display: block;
+  width: 15px;
+  height: 12.5px;
+}
+.stop-clear-ico svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.stop-clear-legend {
+  font-family: 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  font-stretch: condensed;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stop-clear,
+  .stop-clear::before {
+    transition: none;
+  }
 }
 .stop-sep {
   margin: 14px 0 10px;
