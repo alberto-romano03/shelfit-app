@@ -2058,34 +2058,115 @@ textarea.notes {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* A season at a glance: the count and the time left, then the bar. */
-.season-progress {
-  margin: 2px 0 12px;
+/* A season at a glance, at the right of its title (Season.js): the ring of the
+   What's Next cards, watched over total in the middle. The arc draws in from the
+   top when the page opens and moves as episodes are ticked. Tapped, the middle
+   turns over like a card to the time still to watch. */
+.season-ring {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  margin-right: 8px; /* back on the content edge (the header bleeds 8px) */
+  padding: 0;
+  border-radius: 50%;
 }
-.season-progress-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-  text-align: right; /* reads at the bar's end, where it fills toward */
+.season-ring.is-static {
+  cursor: default;
 }
-/* Its loading shimmer sits there too (a block, so moved by its margin). */
-.season-progress-text .skel-text {
-  margin-left: auto;
-}
-.season-progress-bar {
-  height: 4px;
-  margin-top: 6px;
-  border-radius: var(--r-pill);
-  background: var(--surface-elevated);
-  overflow: hidden;
-}
-.season-progress-bar i {
-  display: block;
+.season-ring-svg,
+.season-ring-svg svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
   height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
-  transform-origin: left;
-  transition: transform var(--dur-medium) var(--ease-out);
+  display: block;
+}
+.season-ring-track,
+.season-ring-arc {
+  fill: none;
+  stroke-width: 7;
+}
+.season-ring-track {
+  stroke: var(--surface-elevated);
+}
+.season-ring-arc {
+  stroke: var(--accent);
+  transition: stroke-dashoffset 900ms var(--ease-out);
+}
+.season-ring-faces {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  perspective: 140px;
+}
+.season-ring-face {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  backface-visibility: hidden;
+  transition: transform 550ms var(--ease-out);
+}
+.season-ring-time {
+  transform: rotateX(-180deg);
+}
+.season-ring.is-time .season-ring-count {
+  transform: rotateX(180deg);
+}
+.season-ring.is-time .season-ring-time {
+  transform: none;
+}
+.season-ring-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.season-ring-den,
+.season-ring-unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  padding-top: 2px;
+}
+/* The fraction bar under the total, as in the What's Next ring; the time has none. */
+.season-ring-den {
+  padding-top: 3px;
+  border-top: 1.5px solid color-mix(in srgb, var(--text-secondary) 45%, transparent);
+}
+/* Its loading shimmer is the ring itself: the 7px band with the middle punched
+   out, in the ring's place, and the empty fraction bar where the count will sit. */
+.season-ring-skel {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  margin-right: 8px;
+}
+.season-ring-skel .skeleton {
+  -webkit-mask: radial-gradient(circle, transparent 18.5px, #000 19px);
+  mask: radial-gradient(circle, transparent 18.5px, #000 19px);
+}
+.season-ring-skel::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 1.5px;
+  translate: -50% -50%;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--text-secondary) 30%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .season-ring-arc,
+  .season-ring-face {
+    transition: none;
+  }
 }
 /* Not out yet: the row reads its release date in the accent, and its tick is a
    faint dashed ring that can't be ticked until that day. */
@@ -2100,6 +2181,35 @@ textarea.notes {
 /* Watched rows step back. */
 .episode.is-watched .thumb img {
   opacity: 0.45;
+}
+/* An episode with no still (not out yet, or none on TMDB): the test card's seven
+   colour bars, faded, as on a TV with nothing to show yet (Season.js). */
+.episode .thumb.no-still::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    #c0c0c0 0 14.29%,
+    #c0c000 0 28.57%,
+    #00c0c0 0 42.86%,
+    #00c000 0 57.14%,
+    #c000c0 0 71.43%,
+    #c00000 0 85.71%,
+    #0000c0 0
+  );
+  opacity: 0.32;
+}
+[data-theme='light'] .episode .thumb.no-still::before {
+  opacity: 0.45;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .episode .thumb.no-still::before {
+    opacity: 0.45;
+  }
+}
+.episode.is-watched .thumb.no-still::before {
+  opacity: 0.16;
 }
 .episode.is-watched .ep-title {
   color: var(--text-secondary);

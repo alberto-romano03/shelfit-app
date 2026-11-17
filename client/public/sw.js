@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v205'; // bumped: Season skeleton follows the new header
+const CACHE = 'shelfit-shell-v208'; // bumped: colour bars for episodes with no still
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by

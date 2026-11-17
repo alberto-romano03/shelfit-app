@@ -71,6 +71,21 @@ function isUpcoming(ep) {
   return !!ep && !ep.watched && !!ep.air_date && ep.air_date > localToday();
 }
 
+// The season ring: a 52px circle with a 7px band (its middle 38px across, as in
+// the What's Next cards' ring).
+const RING_R = 22.5;
+const RING_C = +(2 * Math.PI * RING_R).toFixed(2);
+// The time left, in two lines for the middle of the ring: hours over minutes, or
+// minutes over "min" under an hour. Past 99 hours three digits and an h don't fit,
+// so it reads days over hours.
+function ringTime(min) {
+  const m = Math.round(min);
+  const h = Math.floor(m / 60);
+  if (h > 99) return [t('season.ringDays', { n: Math.floor(h / 24) }), `${h % 24}h`];
+  if (h) return [`${h}h`, `${String(m % 60).padStart(2, '0')}m`];
+  return [String(m), 'min'];
+}
+
 // Virtual-scroll tuning.
 const PAGE_SIZE = 50; // episodes fetched per request
 const BUFFER = 15; // rows rendered above AND below the viewport
@@ -83,8 +98,8 @@ const FALLBACK_ROW_H = 77; // used only if a live row can't be measured
 const scrollMemory = new Map();
 
 // Ghost-frame for the season view. Mirrors the real layout so nothing shifts when
-// the data swaps in: header (real back button, the series name over the title),
-// the progress line read on the right, the action row (Watched all and Unmark all
+// the data swaps in: header (real back button, the series name over the title,
+// the season ring on the right), the action row (Watched all and Unmark all
 // as equal pills, then the round jump key), the separator, then the episode rows.
 function seasonSkeleton() {
   const view = el('div', { class: 'season-view' });
@@ -99,11 +114,7 @@ function seasonSkeleton() {
         skelLine({ width: '96px', height: '11px', margin: '0 0 8px' }),
         skelLine({ width: '150px', height: '22px', margin: '0 0 4px' }),
       ]),
-    ]),
-    el('div', { class: 'season-progress' }, [
-      // On the right, like the real line (a block, so pushed there by its margin).
-      el('div', { class: 'season-progress-text' }, [skelText('180px')]),
-      el('div', { class: 'season-progress-bar' }),
+      el('div', { class: 'season-ring-skel' }, [skelCircle(52)]),
     ]),
     el('div', { class: 'season-actions' }, [skelPill(48), skelPill(48), skelCircle(48)]),
     el('hr', { class: 'status-sep season-sep' })
@@ -215,6 +226,71 @@ export default async function Season(container, params) {
         [el('span', { class: 'season-series-name', text: first.show_title }), el('span', { class: 'season-series-chev', html: icons.forward })]
       )
     : null;
+  // The season at a glance, at the right of the title: the ring of the What's Next
+  // cards, watched over total in the middle and the arc drawn in from the top when
+  // the page opens, then moving as episodes are ticked. Tapped, the middle turns
+  // over like a card to the time still to watch, and back on the next tap (only
+  // with time hints on and something left to watch).
+  const ringSvg = el('span', {
+    class: 'season-ring-svg',
+    html:
+      `<svg viewBox="0 0 52 52" aria-hidden="true"><circle class="season-ring-track" cx="26" cy="26" r="${RING_R}"/>` +
+      `<circle class="season-ring-arc" cx="26" cy="26" r="${RING_R}" stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C}" transform="rotate(-90 26 26)"/></svg>`,
+  });
+  const ringArc = ringSvg.querySelector('.season-ring-arc');
+  const ringNum = el('span', { class: 'season-ring-num' });
+  const ringDen = el('span', { class: 'season-ring-den' });
+  const ringBig = el('span', { class: 'season-ring-num' });
+  const ringSmall = el('span', { class: 'season-ring-unit' });
+  let ringShowsTime = false;
+  let ringDrawn = false;
+  const ring = el(
+    'button',
+    {
+      class: 'season-ring',
+      type: 'button',
+      onClick: () => {
+        if (ring.classList.contains('is-static')) return;
+        ringShowsTime = !ringShowsTime;
+        haptic();
+        paintRing();
+      },
+    },
+    [
+      ringSvg,
+      el('span', { class: 'season-ring-faces' }, [
+        el('span', { class: 'season-ring-face season-ring-count' }, [ringNum, ringDen]),
+        el('span', { class: 'season-ring-face season-ring-time' }, [ringBig, ringSmall]),
+      ]),
+    ]
+  );
+  function paintRing() {
+    const canTime = timeHintsOn() && minutesLeft > 0;
+    if (!canTime) ringShowsTime = false; // caught up: the count stays
+    ring.classList.toggle('is-static', !canTime);
+    ring.classList.toggle('is-time', ringShowsTime);
+    ringNum.textContent = String(watchedCount);
+    ringDen.textContent = String(total);
+    const count = t('season.progress', { watched: watchedCount, total });
+    let label = count;
+    if (canTime) {
+      const [big, small] = ringTime(minutesLeft);
+      ringBig.textContent = big;
+      ringSmall.textContent = small;
+      label = `${count} · ${t('time.leftExact', { time: hoursAndMinutes(minutesLeft) })}`;
+    }
+    ring.setAttribute('aria-label', label);
+    ring.title = label;
+    const offset = (RING_C * (1 - (total ? watchedCount / total : 0))).toFixed(2);
+    if (ringDrawn) {
+      ringArc.style.strokeDashoffset = offset;
+    } else {
+      // The first paint waits for the ring to be on the page, so the arc draws in.
+      ringDrawn = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => (ringArc.style.strokeDashoffset = offset)));
+    }
+  }
+
   const header = el('div', { class: 'season-head' }, [
     el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
     el('div', { class: 'season-head-text' }, [
@@ -222,6 +298,7 @@ export default async function Season(container, params) {
       el('h2', { class: 'season-title', text: data.name || t('season.title', { num: n }) }),
     ]),
   ]);
+  if (watchedCount !== null) header.append(ring);
 
   const markAllBtn = el(
     'button',
@@ -324,26 +401,12 @@ export default async function Season(container, params) {
   const spacer = el('div', { class: 'ep-spacer' });
   const scroller = el('div', { class: 'ep-scroller' }, [spacer]);
   const listSep = el('hr', { class: 'status-sep season-sep' });
-  const progressText = el('div', { class: 'season-progress-text' });
-  const progressFill = el('i');
-  const progress = el('div', { class: 'season-progress' }, [
-    progressText,
-    el('div', { class: 'season-progress-bar' }, [progressFill]),
-  ]);
   function paintProgress() {
     paintActions();
-    if (watchedCount === null) return;
-    const count = t('season.progress', { watched: watchedCount, total });
-    const left = timeHintsOn() && minutesLeft > 0 ? t('time.leftExact', { time: hoursAndMinutes(minutesLeft) }) : '';
-    progressText.textContent = left ? `${count} · ${left}` : count;
-    progressFill.style.transform = `scaleX(${total ? watchedCount / total : 0})`;
+    if (watchedCount !== null) paintRing();
   }
   paintProgress();
-  const seasonView = el(
-    'div',
-    { class: 'season-view' },
-    watchedCount === null ? [header, actionRow, listSep, scroller] : [header, progress, actionRow, listSep, scroller]
-  );
+  const seasonView = el('div', { class: 'season-view' }, [header, actionRow, listSep, scroller]);
 
   let ROW_H = FALLBACK_ROW_H;
   const pool = []; // recycled row objects, ready for reuse
@@ -392,6 +455,7 @@ export default async function Season(container, params) {
     img.addEventListener('error', () => {
       img.removeAttribute('src');
       img.style.visibility = 'hidden';
+      thumb.classList.add('no-still');
     });
     // How far into the episode you stopped, along the bottom of its still.
     const stopFill = el('i');
@@ -483,6 +547,9 @@ export default async function Season(container, params) {
       if (ep.watched && ep.watch_count > 1) check.innerHTML = `<span class="check-count">×${ep.watch_count}</span>`;
       else if (ep.watched) check.innerHTML = icons.check;
       else check.innerHTML = '';
+      // No still yet (an episode not out, or one TMDB has no image for): the
+      // test card's colour bars, faded, in its place.
+      thumb.classList.toggle('no-still', !ep.still_url);
       if (ep.still_url) {
         img.style.visibility = '';
         // Reuse the in-memory image cache; guard against the row being recycled
