@@ -43,6 +43,9 @@ export function initNavAnimations(tabButtons) {
   // the next repeat.
   function play(path) {
     if (path !== activePath) return;
+    // Reduced motion: the active icon stays still (checked each time, so a
+    // change of the setting applies without a reload).
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const btn = byPath.get(path);
     const conf = ANIM[path];
     if (!btn || !conf) return;

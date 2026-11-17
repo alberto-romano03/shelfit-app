@@ -30,6 +30,7 @@ import { imageCache } from './imageCache.js';
 import { isServerReachable, markDegraded } from './network.js';
 import { afterTransition } from './router.js';
 import { t } from './i18n.js';
+import { rovingFocus } from './rovingFocus.js';
 
 const COLS = 3; // matches .grid { grid-template-columns: repeat(3, 1fr) }
 const GAP = 10; // matches .grid gap
@@ -148,8 +149,9 @@ function createCell(onItemClick, onItemHold) {
   });
   const badge = el('div', { class: 'rating-badge' });
   badge.style.display = 'none';
-  const retryBtn = el('button', { class: 'gc-retry', type: 'button', text: '↻' });
+  const retryBtn = el('button', { class: 'gc-retry', type: 'button', text: '↻', 'aria-label': t('common.retry') }); // the glyph alone says nothing
   const node = el('div', { class: 'poster-card gc-cell' }, [img, badge, retryBtn]);
+  node.tabIndex = -1; // the grid's roving focus picks the one in Tab order
 
   let currentItem = null;
   let retryHandler = null;
@@ -164,12 +166,22 @@ function createCell(onItemClick, onItemHold) {
     longPress(node, () => {
       if (currentItem) onItemHold(currentItem);
     });
+    // The keyboard's way to the same quick menu: the context-menu key or Shift+F10.
+    node.addEventListener('keydown', (e) => {
+      if (!currentItem || !(e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) return;
+      e.preventDefault();
+      onItemHold(currentItem);
+    });
   }
 
   function show(item) {
     currentItem = item;
     retryHandler = null;
     node.dataset.itemId = item.id;
+    // A title: a button named after it (the poster image alone says nothing).
+    node.setAttribute('role', 'button');
+    node.setAttribute('aria-label', item.title || '');
+    node.removeAttribute('aria-hidden');
     node.classList.remove('is-skel', 'is-retry', 'poster-tile', 'tile-wait');
     if (item.rating) {
       badge.style.display = '';
@@ -222,6 +234,11 @@ function createCell(onItemClick, onItemHold) {
     currentItem = null;
     retryHandler = null;
     delete node.dataset.itemId;
+    // A placeholder: nothing to press or read.
+    node.removeAttribute('role');
+    node.removeAttribute('aria-label');
+    node.setAttribute('aria-hidden', 'true');
+    node.tabIndex = -1;
     node.classList.remove('is-retry', 'poster-tile', 'tile-wait');
     node.classList.add('is-skel', 'skeleton');
     img.removeAttribute('src');
@@ -231,12 +248,19 @@ function createCell(onItemClick, onItemHold) {
     currentItem = null;
     retryHandler = fn;
     delete node.dataset.itemId;
+    // Only its retry button is a control.
+    node.removeAttribute('role');
+    node.removeAttribute('aria-label');
+    node.removeAttribute('aria-hidden');
+    node.tabIndex = -1;
     node.classList.remove('is-skel', 'skeleton', 'poster-tile', 'tile-wait');
     node.classList.add('is-retry');
     img.removeAttribute('src');
     badge.style.display = 'none';
   }
-  return { node, show, showSkeleton, showRetry, _i: -1, _sig: null };
+  const cell = { node, show, showSkeleton, showRetry, _i: -1, _sig: null };
+  node._cell = cell;
+  return cell;
 }
 
 function createDivider() {
@@ -274,6 +298,36 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
   let totalHeight = 0;
 
   const activeCells = new Map(); // absolute item index → cell
+
+  // Keyboard and screen readers (rovingFocus.js): one title in the Tab order,
+  // the arrows move between titles as they sit on screen (up and down by row,
+  // across the section dividers), Enter opens one.
+  const isTitle = (n) => n && n.style.display !== 'none' && n.getAttribute('role') === 'button';
+  const rowOfItem = (i) => rows.findIndex((r) => r.kind === 'items' && i >= r.startItem && i < r.startItem + r.count);
+  const roving = rovingFocus(spacer, {
+    viewport: scroller,
+    selector: '.gc-cell',
+    positionOf: (n) => (n._cell && isTitle(n) && n._cell._i >= 0 ? { i: n._cell._i } : null),
+    nodeAt: ({ i }) => {
+      const c = activeCells.get(i);
+      return c && isTitle(c.node) ? c.node : null;
+    },
+    move: ({ i }, key) => {
+      if (!store) return null;
+      if (key === 'ArrowLeft') return i > 0 ? { i: i - 1 } : null;
+      if (key === 'ArrowRight') return i + 1 < store.total ? { i: i + 1 } : null;
+      if (key !== 'ArrowUp' && key !== 'ArrowDown') return null;
+      const ri = rowOfItem(i);
+      if (ri < 0) return null;
+      const col = i - rows[ri].startItem;
+      const step = key === 'ArrowDown' ? 1 : -1;
+      for (let r = ri + step; r >= 0 && r < rows.length; r += step) {
+        if (rows[r].kind !== 'items') continue; // a section divider
+        return { i: rows[r].startItem + Math.min(col, rows[r].count - 1) };
+      }
+      return null;
+    },
+  });
   const activeDivs = new Map(); // row index → divider node
   const cellPool = [];
   const divPool = [];
@@ -504,6 +558,7 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
 
     ensurePages(minItem, maxItem);
     scrollMem.set(filterKey, scrollTop);
+    roving.sync();
 
     // Report the section now at the top of the viewport (letter-picker highlight).
     if (onActiveGroup && store.groups) {

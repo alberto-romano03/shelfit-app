@@ -47,6 +47,7 @@ import {
   fadeSwap,
   lucideIcon,
   stateBlock, longPress, playOnce,
+  pressable,
 } from '../ui.js';
 import { imageCache } from '../imageCache.js';
 import { isServerReachable, markDegraded } from '../network.js';
@@ -332,7 +333,7 @@ export default async function Home(container) {
     ]);
     card.addEventListener('click', () => navigate(`/detail/${it.id}`));
     longPress(card, () => openPosterMenu(it));
-    return card;
+    return pressable(card, { onHold: () => openPosterMenu(it) });
   }
   // Order-sensitive signature used to skip a needless re-render when nothing changed.
   function watchingSig(list) {

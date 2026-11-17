@@ -43,12 +43,14 @@ const STATUS_BENTO = [
 // pill (tints the current status's leading icon) and the open bento chooser (tints
 // each cell's icon, and the highlight of the selected cell). Defined once here so
 // the two never drift apart. Applied via the scoped `--sc` custom property.
+// The colours themselves are theme tokens (styles.css --status-*): pastels on
+// dark, deeper inks on light, so they stay readable on both.
 export const STATUS_COLORS = {
-  plan_to_watch: '#7db6f0', // blue
-  watching: '#7ed99a', // green
-  completed: '#6fd4c4', // teal
-  paused: '#f0c674', // amber
-  dropped: '#e5867f', // red
+  plan_to_watch: 'var(--status-plan)', // blue
+  watching: 'var(--status-watching)', // green
+  completed: 'var(--status-completed)', // teal
+  paused: 'var(--status-paused)', // amber
+  dropped: 'var(--status-dropped)', // red
 };
 export const STATUS_ICON = Object.fromEntries(STATUS_BENTO.map((s) => [s.key, s.icon]));
 

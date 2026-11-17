@@ -59,7 +59,13 @@ export function createRatingControls(opts = {}) {
   function renderStars(still, from = 0) {
     starsWrap.innerHTML = '';
     for (let k = 1; k <= 5; k++) {
-      const b = el('button', { html: starSvg(k <= (rating || 0)) });
+      // Named for screen readers ("3 stars"), and pressed when it is the rating.
+      const b = el('button', {
+        type: 'button',
+        html: starSvg(k <= (rating || 0)),
+        'aria-label': k === 1 ? t('rating.starOne') : t('rating.stars', { n: k }),
+        'aria-pressed': rating === k ? 'true' : 'false',
+      });
       if (!still && k <= (rating || 0) && k > from) {
         b.firstElementChild.classList.add('star-sweep');
         b.firstElementChild.style.setProperty('--i', String(k - from - 1));

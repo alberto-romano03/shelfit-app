@@ -51,6 +51,7 @@ import {
   typewriterPlaceholder,
   settingsRow,
   epLabel,
+  pressable,
 } from '../ui.js';
 
 // Who this member can suggest a title to (see openSuggestSheet). Fetched when a
@@ -1231,10 +1232,12 @@ export default async function Detail(container, params) {
           : t('detail.seasonEpisodes', { watched: s.watched, total: s.total });
       const item = el('div', { class: 'season-item' + (s === onSeason ? ' is-current' : '') });
       const header = el('div', { class: 'season-header' }, [
-        el('div', {}, [
-          el('div', { class: 's-name', text: s.name }),
-          el('div', { class: 's-count', text: countText }),
-        ]),
+        pressable(
+          el('div', {}, [
+            el('div', { class: 's-name', text: s.name }),
+            el('div', { class: 's-count', text: countText }),
+          ])
+        ),
         finished ? lucideIcon('check', 'season-done') : markAllButton(s),
       ]);
       if (!finished && s.watched > 0) {

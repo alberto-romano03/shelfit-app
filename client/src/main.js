@@ -195,7 +195,11 @@ initRouter({
     // Also for leaving Settings another way: Back, or a tab.
     settingsBtn.classList.toggle('is-open', path === '/settings');
     tabButtons.forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.path === path);
+      const here = btn.dataset.path === path;
+      btn.classList.toggle('active', here);
+      // The tab of the page on screen is announced as the current one too.
+      if (here) btn.setAttribute('aria-current', 'page');
+      else btn.removeAttribute('aria-current');
     });
     // Start/stop the active icon's idle animation for the new section.
     navAnim.setActive(path);

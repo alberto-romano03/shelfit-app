@@ -9,6 +9,16 @@
   --stars: #e5a00d;
   --success: #4caf50;
   --stop-ink: #7ed99a; /* Stopped at: the Watching status green */
+  /* Text in the accent: the accent itself on dark; on light, a deeper amber of
+     the same family, since #c8890a on white is about 3:1 (body text needs 4.5). */
+  --accent-ink: #e5a00d;
+  /* The five status colours (statusSelect.js): soft pastels on dark, deeper inks
+     on light, each at least 4.5:1 on the light surfaces. */
+  --status-plan: #7db6f0;
+  --status-watching: #7ed99a;
+  --status-completed: #6fd4c4;
+  --status-paused: #f0c674;
+  --status-dropped: #e5867f;
   --danger: #e5484d;
   --kodi-blue: #17b2e8;
   /* State inks, for glyphs on a neutral surface: toasts and empty states. */
@@ -175,7 +185,13 @@
   --accent: #c8890a;
   --stars: #c8890a;
   --success: #3d9140;
-  --stop-ink: #3f8f57;
+  --stop-ink: #2e7d4a;
+  --accent-ink: #8a6000;
+  --status-plan: #2f6db3;
+  --status-watching: #2e7d4a;
+  --status-completed: #1d7a6e;
+  --status-paused: #8f6400;
+  --status-dropped: #b5402f;
   --danger: #d33;
   --ink-ok: #2f7d32;
   --ink-bad: #c0392b;
@@ -222,7 +238,13 @@
     --accent: #c8890a;
     --stars: #c8890a;
     --success: #3d9140;
-    --stop-ink: #3f8f57;
+    --stop-ink: #2e7d4a;
+    --accent-ink: #8a6000;
+    --status-plan: #2f6db3;
+    --status-watching: #2e7d4a;
+    --status-completed: #1d7a6e;
+    --status-paused: #8f6400;
+    --status-dropped: #b5402f;
     --danger: #d33;
     --ink-ok: #2f7d32;
     --ink-bad: #c0392b;
@@ -334,7 +356,7 @@ button {
   color: inherit;
 }
 a {
-  color: var(--accent);
+  color: var(--accent-ink);
   text-decoration: none;
 }
 input,
@@ -648,7 +670,7 @@ body.grid-virtual-active #app {
   transition: color var(--dur-short) var(--ease-state);
 }
 .tabbar button.active {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 /* 24px, NOT a size of taste: the lucide glyphs are drawn on a 24-unit grid with
    2-unit strokes on integer coordinates, so at 24px every stroke edge lands on a
@@ -974,7 +996,7 @@ button:active,
    without opening anything. */
 .selpill.is-set {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .selpill.is-set .selpill-key {
   color: color-mix(in srgb, var(--accent) 60%, var(--text-secondary));
@@ -993,7 +1015,7 @@ button:active,
   border: 0;
   border-radius: 50%;
   background: color-mix(in srgb, var(--accent) 22%, transparent);
-  color: var(--accent);
+  color: var(--accent-ink);
   cursor: pointer;
 }
 .selpill-clear svg {
@@ -1056,7 +1078,7 @@ button:active,
   pointer-events: none;
 }
 .letter-pick.is-active {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .chips {
   display: flex;
@@ -1159,7 +1181,7 @@ button:active,
   justify-content: center;
   font-size: 34px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .profile-name {
   display: flex;
@@ -1983,7 +2005,7 @@ textarea.notes {
   background: var(--accent);
 }
 .link-btn {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-size: 13px;
   padding: 6px;
 }
@@ -2050,7 +2072,7 @@ textarea.notes {
   width: 13px;
   height: 13px;
   vertical-align: 0;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .ep-note-text {
   min-width: 0;
@@ -2171,7 +2193,7 @@ textarea.notes {
 /* Not out yet: the row reads its release date in the accent, and its tick is a
    faint dashed ring that can't be ticked until that day. */
 .episode.is-upcoming .ep-sub {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
 }
 .check.is-locked {
@@ -2231,6 +2253,7 @@ textarea.notes {
   gap: 8px;
 }
 .check {
+  position: relative;
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -2239,6 +2262,23 @@ textarea.notes {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+/* Small controls keep their look but take a finger-sized tap: an invisible ring
+   around them catches it (the episode tick 48px, the list remove dot 44px, the
+   recent search's x 36px, which stops short of its chip's text). */
+.check::after,
+.lw-remove::after,
+.fc-q-x::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+}
+.lw-remove::after {
+  inset: -8px;
+}
+.fc-q-x::after {
+  inset: -8px;
 }
 .check.done {
   background: var(--success);
@@ -3029,7 +3069,7 @@ body.season-active #app {
   margin-bottom: 2px;
 }
 .tl-tag-watch {
-  color: var(--accent);
+  color: var(--accent-ink);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 .tl-tag-soon {
@@ -3451,7 +3491,7 @@ body.season-active #app {
   transition: color var(--dur-short) var(--ease-state);
 }
 .fc-field:focus-within .fc-ico {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .fc-ico svg {
   width: 100%;
@@ -3657,6 +3697,7 @@ body.season-active #app {
   scale: var(--press);
 }
 .fc-q-x {
+  position: relative;
   width: 20px;
   height: 20px;
   display: inline-flex;
@@ -4104,7 +4145,7 @@ body.season-active #app {
   border-top: 1px solid var(--border);
 }
 .ht:active .ht-title {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 /* The thumb IS a poster card (same shimmer, same fade-in, same corner); only
    its size is a row's business. */
@@ -4277,6 +4318,23 @@ body.modal-open {
   z-index: -1;
   background: rgba(0, 0, 0, 0.6);
   pointer-events: none;
+}
+/* Cards, posters and rows that act as buttons (ui.js pressable, rovingFocus.js)
+   show where the keyboard is. A poster in the grids draws it inside its edge, so
+   the scroller never clips it. */
+[role='button']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.gc-cell:focus-visible,
+.ep-main:focus-visible {
+  outline-offset: -2px;
+}
+
+/* A popup takes focus as it opens (ui.js dialogA11y) so keyboard and screen
+   readers land in it; the panel itself never shows a focus ring for that. */
+.modal:focus {
+  outline: none;
 }
 .modal {
   width: 100%;
@@ -4632,7 +4690,7 @@ textarea.text-field {
 .pe-avatar-initial {
   font-size: 24px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 /* The name is edited in place: a pill field with a pen glyph, taking the
    inputs' accent border + ring on focus. */
@@ -4672,7 +4730,7 @@ textarea.text-field {
   color: var(--text-secondary);
 }
 .pe-name-wrap:focus-within .pe-name-ico {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .pe-badge {
   width: 34px;
@@ -4775,7 +4833,7 @@ textarea.text-field {
   aspect-ratio: 1;
   border-radius: 50%;
   background: var(--surface-elevated);
-  color: var(--accent);
+  color: var(--accent-ink);
   font-size: 24px;
   font-weight: 700;
 }
@@ -5308,7 +5366,7 @@ button.srow:active {
 .rediscover-btn svg {
   width: 22px;
   height: 22px;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .rediscover-btn:active {
   scale: var(--press-wide);
@@ -5729,7 +5787,7 @@ button.srow:active {
 .empty-art.empty-art--drawn {
   padding: 0;
   background: none;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .empty--error .empty-art--drawn {
   color: var(--ink-bad);
@@ -5765,7 +5823,7 @@ button.srow:active {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--accent);
+  color: var(--accent-ink);
   font-size: 13px;
   font-weight: 700;
 }
@@ -6295,7 +6353,7 @@ button.srow:active {
   min-height: 44px;
   margin-block: -11px;
   padding-inline: 12px;
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -6410,7 +6468,7 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .toast {
 }
 /* A complete collection's count reads in gold. */
 .lw-meta.is-done {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
 }
 
@@ -6485,7 +6543,7 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .toast {
   font-weight: 600;
 }
 .cp-owned.is-done {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 /* A pip per film (gold when owned); a plain bar for long sagas. */
 .cp-pips {
@@ -6882,7 +6940,7 @@ img.mood-emoji {
   transition: color var(--dur-short) var(--ease-state);
 }
 .dur-level.on {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -7420,7 +7478,7 @@ img.mood-emoji {
   min-height: 18px;
   font-size: 14px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-ink);
   transform-origin: center;
 }
 /* ---- 1★ "Not for me": droops in, loses energy, sags dimmed. ---- */
@@ -7549,7 +7607,7 @@ img.mood-emoji {
   margin-top: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .preview-actions {
   display: flex;
@@ -7731,7 +7789,7 @@ img.mood-emoji {
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .pick-title {
   margin: 0;
@@ -8033,7 +8091,7 @@ img.mood-emoji {
   border-radius: var(--r-pill);
   padding: 7px 16px;
   background: var(--surface-elevated);
-  color: var(--accent);
+  color: var(--accent-ink);
   font: inherit;
   font-weight: 700;
   font-size: 14px;
@@ -8177,7 +8235,7 @@ button.lw-card:active {
   position: relative;
   z-index: 1;
   display: grid;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .lw-new-sign svg {
   width: 30px;
@@ -8192,7 +8250,7 @@ button.lw-card:active {
   display: grid;
   place-items: center;
   background: var(--surface-elevated);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .lw-new-plus svg {
   width: 24px;
@@ -8298,7 +8356,7 @@ button.lw-card.lw-new:disabled:active {
   font-variant-numeric: tabular-nums;
 }
 .nl-count.full {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* ================= List detail (List.js) =================
@@ -8458,7 +8516,7 @@ button.lw-card.lw-new:disabled:active {
   color: #fff;
 }
 .list-flag--cine {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .list-flag-ico {
   width: 14px;
@@ -9078,7 +9136,7 @@ textarea.notes:focus,
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .rcpt-entry svg:last-child {
   width: 18px;
@@ -9306,7 +9364,7 @@ textarea.notes:focus,
   transition: color var(--dur-short) var(--ease-state);
 }
 .rcpt-blur-level.on {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -9557,7 +9615,7 @@ textarea.notes:focus,
   align-items: center;
   justify-content: center;
   background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
+  color: var(--accent-ink);
   margin-bottom: 4px;
 }
 .rom-done-badge svg {
@@ -9577,7 +9635,7 @@ textarea.notes:focus,
   margin-top: 4px;
   font-size: 13px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 /* The done card centres its content, so its action row needs an explicit full
    width to span — an align-items:center flex child would otherwise shrink to its
@@ -10143,7 +10201,7 @@ textarea.lend-message-input:focus {
   font-variant-numeric: tabular-nums;
 }
 .lend-message-count.full {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .lend-stage {
   display: flex;
@@ -10309,7 +10367,7 @@ textarea.lend-message-input:focus {
   border-radius: var(--r-md);
   background: var(--surface-elevated);
   border: 1px solid var(--border);
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 700;
   font-size: 14px;
 }
@@ -10488,7 +10546,7 @@ textarea.lend-message-input:focus {
 .backup-stat-num {
   font-size: 20px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .backup-stat-label {
   font-size: 11px;
@@ -12070,7 +12128,7 @@ textarea.lend-message-input:focus {
   border: 0;
   border-radius: var(--r-pill);
   background: none;
-  color: var(--accent);
+  color: var(--accent-ink);
   font: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -12372,7 +12430,7 @@ textarea.lend-message-input:focus {
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .person-eyebrow-ico {
   display: inline-flex;
@@ -12591,8 +12649,8 @@ textarea.lend-message-input:focus {
    A near-full-screen paged sheet. It reuses the shared .modal-backdrop and the
    dialog motion (dialogMotion.js); everything else is namespaced
    `.sc-*` so the illustrations never collide with app CSS. Colours come from the
-   design tokens; the brand literal (#7ed99a "watching") and --kodi-blue match
-   statusSelect.js and the Kodi accent used elsewhere.
+   design tokens; --status-watching and --kodi-blue match statusSelect.js and
+   the Kodi accent used elsewhere.
    ============================================================================ */
 .showcase {
   width: 100%;
@@ -12632,6 +12690,14 @@ textarea.lend-message-input:focus {
 }
 .sc-skip {
   transition: scale var(--dur-long) var(--ease-out);
+}
+/* Skip looks the same but takes a finger-sized tap: an invisible margin around it
+   (about 50px tall and 20px wider) catches a thumb that lands near the word. */
+.sc-skip::after {
+  content: '';
+  position: absolute;
+  inset: -6px -10px -8px -10px;
+  border-radius: inherit;
 }
 .sc-skip:active {
   scale: var(--press);
@@ -12825,7 +12891,7 @@ textarea.lend-message-input:focus {
   white-space: nowrap;
 }
 .sc-cchip.c1 { top: -14px; left: -22px; transform: rotate(-6deg); }
-.sc-cchip.c2 { top: 30px; right: -30px; transform: rotate(5deg); background: color-mix(in srgb, var(--accent) 18%, var(--surface-elevated)); color: var(--accent); border-color: transparent; }
+.sc-cchip.c2 { top: 30px; right: -30px; transform: rotate(5deg); background: color-mix(in srgb, var(--accent) 18%, var(--surface-elevated)); color: var(--accent-ink); border-color: transparent; }
 .sc-cchip.c3 { bottom: 26px; left: -30px; transform: rotate(4deg); }
 .sc-cchip.c4 { bottom: -14px; right: -18px; transform: rotate(-4deg); }
 
@@ -12869,9 +12935,9 @@ textarea.lend-message-input:focus {
   border-radius: var(--r-pill);
   font-weight: 600;
   font-size: 14px;
-  border: 1.5px solid color-mix(in srgb, #7ed99a 60%, transparent);
-  background: color-mix(in srgb, #7ed99a 15%, transparent);
-  color: #7ed99a;
+  border: 1.5px solid color-mix(in srgb, var(--status-watching) 60%, transparent);
+  background: color-mix(in srgb, var(--status-watching) 15%, transparent);
+  color: var(--status-watching);
 }
 .sc-status .sc-ic { width: 17px; height: 17px; flex: none; }
 .sc-status .sc-cur { flex: 1; text-align: left; }
@@ -12899,7 +12965,7 @@ textarea.lend-message-input:focus {
 .sc-chip.sc-on {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   background: color-mix(in srgb, var(--accent) 15%, transparent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* --- Page 4: vertical cinema ticket (mirrors cinemaTicket.js, simplified) --- */
@@ -13097,7 +13163,7 @@ textarea.lend-message-input:focus {
 }
 .sc-mood.sc-on {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* --- Page 7: What's Next — transit line + calendar for upcoming --- */
@@ -13332,7 +13398,7 @@ textarea.lend-message-input:focus {
   color: var(--text-secondary);
   margin-top: -6px;
 }
-.imgtype-state.is-custom { color: var(--accent); font-weight: 600; }
+.imgtype-state.is-custom { color: var(--accent-ink); font-weight: 600; }
 
 /* The illustrations sit in a fixed-height stage so the three cells line up
    whatever their shape. Same flat, two-tone language as the showcase art. */
@@ -13583,25 +13649,6 @@ textarea.lend-message-input:focus {
   background: var(--accent);
 }
 
-/* --- Busy state (compress / save) ------------------------------------- */
-.imgflow-busy {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 34px 0;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-.imgflow-spin {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid var(--surface-elevated);
-  border-top-color: var(--accent);
-  animation: imgflowSpin 0.7s linear infinite;
-}
-@keyframes imgflowSpin { to { transform: rotate(360deg); } }
 
 /* ============== Options modal heading (clear logo or text) ==============
    One fixed-height row holding both the text title and, when Fanart.tv has one,

@@ -679,6 +679,28 @@ export function playOnce(node, cls) {
 // Press and hold. It lets go as soon as the finger moves or the page scrolls, and the tap
 // that ends a hold doesn't also open what's under it.
 const HOLD_MS = 380;
+// A card or tile that acts as a button without being a <button> (it holds a
+// poster and lines of text): in the Tab order, announced as a button (named by
+// `label`, else by its own text), pressed with Enter or Space. `onHold`: what a
+// long press opens, reached from the keyboard with the context-menu key or
+// Shift+F10.
+export function pressable(node, { label, onHold } = {}) {
+  node.setAttribute('role', 'button');
+  node.tabIndex = 0;
+  if (label) node.setAttribute('aria-label', label);
+  node.addEventListener('keydown', (e) => {
+    if (e.target !== node) return; // a real control inside handles its own keys
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      node.click();
+    } else if (onHold && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+      e.preventDefault();
+      onHold();
+    }
+  });
+  return node;
+}
+
 export function longPress(node, onHold) {
   let timer = 0;
   let x = 0;
@@ -1422,6 +1444,53 @@ export function segmentedBar({
   };
 }
 
+// --- Dialog semantics -----------------------------------------------------
+// Every popup is announced as a modal dialog, named by its heading. Focus moves
+// into it as it opens and stays inside while it is open (Tab and Shift+Tab cycle
+// through its controls), then goes back to whatever had it once it closes.
+// Escape closes the top one (sheetStack.js). Returns the restore for close().
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+let dialogSeq = 0;
+function dialogA11y(panel, backdrop) {
+  const before = document.activeElement;
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  const heading = panel.querySelector('h1, h2, h3, .imgflow-title');
+  if (heading) {
+    if (!heading.id) heading.id = `dialog-title-${++dialogSeq}`;
+    panel.setAttribute('aria-labelledby', heading.id);
+  }
+  panel.tabIndex = -1;
+  // A control the dialog focused itself (a text field) keeps it.
+  if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
+  backdrop.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    const items = [...panel.querySelectorAll(FOCUSABLE)].filter((n) => n.getClientRects().length);
+    if (!items.length) {
+      e.preventDefault();
+      panel.focus({ preventScroll: true });
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const at = document.activeElement;
+    if (e.shiftKey && (at === first || at === panel)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && at === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+  return () => {
+    // Another popup already open over this one keeps the focus it took.
+    const at = document.activeElement;
+    if (at && !panel.contains(at) && at.closest && at.closest('[aria-modal="true"]')) return;
+    if (before && before.isConnected && typeof before.focus === 'function') before.focus({ preventScroll: true });
+  };
+}
+
 // --- Modal ----------------------------------------------------------------
 // It arrives and leaves by dialogMotion.js, and the node is removed only once it has gone.
 //
@@ -1445,10 +1514,12 @@ export function openModal(buildContent, opts = {}) {
   let closed = false;
   let removed = false;
   let untrack = () => {};
+  let restoreFocus = () => {};
   function close() {
     if (closed) return;
     closed = true;
     untrack();
+    restoreFocus();
     const done = () => {
       if (removed) return;
       removed = true;
@@ -1466,6 +1537,7 @@ export function openModal(buildContent, opts = {}) {
   buildContent(modal, close);
   lockScroll();
   document.body.append(backdrop);
+  if (!closed) restoreFocus = dialogA11y(modal, backdrop);
   dialogEnter(modal, backdrop, { popup: !!opts.center });
   if (!closed) untrack = trackSheet(close);
   return { close, modal };
@@ -1683,10 +1755,12 @@ export function openSheet(buildContent, opts = {}) {
   let closing = false;
   let removed = false;
   let untrack = () => {};
+  let restoreFocus = () => {};
   function close() {
     if (closing) return;
     closing = true;
     untrack();
+    restoreFocus();
     const done = () => {
       if (removed) return;
       removed = true;
@@ -1701,6 +1775,7 @@ export function openSheet(buildContent, opts = {}) {
   buildContent(sheet, close);
   lockScroll();
   document.body.append(backdrop);
+  if (!closing) restoreFocus = dialogA11y(sheet, backdrop);
   dialogEnter(sheet, backdrop);
   if (!closing) untrack = trackSheet(close);
   return { close, sheet };
@@ -1725,8 +1800,8 @@ const loadingPhrases = () => [
 // modal / bottom sheet (used by Rate-O-Matic and My Tickets).
 export function spinner(opts = {}) {
   const phrases = loadingPhrases();
-  const phrase =
-    phrases[Math.floor(Math.random() * phrases.length)];
+  // `opts.text`: a fixed caption instead of a random phrase.
+  const phrase = opts.text || phrases[Math.floor(Math.random() * phrases.length)];
   return el('div', { class: 'loader' + (opts.compact ? ' loader--compact' : '') }, [
     el('div', { class: 'loader-logo', role: 'img', 'aria-label': t('ui.loading') }),
     el('div', { class: 'loader-phrase', text: phrase }),

@@ -30,6 +30,7 @@ import {
   clear,
   stateBlock,
   lucideIcon,
+  pressable,
 } from '../ui.js';
 import { imageCache } from '../imageCache.js';
 import { isServerReachable, markDegraded } from '../network.js';
@@ -96,7 +97,7 @@ function buildCell(it) {
     if (it.item_id) openDetail(`/detail/${it.item_id}`);
     else toast(t('lists.notInLibrary'));
   });
-  return cell;
+  return pressable(cell);
 }
 
 // --- Session copies, card hints and prefetch ---------------------------------

@@ -78,6 +78,9 @@ function frame(now) {
 export const confetti = {
   trigger() {
     if (typeof document === 'undefined') return;
+    // A burst across the whole screen is exactly what reduced motion asks to
+    // spare: the toast or prompt that comes with it still says it.
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (!pieces) buildPool();
     if (!overlay.isConnected) document.body.append(overlay);
     const W = window.innerWidth;

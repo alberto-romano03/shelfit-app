@@ -79,8 +79,8 @@ export default async function pushRoutes(fastify) {
     return { ok: true };
   });
 
-  // PUT /api/push/reminders { dusty?, cinema?, comeback? }: the caller's
-  // occasional reminders on or off (all devices). Returns the full set.
+  // PUT /api/push/reminders { episodes?, dusty?, cinema?, comeback? }: each kind
+  // of the caller's notifications on or off (all devices). Returns the full set.
   fastify.put('/api/push/reminders', async (request) => {
     return { reminders: setReminderPrefs(request.user.id, request.body || {}) };
   });

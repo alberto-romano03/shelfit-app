@@ -41,6 +41,7 @@ import { offerShelve } from '../finishSeries.js';
 import { keepTitleFresh } from '../titleSync.js';
 import { withBase } from '../basePath.js';
 import { t } from '../i18n.js';
+import { rovingFocus } from '../rovingFocus.js';
 import { openStopSheet, stopLabel } from '../stoppedAt.js';
 
 // Diary-style openers used as a random placeholder each time the note sheet opens.
@@ -480,8 +481,10 @@ export default async function Season(container, params) {
     const noteText = el('span', { class: 'ep-note-text' });
     const noteLine = el('div', { class: 'ep-note' }, [lucideIcon('square-pen', 'btn-lucide ep-note-ico'), noteText]);
     noteLine.hidden = true;
-    const main = el('div', { class: 'ep-main' }, [titleRow, sub, noteLine]);
-    const check = el('div', { class: 'check' });
+    // Both act as buttons: the episode (its sheet) and its tick, which is a
+    // toggle named "Watched". The list's roving focus puts one in Tab order.
+    const main = el('div', { class: 'ep-main', role: 'button', tabindex: '-1' }, [titleRow, sub, noteLine]);
+    const check = el('div', { class: 'check', role: 'button', tabindex: '-1', 'aria-label': t('season.watchedToggle') });
     const right = el('div', { class: 'ep-right' }, [check]);
     const real = el('div', { class: 'ep-real' }, [thumb, main, right]);
 
@@ -562,6 +565,9 @@ export default async function Season(container, params) {
       node.classList.toggle('is-watched', !!ep.watched);
       check.classList.remove('check-draw');
       check.classList.toggle('done', !!ep.watched);
+      check.setAttribute('aria-pressed', ep.watched ? 'true' : 'false');
+      if (upcoming) check.setAttribute('aria-disabled', 'true');
+      else check.removeAttribute('aria-disabled');
       if (ep.watched && ep.watch_count > 1) check.innerHTML = `<span class="check-count">×${ep.watch_count}</span>`;
       else if (ep.watched) check.innerHTML = icons.check;
       else check.innerHTML = '';
@@ -595,7 +601,10 @@ export default async function Season(container, params) {
       node.classList.add('is-retry');
       node.classList.remove('is-skel');
     }
-    return { node, showEpisode, showSkeleton, showRetry, _i: -1, _sig: null };
+    const row = { node, main, check, showEpisode, showSkeleton, showRetry, _i: -1, _sig: null };
+    main._row = row;
+    check._row = row;
+    return row;
   }
 
   // Set a row's content to reflect the current state of absolute index `i`
@@ -651,7 +660,29 @@ export default async function Season(container, params) {
     }
     ensurePagesForRange(start, end);
     scrollMemory.set(scrollKey, scrollTop);
+    roving.sync();
   }
+
+  // Keyboard and screen readers (rovingFocus.js): one control of the list in the
+  // Tab order; Up and Down move between episodes, Left and Right between an
+  // episode and its tick, Enter or Space presses it.
+  const liveRow = (r) => r && r.node.style.display !== 'none' && !r.node.classList.contains('is-skel') && !r.node.classList.contains('is-retry');
+  const roving = rovingFocus(spacer, {
+    viewport: scroller,
+    selector: '.ep-main, .check',
+    positionOf: (n) => (n._row && liveRow(n._row) && n._row._i >= 0 ? { i: n._row._i, c: n === n._row.check ? 1 : 0 } : null),
+    nodeAt: ({ i, c }) => {
+      const r = activeRows.get(i);
+      return liveRow(r) ? (c ? r.check : r.main) : null;
+    },
+    move: ({ i, c }, key) => {
+      if (key === 'ArrowUp') return i > 0 ? { i: i - 1, c } : null;
+      if (key === 'ArrowDown') return i + 1 < total ? { i: i + 1, c } : null;
+      if (key === 'ArrowLeft') return c ? { i, c: 0 } : null;
+      if (key === 'ArrowRight') return c ? null : { i, c: 1 };
+      return null;
+    },
+  });
 
   // Scroll to the "jump to next" target. Instant (not smooth): a long series can
   // be thousands of rows, and animating across them would thrash the virtual

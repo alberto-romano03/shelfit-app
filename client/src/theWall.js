@@ -13,7 +13,7 @@
 import { api } from './api.js';
 import { openDetail, navigate } from './router.js';
 import { whenStill } from './pageMotion.js';
-import { el, toast } from './ui.js';
+import { el, toast, pressable } from './ui.js';
 import { withBase } from './basePath.js';
 import { openTitlePicker, openPersonPicker } from './pickers.js';
 import { saveWall, getWall } from './offlineCache.js';
@@ -194,7 +194,9 @@ function posterSlot(kind, data, { onOpen, onPick }) {
   // One strip of tape holds it up, straddling the top edge.
   slot.append(el('span', { class: 'wall-tape' }));
   slot.addEventListener('click', () => (data ? onOpen(data) : onPick()));
-  return slot;
+  return pressable(slot, {
+    label: data && data.title ? data.title : kind === 'movie' ? t('wall.setFilm') : t('wall.setSeries'),
+  });
 }
 
 function personSlot(person, { onOpen, onPick, fallbackSrc }) {
@@ -223,7 +225,7 @@ function personSlot(person, { onOpen, onPick, fallbackSrc }) {
   const slot = el('div', { class: 'wall-slot wall-slot--person' }, [box]);
   slot.insertAdjacentHTML('beforeend', ornateFrame());
   slot.addEventListener('click', () => (person ? onOpen(person) : onPick()));
-  return slot;
+  return pressable(slot, { label: person && person.name ? person.name : t('wall.setPerson') });
 }
 
 // Build the section. Returns the element; it refreshes itself after any pick.

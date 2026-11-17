@@ -10,7 +10,7 @@
 // aspect ratio and the image is panned and zoomed behind it, so what the server
 // receives is already exactly the shape the slot needs. It only compresses and
 // stores it (see server/routes/images.js).
-import { el, openModal, toast, lucideIcon, icons } from './ui.js';
+import { el, openModal, toast, lucideIcon, icons, spinner } from './ui.js';
 import { t } from './i18n.js';
 import { withBase } from './basePath.js';
 
@@ -212,12 +212,12 @@ export function openImagePicker(item, api, onChanged) {
     function stepBrowse(root, slot) {
       head(root, slotLabel(slot.key), () => show((r) => stepSource(r, slot)));
 
-      const grid = el('div', { class: `imgpick-grid imgpick-grid--${slot.key}` });
-      const busy = el('div', { class: 'imgflow-busy' }, [
-        el('div', { class: 'imgflow-spin' }),
-        el('span', { text: t('images.loading') }),
-      ]);
-      root.append(busy, grid, el('hr', { class: 'status-sep' }));
+      // While the candidates load, the grid shows their shapes as skeletons, as
+      // every other list in the app does.
+      const grid = el('div', { class: `imgpick-grid imgpick-grid--${slot.key}`, 'aria-busy': 'true' });
+      for (let i = 0; i < 6; i++) grid.append(el('div', { class: 'imgpick-item skeleton', 'aria-hidden': 'true' }));
+      const busy = { remove: () => (grid.replaceChildren(), grid.removeAttribute('aria-busy')) };
+      root.append(grid, el('hr', { class: 'status-sep' }));
       actions(root, [
         {
           cls: 'btn-secondary',
@@ -237,10 +237,12 @@ export function openImagePicker(item, api, onChanged) {
             grid.replaceWith(el('div', { class: 'imgflow-empty', text: t('images.none') }));
             return;
           }
-          list.forEach((c) => {
-            const cell = el('button', { class: 'imgpick-item' }, [
-              el('img', { src: c.thumb, alt: '', loading: 'lazy' }),
-            ]);
+          list.forEach((c, i) => {
+            const cell = el(
+              'button',
+              { class: 'imgpick-item', 'aria-label': t('images.option', { n: i + 1, total: list.length }) },
+              [el('img', { src: c.thumb, alt: '', loading: 'lazy' })]
+            );
             cell.addEventListener('click', () => show((r) => stepCrop(r, slot, c.url)));
             grid.append(cell);
           });
@@ -316,12 +318,7 @@ export function openImagePicker(item, api, onChanged) {
     // ---- Step 5: hand it to the server ----
     function stepSaving(root, slot, image) {
       head(root, slotLabel(slot.key));
-      root.append(
-        el('div', { class: 'imgflow-busy' }, [
-          el('div', { class: 'imgflow-spin' }),
-          el('span', { text: t('images.saving') }),
-        ])
-      );
+      root.append(spinner({ compact: true, text: t('images.saving') }));
       api
         .setCustomImage(item.type, item.tmdb_id, slot.key, image)
         .then(() => {

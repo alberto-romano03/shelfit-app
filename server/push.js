@@ -84,10 +84,10 @@ function fallbackLang() {
   return getTmdbLanguage().startsWith('it') ? 'it' : 'en';
 }
 
-// --- reminder switches (per member) ---------------------------------------
-// The occasional reminders in server/reminders.js, each one on unless the
-// member turned it off.
-export const REMINDER_KINDS = ['dusty', 'cinema', 'comeback'];
+// --- notification switches (per member) -----------------------------------
+// One per kind of notification: the new-episode alert below and the occasional
+// reminders in server/reminders.js, each one on unless the member turned it off.
+export const REMINDER_KINDS = ['episodes', 'dusty', 'cinema', 'comeback'];
 export function getReminderPrefs(userId) {
   let stored = {};
   try {
@@ -317,6 +317,7 @@ export async function checkNewEpisodes(logger) {
 }
 
 async function notifyUser(userId, lastDate, todayDate, logger) {
+  if (!getReminderPrefs(userId).episodes) return; // turned off in Settings
   const shows = activeShowsStmt.all(userId);
 
   const newlyAired = [];

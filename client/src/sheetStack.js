@@ -41,6 +41,16 @@ export function trackSheet(close) {
   };
 }
 
+// Escape closes the top sheet. Where CloseWatcher exists it already does (its
+// close request covers Escape and Android's Back), so this is the fallback.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !open.length) return;
+  const top = open[open.length - 1];
+  if (top.watcher) return;
+  e.preventDefault();
+  top.close();
+});
+
 // The router asks this first on every popstate. True means a sheet took it.
 export function closeTopSheetOnPop() {
   if (!open.length) return false;

@@ -16,6 +16,7 @@ import {
   crossfadeSwap,
   clear,
   stateBlock,
+  pressable,
 } from '../ui.js';
 import { isServerReachable, markDegraded } from '../network.js';
 import { saveUpNext, getUpNext, saveUpcoming, getUpcoming, formatSyncTime } from '../offlineCache.js';
@@ -219,7 +220,7 @@ function watchNextCard(w) {
   // Straight to THIS episode's season list (not the general series detail), so
   // the next episode to watch is right there — e.g. S1E3 → that series' Season 1.
   item.addEventListener('click', () => navigate(`/season/${w.item_id}/${w.season}`));
-  return item;
+  return pressable(item);
 }
 
 // Coming Soon card: an episode airing within the next 7 days.
@@ -243,7 +244,7 @@ function comingSoonCard(ep) {
 
   const item = el('div', { class: 'tl-item tl-soon' }, [card]);
   item.addEventListener('click', () => navigate(`/detail/${ep.item_id}`));
-  return item;
+  return pressable(item);
 }
 
 // --- "On the Horizon" railway timeline ------------------------------------
@@ -314,7 +315,7 @@ function buildHorizonRailway(horizon) {
     ]);
     stop.style.marginLeft = `${marginLeft}px`;
     stop.addEventListener('click', () => navigate(`/detail/${h.item_id}`));
-    track.append(stop);
+    track.append(pressable(stop));
   });
   // Trailing spacer so the track line runs visibly past the last stop / viewport.
   track.append(el('div', { class: 'railway-tail' }));

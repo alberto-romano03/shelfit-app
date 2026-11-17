@@ -666,15 +666,19 @@ export default async function Settings(container) {
   ]);
   buildNotificationsSection(notificationsSection);
 
-  // Push toggle: subscribe/unsubscribe via the browser + backend. Absent (with a
-  // note) on devices without Web Push. Reflects the server subscription state.
+  // One switch per kind of notification, all shown at once and each on or off
+  // by itself. A kind reads on when this device receives notifications and the
+  // member wants that kind (the choice is the member's, on every device).
+  // Turning the first one on sets this device up (the browser asks for
+  // permission); turning the last one off stops it receiving any. Absent (with a
+  // note) on devices without Web Push.
   function buildNotificationsSection(section) {
     if (!pushSupported()) {
       // Still a row, so the setting reads as present-but-unavailable rather
       // than as a stray sentence.
       const dead = settingsRow({
-        icon: 'tv',
-        label: t('settings.notif.newEpisodes'),
+        icon: 'bell',
+        label: t('settings.notif.title'),
         sub: t('settings.notif.unsupported'),
         control: 'switch',
       });
@@ -700,82 +704,87 @@ export default async function Settings(container) {
     });
     testRow.el.style.display = 'none';
 
-    // The occasional reminders, each on or off for the member (all devices).
-    // Shown with the test row, once this device receives notifications.
-    const REMINDERS = [
+    const KINDS = [
+      ['episodes', 'tv'],
       ['dusty', 'clock'],
       ['cinema', 'ticket'],
       ['comeback', 'refresh-cw'],
     ];
-    const reminderRows = REMINDERS.map(([kind, icon]) => {
+    let deviceOn = false; // this device receives the member's notifications
+    let otherDevice = false; // another of the member's devices does
+    let prefs = {}; // the member's kinds (missing = on)
+    let busy = false;
+    const kindRows = KINDS.map(([kind, icon]) => {
       const row = settingsRow({
         icon,
         label: t(`settings.notif.${kind}`),
         sub: t(`settings.notif.${kind}Sub`),
         control: 'switch',
-        onChange: async (wantOn) => {
-          try {
-            await api.pushReminders({ [kind]: wantOn });
-          } catch {
-            row.setChecked(!wantOn);
-            toast(t('settings.notif.updateFailed'), 'bad');
-          }
-        },
+        onChange: (wantOn) => toggle(kind, wantOn),
       });
-      row.setChecked(true);
-      row.el.style.display = 'none';
       return { kind, row };
     });
-    const showDeviceRows = (on) => {
-      testRow.el.style.display = on ? '' : 'none';
-      for (const { row } of reminderRows) row.el.style.display = on ? '' : 'none';
-    };
-    const paintReminders = (prefs) => {
-      for (const { kind, row } of reminderRows) row.setChecked(!prefs || prefs[kind] !== false);
-    };
-
-    const notifRow = settingsRow({
-      icon: 'tv',
-      label: t('settings.notif.newEpisodes'),
-      sub: t('settings.notif.newEpisodesSub'),
-      control: 'switch',
-      onChange: async (wantOn) => {
-        const input = notifRow.el.querySelector('input');
-        input.disabled = true;
-        try {
-          if (wantOn) {
-            await enablePush();
-            setPref('push', true);
-            toast(t('settings.notif.enabled'), 'ok');
-            showDeviceRows(true);
-          } else {
+    function paint() {
+      for (const { kind, row } of kindRows) row.setChecked(deviceOn && prefs[kind] !== false);
+      testRow.el.style.display = deviceOn ? '' : 'none'; // a test needs a device to land on
+    }
+    function setBusy(on) {
+      busy = on;
+      for (const { row } of kindRows) row.setDisabled(on);
+    }
+    async function toggle(kind, wantOn) {
+      if (busy) return paint();
+      setBusy(true);
+      try {
+        if (wantOn && !deviceOn) {
+          // The first kind on this device: set it up (first thing, so the
+          // browser's permission prompt still counts as answering this tap).
+          // When none of the member's devices got notifications yet, only the
+          // kind turned on is on; the others wait for their own switch.
+          await enablePush();
+          deviceOn = true;
+          setPref('push', true);
+          const patch = { [kind]: true };
+          if (!otherDevice) for (const [k] of KINDS) if (k !== kind) patch[k] = false;
+          prefs = (await api.pushReminders(patch)).reminders || prefs;
+          toast(t('settings.notif.enabled'), 'ok');
+        } else {
+          prefs = (await api.pushReminders({ [kind]: wantOn })).reminders || prefs;
+          if (!wantOn && KINDS.every(([k]) => prefs[k] === false)) {
+            // Nothing left to receive: this device stops receiving notifications.
             await disablePush();
+            deviceOn = false;
             setPref('push', false);
             toast(t('settings.notif.disabled'), 'ok');
-            showDeviceRows(false);
           }
-        } catch (err) {
-          notifRow.setChecked(!wantOn); // revert the switch on failure
-          toast(err.message || t('settings.notif.updateFailed'), 'bad');
-        } finally {
-          input.disabled = false;
         }
-      },
-    });
-    section.append(notifRow.el, ...reminderRows.map((r) => r.row.el), testRow.el);
+      } catch (err) {
+        toast((err && err.message) || t('settings.notif.updateFailed'), 'bad');
+      } finally {
+        setBusy(false);
+        paint();
+      }
+    }
+    section.append(...kindRows.map((r) => r.row.el), testRow.el);
+    paint();
 
     // Reflect whether THIS device notifies the signed-in member (another
-    // member may have enabled notifications on it before).
+    // member may have enabled notifications on it before), and which kinds.
     currentPushEndpoint()
       .then((endpoint) => (endpoint ? api.pushConfig(endpoint) : { subscribed: false }))
-      .then((cfg) => {
-        const on = !!(cfg && cfg.subscribed);
-        notifRow.setChecked(on);
-        setPref('push', on);
-        paintReminders(cfg && cfg.reminders);
-        showDeviceRows(on);
+      .then(async (cfg) => {
+        deviceOn = !!(cfg && cfg.subscribed);
+        prefs = (cfg && cfg.reminders) || {};
+        setPref('push', deviceOn);
+        paint();
         // A device set up before notifications spoke its language learns it here.
-        if (on && cfg.lang !== getLang()) syncPushLang();
+        if (deviceOn && cfg.lang !== getLang()) syncPushLang();
+        if (!deviceOn) {
+          // Asked without naming this device: whether any of the member's does.
+          const any = await api.pushConfig();
+          otherDevice = !!(any && any.subscribed);
+          if (any && any.reminders) prefs = any.reminders;
+        }
       })
       .catch(() => {});
   }
@@ -871,7 +880,8 @@ export default async function Settings(container) {
       })
     );
     const list = el('div', { class: 'stack' });
-    list.append(el('div', { class: 'muted', text: t('settings.access.loading') }));
+    // Skeleton rows while the log loads, as the other Settings panels do.
+    for (let i = 0; i < 3; i++) list.append(el('div', { class: 'settings-row' }, [skelLine({ width: `${70 - i * 12}%` })]));
     body.append(list);
 
     section.append(accessRow.el, body);
@@ -944,7 +954,7 @@ export default async function Settings(container) {
           const res = await api.setMetadataLanguage(value);
           if (res && res.changed) {
             status.textContent = t('settings.metaLangDone', { count: res.refreshed || 0 });
-            toast(t('settings.metaLangDone', { count: res.refreshed || 0 }), 'good');
+            toast(t('settings.metaLangDone', { count: res.refreshed || 0 }), 'ok');
             // Titles live in the grids' session cache and in every open view —
             // a reload is the only way to show them all in the new language.
             setTimeout(() => location.reload(), 900);

@@ -120,10 +120,19 @@ describe('reminders', () => {
   });
 
   it('keeps each member\'s reminder switches, all on until turned off', async () => {
-    assert.deepEqual((await a.get('/api/push/config')).json.reminders, { dusty: true, cinema: true, comeback: true });
+    assert.deepEqual((await a.get('/api/push/config')).json.reminders, {
+      episodes: true,
+      dusty: true,
+      cinema: true,
+      comeback: true,
+    });
     const res = await a.put('/api/push/reminders', { cinema: false, bogus: false });
-    assert.deepEqual(res.json.reminders, { dusty: true, cinema: false, comeback: true });
+    assert.deepEqual(res.json.reminders, { episodes: true, dusty: true, cinema: false, comeback: true });
     assert.equal((await a.get('/api/push/config')).json.reminders.cinema, false);
+    // New episodes has its own switch too.
+    const off = await a.put('/api/push/reminders', { episodes: false });
+    assert.equal(off.json.reminders.episodes, false);
+    await a.put('/api/push/reminders', { episodes: true, cinema: true });
   });
 
   it('keeps a device language, and only the owner can change it', async () => {

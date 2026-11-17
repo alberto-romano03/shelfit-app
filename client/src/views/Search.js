@@ -26,6 +26,7 @@ import {
   skelText,
   segmentedControl,
   typewriterPlaceholder,
+  pressable,
 } from '../ui.js';
 import { isServerReachable, markDegraded } from '../network.js';
 import { buildStatusBento } from '../statusSelect.js';
@@ -265,7 +266,7 @@ export default async function Search(container) {
       el('div', { class: 'ai-sub', text: item.year || '' }),
     ]);
     c.addEventListener('click', () => openTitle(item));
-    return c;
+    return pressable(c);
   }
 
   // The desktop arrows for a rail. A pointer has no swipe, so without these a
@@ -425,7 +426,7 @@ export default async function Search(container) {
       el('div', { class: 'ai-sub', text: item.year || '' }),
     ]);
     c.addEventListener('click', () => openTitle(item));
-    return c;
+    return pressable(c);
   }
 
   // --- The mood strip: six rows become one block ---------------------------

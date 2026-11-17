@@ -22,6 +22,12 @@ import { t, locale } from './i18n.js';
 import { collapsibleText } from './collapsibleText.js';
 
 // A cached genre payload is usable only when it carries both lists as arrays.
+// A tile's chosen state, shown and announced (aria-pressed), not only coloured.
+function setPressed(btn, on) {
+  btn.classList.toggle('active', !!on);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+
 function validGenres(g) {
   return !!g && Array.isArray(g.movie) && Array.isArray(g.tv);
 }
@@ -270,13 +276,14 @@ export function openDustItOff() {
           // long name ("Science Fiction", "Fantascienza") would ellipsize.
           text: g.id === 878 ? 'SCI-FI' : g.name,
         });
+        setPressed(c, state.genres.has(g.id));
         c.addEventListener('click', () => {
           if (state.genres.has(g.id)) {
             state.genres.delete(g.id);
-            c.classList.remove('active');
+            setPressed(c, false);
           } else {
             state.genres.add(g.id);
-            c.classList.add('active');
+            setPressed(c, true);
           }
         });
         row.append(c);
@@ -327,10 +334,10 @@ export function openDustItOff() {
         btn.style.setProperty('--tile', color);
         const emoji = moodEmoji('mood-emoji', gif, loopMs);
         btn.append(emoji, el('span', { class: 'mood-label', text: t(textKey) }));
+        setPressed(btn, state.mood === val);
         btn.addEventListener('click', () => {
           state.mood = state.mood === val ? null : val;
-          grid.querySelectorAll('.mood-btn').forEach((b) => b.classList.remove('active'));
-          if (state.mood === val) btn.classList.add('active');
+          grid.querySelectorAll('.mood-btn').forEach((b) => setPressed(b, b === btn && state.mood === val));
         });
         grid.append(btn);
       });
@@ -431,10 +438,10 @@ export function openDustItOff() {
       RATINGS.forEach(([val, textKey, level]) => {
         const btn = el('button', { class: 'rating-btn' + (state.minRating === val ? ' active' : '') });
         btn.append(el('span', { class: 'rating-btn-label', text: t(textKey) }), starMeter(level));
+        setPressed(btn, state.minRating === val);
         btn.addEventListener('click', () => {
           state.minRating = val;
-          row.querySelectorAll('.rating-btn').forEach((b) => b.classList.remove('active'));
-          btn.classList.add('active');
+          row.querySelectorAll('.rating-btn').forEach((b) => setPressed(b, b === btn));
         });
         row.append(btn);
       });
@@ -447,10 +454,10 @@ export function openDustItOff() {
       ERAS.forEach(([val, nameKey, rangeKey, cls]) => {
         const btn = el('button', { class: `era-btn ${cls}` + (state.era === val ? ' active' : '') });
         btn.append(el('span', { class: 'era-name', text: t(nameKey) }), el('span', { class: 'era-range', text: t(rangeKey) }));
+        setPressed(btn, state.era === val);
         btn.addEventListener('click', () => {
           state.era = state.era === val ? null : val;
-          grid.querySelectorAll('.era-btn').forEach((b) => b.classList.remove('active'));
-          if (state.era === val) btn.classList.add('active');
+          grid.querySelectorAll('.era-btn').forEach((b) => setPressed(b, b === btn && state.era === val));
         });
         grid.append(btn);
       });
