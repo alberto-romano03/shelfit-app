@@ -1688,8 +1688,8 @@ function openSuggestSheet(d) {
 }
 
 // Series progress: how much of the show, then a track cut into its seasons (each
-// as long as its episodes, filled as far as watched, the one you're on ringed),
-// their numbers under it, and what is left. Finished seasons need no tick: a
+// as long as its episodes, filled as far as watched), their numbers under it (the
+// one you're on in bold: its card below carries the outline), and what is left. Finished seasons need no tick: a
 // full segment and a gold number say it.
 // `perEpisode`: the show's usual episode length in minutes, for the time left.
 function progressSection(p, onSeason, perEpisode) {
@@ -1718,7 +1718,7 @@ function progressSection(p, onSeason, perEpisode) {
     const current = s === onSeason;
     const done = s.watched >= s.total;
     const fill = el('i');
-    const seg = el('div', { class: 'prog-seg' + (current ? ' is-current' : '') }, [fill]);
+    const seg = el('div', { class: 'prog-seg' }, [fill]);
     seg.style.flexGrow = String(s.total);
     track.append(seg);
     fills.push([fill, (s.watched / s.total) * 100]);

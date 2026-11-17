@@ -2048,10 +2048,6 @@ textarea.notes {
   background: var(--accent);
   transition: width 900ms var(--ease-out);
 }
-/* The season you're on (the one outlined in Seasons below). */
-.prog-seg.is-current {
-  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent);
-}
 .prog-labels > span {
   overflow: hidden;
   white-space: nowrap;
