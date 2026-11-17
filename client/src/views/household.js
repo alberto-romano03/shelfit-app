@@ -165,6 +165,7 @@ export function buildHousehold(api) {
         el('span', { text: t('common.save') }),
       ]);
       const submit = async () => {
+        if (save.disabled) return; // Enter again while saving
         const name = input.value.trim();
         if (!name) {
           input.focus();
@@ -282,18 +283,24 @@ export function buildHousehold(api) {
       lucideIcon('plus', 'btn-lucide'),
       el('span', { text: t('household.create') }),
     ]);
+    // One member per Create: Enter and the button share this, and a second press
+    // while the first is on its way would add the member twice (two invites).
+    let sending = false;
     const submit = async () => {
+      if (sending) return;
       const name = input.value.trim();
       if (!name) {
         input.focus();
         return;
       }
+      sending = true;
       create.disabled = true;
       try {
         const res = await api.addMember(name);
         showInvite(res);
         refresh();
       } catch (err) {
+        sending = false;
         create.disabled = false;
         toast(err.message || t('settings.failed'), 'bad');
       }

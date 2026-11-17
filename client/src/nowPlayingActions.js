@@ -28,6 +28,12 @@ function nth(n) {
   const suffix = tens >= 11 && tens <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th';
   return `${n}${suffix}`;
 }
+// A film as its detail had it before an action, so its Undo puts back the watch
+// date and the stopped minute too (the server's triggers change them).
+async function filmBefore(itemId) {
+  const d = await api.mediaDetail(itemId);
+  return { status: d.status, watch_date: d.watch_date, stopped_at: d.stopped_at, updated_at: d.updated_at };
+}
 function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -71,42 +77,65 @@ function planFor(np) {
     if (m.status === 'completed') {
       const next = (m.plays || 1) + 1;
       let rewatchId = null;
+      let before = null;
       return {
         icon: 'refresh-cw',
         label: t('nowPlaying.rewatchMovie'),
         aside: t('nowPlaying.nth', { nth: nth(next) }),
         run: async () => {
+          before = await filmBefore(m.item_id);
           const res = await api.addRewatch(m.item_id, todayISO());
           rewatchId = res && res.rewatch_id;
           return t('nowPlaying.doneTimes', { n: next });
         },
-        undo: () => (rewatchId ? api.deleteRewatch(m.item_id, rewatchId) : null),
+        // A rewatch clears the minute it was stopped at: it comes back too.
+        undo: async () => {
+          if (!rewatchId) return;
+          await api.deleteRewatch(m.item_id, rewatchId);
+          if (before) await api.restoreMovie(m.item_id, before);
+        },
       };
     }
-    const before = m.status;
+    let before = null;
     return {
       icon: 'library-big',
       label: t('nowPlaying.shelve'),
       run: async () => {
+        before = await filmBefore(m.item_id);
         await api.updateMedia(m.item_id, { status: 'completed' });
         return t('nowPlaying.doneShelved');
       },
-      undo: () => api.updateMedia(m.item_id, { status: before }),
+      // Back as it was: the status, and the watch date and the minute the shelf
+      // stamped and cleared.
+      undo: () => (before ? api.restoreMovie(m.item_id, before) : api.updateMedia(m.item_id, { status: m.status })),
     };
   }
   const count = m.plays || 0;
   if (!m.seen) {
+    let marked = null;
+    let prompt = null;
     return {
       icon: 'check',
       label: t('nowPlaying.markEp', { ep }),
       run: async () => {
-        const res = await api.markEpisode(m.item_id, np.season, np.episode);
+        marked = await api.markEpisode(m.item_id, np.season, np.episode);
         // A series off the list starts being watched; a shelved one is offered
         // back to Watching; the last episode of an ended one, the shelf.
-        offerShelve(res, { id: m.item_id });
+        prompt = offerShelve(marked, { id: m.item_id }) || null;
         return t('nowPlaying.doneEp', { ep });
       },
-      undo: () => api.setEpisodeCount(m.item_id, np.season, np.episode, 0),
+      // Everything the mark did goes back: the episode, the season it made
+      // current, and a series it moved off the list to Watching. A prompt it
+      // opened no longer applies.
+      undo: async () => {
+        if (prompt && prompt.close) prompt.close();
+        await api.undoMarks(
+          m.item_id,
+          [{ season: np.season, episode: np.episode }],
+          marked ? marked.previous_current_season ?? null : null,
+          marked && marked.status_changed ? 'plan_to_watch' : undefined
+        );
+      },
     };
   }
   return {
@@ -205,22 +234,32 @@ function showDone(row, text, undo, itemOf) {
   row.className = 'np-act is-done';
   row.append(lucideIcon('check', 'btn-lucide np-act-ico'), el('span', { class: 'np-act-note', text }));
   if (!undo) return;
-  row.append(
-    linkButton(t('nowPlaying.undo'), async () => {
-      try {
-        await undo();
-        toast(t('nowPlaying.undone'), 'ok');
-        if (itemOf) markTitleChanged(itemOf());
-      } catch (err) {
-        toast((err && err.message) || t('nowPlaying.failed'), 'bad');
-        return;
-      }
-      // The snapshot still describes the title as it was before the action, which
-      // is what it is again: rebuild the row from it.
-      state = { key: null, done: null, undo: null, busy: false };
-      row._sig = null;
-      row.dispatchEvent(new CustomEvent('np-act-reset', { bubbles: true }));
-      refreshNowPlaying(); // the snapshot may already show it counted: read it again
-    })
-  );
+  let undoing = false;
+  const undoBtn = linkButton(t('nowPlaying.undo'), async () => {
+    if (undoing) return; // one Undo per action
+    undoing = true;
+    undoBtn.disabled = true;
+    try {
+      await undo();
+      toast(t('nowPlaying.undone'), 'ok');
+      if (itemOf) markTitleChanged(itemOf());
+    } catch (err) {
+      toast((err && err.message) || t('nowPlaying.failed'), 'bad');
+      undoing = false;
+      undoBtn.disabled = false;
+      return;
+    }
+    // The snapshot on hand was read after the action and still says it was
+    // counted: read Kodi and the library again before rebuilding the row from
+    // it, so the row never flashes "already counted" with a second Undo.
+    state = { key: null, done: null, undo: null, busy: false };
+    row._sig = null;
+    try {
+      await refreshNowPlaying();
+    } catch {
+      /* the next poll brings it */
+    }
+    row.dispatchEvent(new CustomEvent('np-act-reset', { bubbles: true }));
+  });
+  row.append(undoBtn);
 }

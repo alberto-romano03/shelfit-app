@@ -897,14 +897,7 @@ export default async function Search(container) {
       const data = await api.search(q, 'all', state.mine ? 'library' : undefined);
       if (myReq !== reqId) return; // a newer request superseded this one
       if (data && data.capReached) {
-        resultsEl.innerHTML = '';
-        resultsEl.append(
-          stateBlock({
-            icon: 'wallet',
-            title: t('search.searchPaused'),
-            detail: t('search.budgetReached'),
-          })
-        );
+        showBudgetReached();
         return;
       }
       state.results = data.results || [];
@@ -913,6 +906,12 @@ export default async function Search(container) {
     } catch (err) {
       if (isAbortError(err)) return; // navigated away or superseded — ignore
       if (myReq !== reqId) return;
+      // The month's TMDB budget is spent: the server answers 429 with capReached,
+      // which arrives here as an error. Not a failure to retry, a pause to explain.
+      if (err.data && err.data.capReached) {
+        showBudgetReached();
+        return;
+      }
       if (!isServerReachable()) {
         // Server unreachable; keep the ghost rows, recovery re-renders.
         markDegraded();
@@ -929,6 +928,17 @@ export default async function Search(container) {
         })
       );
     }
+  }
+
+  function showBudgetReached() {
+    resultsEl.innerHTML = '';
+    resultsEl.append(
+      stateBlock({
+        icon: 'wallet',
+        title: t('search.searchPaused'),
+        detail: t('search.budgetReached'),
+      })
+    );
   }
 
   // --- Wiring --------------------------------------------------------------

@@ -247,6 +247,7 @@ export default async function progressRoutes(fastify) {
     }
     let firstWatch = false;
     let statusChanged = null;
+    const previousCurrentSeason = item.current_season ?? null; // for an Undo (undo-marks)
     const apply = db.transaction(() => {
       firstWatch = insertWatchedStmt.run(item_id, season, episode, notes ?? null).changes > 0;
       setCurrentSeasonStmt.run(season, item_id);
@@ -276,6 +277,7 @@ export default async function progressRoutes(fastify) {
       ...info,
       status_changed: statusChanged,
       offer_watching: offerWatching(item, firstWatch, caughtUp, info),
+      previous_current_season: previousCurrentSeason,
     };
   });
 

@@ -131,6 +131,42 @@ describe('stopped at', () => {
     assert.equal(again.json.created, undefined);
   });
 
+  it('puts a film back exactly as it was (the Undo of moving it to the shelf)', async () => {
+    h.db.prepare('UPDATE items SET watch_date = NULL WHERE id = ?').run(movie);
+    await a.patch(`/api/media/${movie}`, { stopped_at: 37 });
+    const was = await detail(movie);
+    const before = { status: was.status, watch_date: was.watch_date, stopped_at: was.stopped_at, updated_at: was.updated_at };
+    await a.patch(`/api/media/${movie}`, { status: 'completed' });
+    let now = await detail(movie);
+    assert.equal(now.stopped_at, null);
+    assert.ok(now.watch_date); // the shelf stamped today
+    assert.equal((await a.post(`/api/media/${movie}/restore`, before)).status, 200);
+    now = await detail(movie);
+    assert.equal(now.status, 'watching');
+    assert.equal(now.stopped_at, 37);
+    assert.equal(now.watch_date, null);
+    assert.equal(now.updated_at, was.updated_at);
+    // Nothing made up: a bad value, or a series, is refused.
+    assert.equal((await a.post(`/api/media/${movie}/restore`, { ...before, status: 'nope' })).status, 400);
+    assert.equal((await a.post(`/api/media/${show}/restore`, before)).status, 404);
+  });
+
+  it('tells a single mark which season was current, for its Undo', async () => {
+    h.db.prepare('UPDATE items SET current_season = NULL WHERE id = ?').run(show);
+    const res = await a.post('/api/progress', { item_id: show, season: 1, episode: 1 });
+    assert.equal(res.json.previous_current_season, null);
+    const again = await a.post('/api/progress', { item_id: show, season: 1, episode: 2 });
+    assert.equal(again.json.previous_current_season, 1);
+  });
+
+  it('counts the aired episodes a season has left to mark', async () => {
+    let s = (await detail(show)).progress.seasons[0];
+    assert.equal(s.aired_left, 3);
+    await a.post('/api/progress/season', { item_id: show, season: 1 });
+    s = (await detail(show)).progress.seasons[0];
+    assert.equal(s.aired_left, 0);
+  });
+
   it('keeps one member out of another member\'s series', async () => {
     const memberId = await addUser(h.db, { name: 'Giulia', password: 'member-pass-1' });
     const b = client(h.app, await login(h.app, 'member-pass-1', memberId));

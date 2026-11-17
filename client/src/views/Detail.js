@@ -1173,6 +1173,30 @@ export default async function Detail(container, params) {
     const onSeason = !p.watched_episodes
       ? null
       : unfinished.find((s) => s.season_number === p.current_season) || unfinished[0] || null;
+    // Mark all watched marks only episodes already out. A season still airing
+    // with every one of those watched has nothing to mark: no button (the server
+    // sends aired_left; null when it can't tell, and the button stays). One tap
+    // at a time: the button waits for its answer.
+    const markAllButton = (s) => {
+      if (s.aired_left === 0) return null;
+      const btn = el('button', { class: 'link-btn', text: t('detail.markAllWatched') });
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (btn.disabled) return;
+        btn.disabled = true;
+        try {
+          const res = await api.markSeason(id, s.season_number);
+          if (res.caught_up) confetti.trigger(); // finished the last available episode
+          reload();
+          const prompt = offerShelve(res, { id, onShelved: reload });
+          markedToast(res, t('detail.seasonMarked'), { id, prompt, reload });
+        } catch (err) {
+          btn.disabled = false;
+          toast(err.message, 'bad');
+        }
+      });
+      return btn;
+    };
     for (const s of p.seasons) {
       const finished = s.total > 0 && s.watched >= s.total;
       const countText = finished
@@ -1186,22 +1210,7 @@ export default async function Detail(container, params) {
           el('div', { class: 's-name', text: s.name }),
           el('div', { class: 's-count', text: countText }),
         ]),
-        finished ? lucideIcon('check', 'season-done') : el('button', {
-          class: 'link-btn',
-          text: t('detail.markAllWatched'),
-          onClick: async (e) => {
-            e.stopPropagation();
-            try {
-              const res = await api.markSeason(id, s.season_number);
-              if (res.caught_up) confetti.trigger(); // finished the last available episode
-              reload();
-              const prompt = offerShelve(res, { id, onShelved: reload });
-              markedToast(res, t('detail.seasonMarked'), { id, prompt, reload });
-            } catch (err) {
-              toast(err.message, 'bad');
-            }
-          },
-        }),
+        finished ? lucideIcon('check', 'season-done') : markAllButton(s),
       ]);
       if (!finished && s.watched > 0) {
         const bar = el('i', { class: 'season-bar' });

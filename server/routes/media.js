@@ -164,6 +164,10 @@ const decRewatchCountStmt = db.prepare(
   'UPDATE items SET rewatch_count = MAX(0, rewatch_count - 1) WHERE id = ?'
 );
 const setWatchDateStmt = db.prepare('UPDATE items SET watch_date = ? WHERE id = ?');
+const restoreStatusStmt = db.prepare('UPDATE items SET status = ? WHERE id = ? AND user_id = ?');
+const restoreMovieStmt = db.prepare(
+  'UPDATE items SET watch_date = ?, stopped_at = ?, updated_at = ? WHERE id = ? AND user_id = ?'
+);
 
 // A date-only 'YYYY-MM-DD' string (a real calendar date), else null.
 function validDate(v) {
@@ -237,14 +241,26 @@ function buildShowProgress(itemId, tmdbId, meta) {
   let watchedEpisodes = 0;
   const watchedRows = watchedSeasonsStmt.all(itemId);
   const watchedBySeason = {};
+  const watchedKeys = new Set();
   for (const r of watchedRows) {
     watchedBySeason[r.season] = (watchedBySeason[r.season] || 0) + 1;
+    watchedKeys.add(`${r.season}:${r.episode}`);
   }
+  // What "Mark all watched" would mark (the same rule as POST /api/progress/season):
+  // episodes already out and not watched. A season still airing can be all
+  // caught up with episodes left, and then has nothing to mark.
+  const today = new Date().toISOString().slice(0, 10);
 
   for (const s of meta.seasons || []) {
     const sMeta = readSeasonMetaSync(tmdbId, s.season_number);
     const total = sMeta ? sMeta.episodes.length : s.episode_count || 0;
     const watched = watchedBySeason[s.season_number] || 0;
+    // Unknown without the season's episode list: null, and the button stays.
+    const airedLeft = sMeta
+      ? sMeta.episodes.filter(
+          (e) => e.air_date && e.air_date <= today && !watchedKeys.has(`${s.season_number}:${e.episode_number}`)
+        ).length
+      : null;
     totalEpisodes += total;
     watchedEpisodes += watched;
     seasons.push({
@@ -252,6 +268,7 @@ function buildShowProgress(itemId, tmdbId, meta) {
       name: s.name || `Season ${s.season_number}`,
       total,
       watched,
+      aired_left: airedLeft,
       poster_url: `${assetBase('show', tmdbId)}/seasons/s${s.season_number}/poster.webp`,
     });
   }
@@ -840,6 +857,40 @@ export default async function mediaRoutes(fastify) {
     setWatchDateStmt.run(date, row.id);
     scheduleStatsRecompute(db);
     return { ok: true, watch_date: date };
+  });
+
+  // POST /api/media/:id/restore { status, watch_date, stopped_at, updated_at }
+  // (movies only): puts a film back exactly as it was before an action, for an
+  // Undo. Moving it to the shelf stamps the watch date, clears the stopped
+  // minute (migrations 9 and 11) and bumps updated_at, which a plain status
+  // change back cannot take back. The status goes first, and only if it differs
+  // (setting it again would re-run those triggers); the values from before then
+  // overwrite whatever they wrote.
+  fastify.post('/api/media/:id/restore', async (request, reply) => {
+    const row = getItemByIdStmt.get(request.params.id, request.user.id);
+    if (!row || row.type !== 'movie') {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    const b = request.body || {};
+    const watchDate = b.watch_date == null ? null : validDate(b.watch_date);
+    const minute = b.stopped_at == null ? null : stopMinute(b.stopped_at);
+    const updatedAt =
+      typeof b.updated_at === 'string' &&
+      b.updated_at.length <= 32 &&
+      /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(b.updated_at)
+        ? b.updated_at
+        : null;
+    if (!VALID_STATUS.includes(b.status) || (b.watch_date != null && !watchDate) || minute === undefined || !updatedAt) {
+      reply.code(400);
+      return { error: 'status, watch_date, stopped_at and updated_at as they were are required' };
+    }
+    db.transaction(() => {
+      if (b.status !== row.status) restoreStatusStmt.run(b.status, row.id, row.user_id);
+      restoreMovieStmt.run(watchDate, minute || null, updatedAt, row.id, row.user_id);
+      scheduleStatsRecompute(db);
+    })();
+    return { ok: true };
   });
 
   // POST /api/media/:id/rewatch  { date: 'YYYY-MM-DD' }  (movies only)

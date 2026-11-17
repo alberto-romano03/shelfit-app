@@ -169,6 +169,9 @@ function buildApi(signal) {
       return api.get(`/api/media?${p.toString()}`);
     },
     mediaDetail: (id) => api.get(`/api/media/${id}`),
+    // A film back exactly as it was before an action (an Undo): { status,
+    // watch_date, stopped_at, updated_at } as the detail payload had them.
+    restoreMovie: (id, before) => api.post(`/api/media/${id}/restore`, before),
     preview: (type, tmdbId) => api.get(`/api/preview/${type}/${tmdbId}`),
     season: (id, n) => api.get(`/api/media/${id}/season/${n}`),
     // Paginated season fetch (additive; the server returns total/page/pageSize/
