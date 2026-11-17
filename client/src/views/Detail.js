@@ -144,6 +144,9 @@ function openDateModal({ title, label, value, confirmLabel = t('detail.confirm')
 // preserves insertion order → oldest key is the least-recently-used.
 const DETAIL_DOM_MAX = 12;
 const detailDom = new Map(); // id -> { nodes, hero, backdropUrl, scrollY }
+// Titles removed a moment ago, still within their Undo: id -> the grid the
+// removal went back to.
+const removing = new Map();
 window.addEventListener('shelfit:library-changed', () => detailDom.clear());
 
 // Ceiling on the detail load before a stalled fetch falls back to the cached
@@ -521,6 +524,13 @@ function detailSignature(x) {
 
 export default async function Detail(container, params) {
   const id = params.id;
+
+  // Removed a moment ago (Back from the grid lands here): the title is on its
+  // way out, so its page is not shown again, kept copy or not; back to the grid.
+  if (removing.has(id)) {
+    navigate(removing.get(id), { replace: true });
+    return;
+  }
 
   // Retained DOM hit (e.g. back from a season): re-attach the exact detail built
   // last time and restore scroll — no skeleton, no refetch, no rebuild. Cleared
@@ -1167,12 +1177,18 @@ export default async function Detail(container, params) {
     );
 
     const seasonsWrap = el('div', {});
-    // The season you're on: the one you last marked if it isn't finished, otherwise the
-    // first that isn't. Nothing is outlined before you've watched anything.
+    // The season you're on: the one you last marked in if it isn't finished, else
+    // the next unfinished one after it, else the first unfinished (an episode
+    // skipped early on doesn't pull the outline back to season 1 while you are
+    // midway through season 3). Nothing is outlined before you've watched anything.
     const unfinished = p.seasons.filter((s) => s.watched < s.total);
+    const marked = p.marked_season ?? p.current_season;
     const onSeason = !p.watched_episodes
       ? null
-      : unfinished.find((s) => s.season_number === p.current_season) || unfinished[0] || null;
+      : unfinished.find((s) => s.season_number === marked) ||
+        unfinished.find((s) => marked != null && s.season_number > marked) ||
+        unfinished[0] ||
+        null;
     // Mark all watched marks only episodes already out. A season still airing
     // with every one of those watched has nothing to mark: no button (the server
     // sends aired_left; null when it can't tell, and the button stays). One tap
@@ -1188,7 +1204,16 @@ export default async function Detail(container, params) {
           const res = await api.markSeason(id, s.season_number);
           if (res.caught_up) confetti.trigger(); // finished the last available episode
           reload();
-          const prompt = offerShelve(res, { id, onShelved: reload });
+          // "Resume watching" answered after the marks changes the status this
+          // page shows: reload for it too (a status the marks changed themselves
+          // is already in the reload above).
+          const prompt = offerShelve(res, {
+            id,
+            onShelved: reload,
+            onStatus: () => {
+              if (!res.status_changed) reload();
+            },
+          });
           markedToast(res, t('detail.seasonMarked'), { id, prompt, reload });
         } catch (err) {
           btn.disabled = false;
@@ -1845,6 +1870,11 @@ function openMenu(d, reload) {
             confirmLabel: t('common.remove'),
             onConfirm: () => {
               const home = d.type === 'movie' ? '/movies' : '/series';
+              // Its kept page goes now, and Back to it lands on the grid
+              // instead (see the top of Detail), unless the removal is undone.
+              const key = String(d.id);
+              removing.set(key, home);
+              detailDom.delete(key);
               // A gap stays on the shelf until the delete goes out or is undone.
               deferred({
                 msg: t('detail.removed'),
@@ -1852,6 +1882,8 @@ function openMenu(d, reload) {
                 selector: `[data-item-id="${d.id}"]`,
                 rule: 'visibility:hidden',
                 stayOn: home,
+                onUndo: () => removing.delete(key),
+                onFailed: () => removing.delete(key),
               });
               navigate(home);
             },

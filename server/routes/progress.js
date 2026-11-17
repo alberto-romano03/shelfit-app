@@ -91,9 +91,11 @@ function getItem(id, userId) {
 const startWatchingStmt = db.prepare(
   "UPDATE items SET status = 'watching', updated_at = datetime('now') WHERE id = ? AND user_id = ? AND status = 'plan_to_watch'"
 );
-const backToListStmt = db.prepare(
-  "UPDATE items SET status = 'plan_to_watch' WHERE id = ? AND user_id = ? AND status = 'watching'"
-);
+// An Undo puts the series' status back to what it was before the marks and the
+// prompt that followed them: on the list (the marks started it), Watching (the
+// prompt shelved it) or shelved, paused or dropped (the prompt resumed it).
+const RESTORABLE_STATUS = new Set(['plan_to_watch', 'watching', 'completed', 'paused', 'dropped']);
+const restoreStatusStmt = db.prepare('UPDATE items SET status = ? WHERE id = ? AND user_id = ?');
 // Called inside a mark's transaction: `firstWatch` is whether the mark added an
 // episode never watched before (a rewatch or a correction is not one). Returns
 // the new status when it changed, else null.
@@ -531,8 +533,9 @@ export default async function progressRoutes(fastify) {
   // POST /api/progress/undo-marks → the Undo after Watched all or a catch up: removes
   // only the episodes that action reported marking, and puts current_season back.
   // DELETE /api/progress/season can't do this: it would clear the whole season.
-  // `restore_status: 'plan_to_watch'` also puts back a series that the marks
-  // moved from the list to Watching.
+  // `restore_status` also puts the series' status back (see RESTORABLE_STATUS):
+  // 'plan_to_watch' for one the marks moved from the list to Watching, or what it
+  // was before the shelve / resume prompt that followed the marks.
   fastify.post('/api/progress/undo-marks', async (request, reply) => {
     const { item_id, episodes, current_season, restore_status } = request.body || {};
     const positive = (n) => Number.isInteger(n) && n >= 1;
@@ -541,7 +544,8 @@ export default async function progressRoutes(fastify) {
       !Array.isArray(episodes) ||
       episodes.length > 5000 ||
       !episodes.every((e) => e && positive(e.season) && positive(e.episode)) ||
-      !(current_season == null || positive(current_season))
+      !(current_season == null || positive(current_season)) ||
+      !(restore_status == null || RESTORABLE_STATUS.has(restore_status))
     ) {
       reply.code(400);
       return { error: 'item_id and a list of episodes are required' };
@@ -553,7 +557,7 @@ export default async function progressRoutes(fastify) {
     const apply = db.transaction(() => {
       for (const e of episodes) deleteEpisodeStmt.run(item_id, e.season, e.episode);
       setCurrentSeasonStmt.run(current_season ?? null, item_id);
-      if (restore_status === 'plan_to_watch') backToListStmt.run(item_id, request.user.id);
+      if (restore_status) restoreStatusStmt.run(restore_status, item_id, request.user.id);
       scheduleStatsRecompute(db);
     });
     apply();

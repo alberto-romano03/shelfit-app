@@ -17,6 +17,7 @@ import { api } from './api.js';
 import { t, getLang } from './i18n.js';
 import { navigate } from './router.js';
 import { offerShelve } from './finishSeries.js';
+import { statusBeforeMarks } from './undoable.js';
 import { refreshNowPlaying } from './kodi.js';
 import { markTitleChanged } from './titleSync.js';
 
@@ -121,7 +122,9 @@ function planFor(np) {
         marked = await api.markEpisode(m.item_id, np.season, np.episode);
         // A series off the list starts being watched; a shelved one is offered
         // back to Watching; the last episode of an ended one, the shelf.
-        prompt = offerShelve(marked, { id: m.item_id }) || null;
+        // A shelve or resume answered here changes a page open on the series.
+        const changed = () => markTitleChanged(m.item_id);
+        prompt = offerShelve(marked, { id: m.item_id, onShelved: changed, onStatus: changed }) || null;
         return t('nowPlaying.doneEp', { ep });
       },
       // Everything the mark did goes back: the episode, the season it made
@@ -133,7 +136,7 @@ function planFor(np) {
           m.item_id,
           [{ season: np.season, episode: np.episode }],
           marked ? marked.previous_current_season ?? null : null,
-          marked && marked.status_changed ? 'plan_to_watch' : undefined
+          statusBeforeMarks(marked, prompt)
         );
       },
     };

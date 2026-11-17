@@ -18,7 +18,7 @@ import {
 import { scheduleStatsRecompute } from '../stats.js';
 import { clientAbortSignal } from '../http.js';
 import { hasFanartDiscCached } from '../fanart.js';
-import { imageVersion } from '../customImages.js';
+import { imageVersion, customSlots } from '../customImages.js';
 import { stopMinute } from '../stoppedAt.js';
 
 const VALID_STATUS = [
@@ -498,6 +498,9 @@ export default async function mediaRoutes(fastify) {
       // The disc art lives behind /api/fanart, served `immutable` too, so the
       // client appends this when the user has replaced it.
       fanart_v: imageVersion(row.type, row.tmdb_id, 'fanart'),
+      // Which images carry the user's own pick, so the image customiser opens
+      // already showing them (and their Reset rows).
+      custom_images: customSlots(row.type, row.tmdb_id),
       // Whether a real Fanart disc is cached (movies only); else the client uses
       // the poster-based disc rendering. Never triggers a network fetch.
       disc_available: row.type === 'movie' && hasFanartDiscCached(row.tmdb_id),
@@ -507,6 +510,10 @@ export default async function mediaRoutes(fastify) {
 
     if (row.type === 'show' && meta) {
       result.progress = buildShowProgress(row.id, row.tmdb_id, meta);
+      // The season the viewer last marked in (items.current_season), which the
+      // page outlines while it is unfinished. current_season above is the first
+      // partly watched one, which a single skipped episode early on would pin.
+      result.progress.marked_season = row.current_season ?? null;
     }
 
     return result;

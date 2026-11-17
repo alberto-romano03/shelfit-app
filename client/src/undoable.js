@@ -30,6 +30,17 @@ export function undoable({ msg, undo }) {
   });
 }
 
+// The status an Undo of some marks puts back: on the list if the marks started
+// the series; else what it was before the prompt that followed them, if that
+// prompt moved it (shelved it from Watching, or resumed it from its status at
+// the time of the marks); else nothing to put back.
+export function statusBeforeMarks(res, prompt) {
+  if (res && res.status_changed) return 'plan_to_watch';
+  if (prompt && prompt.shelved) return 'watching';
+  if (prompt && prompt.resumed && res && res.item_status) return res.item_status;
+  return undefined;
+}
+
 // After marking many episodes: only those this action marked go back, never the ones
 // already watched. Nothing new marked means nothing to undo, so a plain toast.
 export function markedToast(res, msg, { id, prompt, reload } = {}) {
@@ -42,13 +53,9 @@ export function markedToast(res, msg, { id, prompt, reload } = {}) {
     msg,
     undo: async (a) => {
       if (prompt) prompt.close(); // "Move it to the shelf?" no longer applies
-      // Marks that moved a series off the list put it back there too.
-      await a.undoMarks(
-        id,
-        episodes,
-        res.previous_current_season ?? null,
-        res.status_changed ? 'plan_to_watch' : undefined
-      );
+      // Marks that moved a series off the list put it back there too, and a
+      // shelve or resume answered after them is taken back with them.
+      await a.undoMarks(id, episodes, res.previous_current_season ?? null, statusBeforeMarks(res, prompt));
       if (reload) reload();
     },
   });

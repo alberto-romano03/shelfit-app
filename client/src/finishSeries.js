@@ -12,7 +12,8 @@
 //
 // The server attaches what this needs (series_ended, item_status, title,
 // status_changed, offer_watching) to every mark response. Returns the dialog it
-// opened, if any, so an Undo can close it.
+// opened, if any, so an Undo can close it; the dialog then says whether it moved
+// the series (`shelved`, `resumed`), so the Undo can put the status back too.
 
 import { confirmModal, toast } from './ui.js';
 import { api as defaultApi } from './api.js';
@@ -29,7 +30,7 @@ export function offerShelve(res, { id, api = defaultApi, onShelved, onStatus } =
   if (res.offer_watching && !declined.has(String(id))) return offerWatching(res, { id, api, onStatus });
   if (!res.caught_up || !res.series_ended || (res.status_changed || res.item_status) !== 'watching') return;
 
-  return confirmModal({
+  const dialog = confirmModal({
     title: t('finish.title'),
     body: t('finish.body', { title: res.title || '' }),
     confirmLabel: t('finish.shelve'),
@@ -40,6 +41,7 @@ export function offerShelve(res, { id, api = defaultApi, onShelved, onStatus } =
     onConfirm: async () => {
       try {
         await api.updateMedia(id, { status: 'completed' });
+        dialog.shelved = true;
         toast(t('finish.shelved'), 'ok');
         if (onShelved) onShelved();
       } catch (err) {
@@ -48,12 +50,13 @@ export function offerShelve(res, { id, api = defaultApi, onShelved, onStatus } =
       }
     },
   });
+  return dialog;
 }
 
 function offerWatching(res, { id, api, onStatus }) {
   declined.add(String(id)); // asked once per visit, whatever the answer
   const status = t(`status.${res.item_status}`).toLowerCase(); // "is shelved", "in pausa"
-  return confirmModal({
+  const dialog = confirmModal({
     title: t('finish.resumeTitle'),
     body: t('finish.resumeBody', { title: res.title || '', status }),
     confirmLabel: t('finish.resume'),
@@ -63,6 +66,7 @@ function offerWatching(res, { id, api, onStatus }) {
     onConfirm: async () => {
       try {
         await api.updateMedia(id, { status: 'watching' });
+        dialog.resumed = true;
         toast(t('finish.resumed'), 'ok');
         if (onStatus) onStatus('watching');
       } catch (err) {
@@ -71,4 +75,5 @@ function offerWatching(res, { id, api, onStatus }) {
       }
     },
   });
+  return dialog;
 }

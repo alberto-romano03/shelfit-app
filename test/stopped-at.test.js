@@ -157,6 +157,28 @@ describe('stopped at', () => {
     assert.equal(res.json.previous_current_season, null);
     const again = await a.post('/api/progress', { item_id: show, season: 1, episode: 2 });
     assert.equal(again.json.previous_current_season, 1);
+    // The title page outlines the season last marked in.
+    assert.equal((await detail(show)).progress.marked_season, 1);
+  });
+
+  it('takes back a shelve answered after the marks, with them', async () => {
+    const res = await a.post('/api/progress/season', { item_id: show, season: 1 });
+    await a.patch(`/api/media/${show}`, { status: 'completed' }); // the shelve prompt
+    const undo = await a.post('/api/progress/undo-marks', {
+      item_id: show,
+      episodes: res.json.marked_episodes,
+      current_season: res.json.previous_current_season ?? null,
+      restore_status: 'watching',
+    });
+    assert.equal(undo.status, 200);
+    assert.equal((await detail(show)).status, 'watching');
+    assert.equal((await season()).watched_count, 0);
+    const bad = await a.post('/api/progress/undo-marks', { item_id: show, episodes: [], restore_status: 'gone' });
+    assert.equal(bad.status, 400);
+  });
+
+  it('says which images carry the user\'s own pick', async () => {
+    assert.deepEqual((await detail(movie)).custom_images, { poster: false, backdrop: false, fanart: false });
   });
 
   it('counts the aired episodes a season has left to mark', async () => {

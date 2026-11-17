@@ -21,7 +21,7 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v211'; // bumped: budget block, full Now Playing undo, season mark, member submit
+const CACHE = 'shelfit-shell-v212'; // bumped: resume status, outlined season, image picker, removed title
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by

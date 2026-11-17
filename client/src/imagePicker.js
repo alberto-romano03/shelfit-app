@@ -32,10 +32,19 @@ const SLOTS = [
 const slotLabel = (key) => t(`images.slot.${key}`);
 
 export function openImagePicker(item, api, onChanged) {
-  // Which slots currently carry the user's own image. Filled from the first
-  // browse response and kept in step with every save and reset.
-  const custom = { poster: false, backdrop: false, fanart: false };
+  // Which slots currently carry the user's own image: from the title's payload
+  // (custom_images), so the first step already shows them with their Reset rows,
+  // then kept in step with every browse, save and reset.
+  const known = item.custom_images || {};
+  const custom = { poster: !!known.poster, backdrop: !!known.backdrop, fanart: !!known.fanart };
   let changed = false;
+
+  // However the sheet is closed (Close, a tap outside, a swipe down), the page
+  // behind reloads if something changed, and only then: a look-and-cancel costs
+  // nothing.
+  const onClose = () => {
+    if (changed && onChanged) onChanged();
+  };
 
   openModal((modal, close) => {
     const stage = el('div', { class: 'imgflow' });
@@ -90,14 +99,13 @@ export function openImagePicker(item, api, onChanged) {
       parent.append(row);
     }
 
-    // Closing reloads the detail view only when something actually changed, so
-    // a look-and-cancel costs nothing. The retained Detail DOM was already
-    // dropped by the save itself: api.js fires 'shelfit:library-changed' on every
-    // non-GET, so the reload rebuilds from the new payload rather than
-    // re-attaching nodes that still point at the old image URLs.
+    // Closing reloads the detail view when something changed (onClose above).
+    // The retained Detail DOM was already dropped by the save itself: api.js
+    // fires 'shelfit:library-changed' on every non-GET, so the reload rebuilds
+    // from the new payload rather than re-attaching nodes that still point at
+    // the old image URLs.
     function done() {
       close();
-      if (changed && onChanged) onChanged();
     }
 
     // ---- Step 1: which image ----
@@ -329,7 +337,7 @@ export function openImagePicker(item, api, onChanged) {
     }
 
     show(stepSlot);
-  });
+  }, { onClose });
 }
 
 // --- Crop engine ----------------------------------------------------------
