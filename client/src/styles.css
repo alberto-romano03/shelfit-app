@@ -7866,11 +7866,13 @@ img.mood-emoji {
   transform: translateX(18px);
   transition: none;
 }
-/* The backdrop opens the card, fading into the sheet's own surface. */
+/* The backdrop opens the card edge to edge, as a title page's does: it reaches
+   past the sheet body's side padding to the sheet's own edges, square-cornered,
+   fading into the sheet's surface. */
 .pick-hero {
   position: relative;
   aspect-ratio: 16 / 9;
-  border-radius: var(--r-md);
+  margin: 0 calc(-1 * var(--gutter-r)) 0 calc(-1 * var(--gutter-l));
   overflow: hidden;
   background: var(--surface-elevated);
 }
@@ -7893,7 +7895,8 @@ img.mood-emoji {
   display: flex;
   align-items: flex-end;
   gap: 14px;
-  margin: -64px 8px 0;
+  /* On the content's edge, like the poster under a title page's backdrop. */
+  margin: -64px 0 0;
 }
 .pick-card.no-hero .pick-hero {
   display: none;
