@@ -36,6 +36,9 @@ import { markBootSettled } from './warmup.js';
 import { getExplore } from './offlineCache.js';
 
 initTheme();
+// iOS Safari pinch-zooms whatever the viewport meta says: its own gesture events
+// are the one way to stop it (touch-action in styles.css covers the rest).
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
 initI18n();
 // Before anything reads the on-device stores: pick the signed-in member's cache
 // and drop what belongs to nobody (see userScope.js).

@@ -300,6 +300,12 @@ body {
   margin: 0;
   padding: 0;
 }
+/* No pinch or double-tap zoom: the app scrolls, it never zooms (the viewport
+   meta says the same; iOS ignores that part of it, so this and main.js's
+   gesture guard carry it there). */
+html {
+  touch-action: pan-x pan-y;
+}
 body {
   background: var(--bg);
   color: var(--text-primary);
@@ -3366,7 +3372,15 @@ body.season-active #app {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  max-width: 100%;
+  /* The clamp's "…" is drawn just past the last line, and a lone long word runs
+     past the stop: both were cropped by the clip. A few px of padding, hung into
+     the gap between stops (negative margin), gives the ellipsis room without
+     changing where lines break, and a long word now wraps instead. */
+  box-sizing: border-box;
+  max-width: calc(100% + 12px);
+  margin: 0 -6px;
+  padding: 0 6px;
+  overflow-wrap: anywhere;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.25;
@@ -11830,7 +11844,7 @@ textarea.lend-message-input:focus {
   border: none;
   background: transparent;
   font-family: inherit;
-  font-size: 16px; /* under 16px, iOS zooms the page in on focus */
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink);
   padding: 0;
