@@ -24,6 +24,7 @@ import {
   clear,
   stateBlock,
   lucideIcon,
+  pressable,
 } from '../ui.js';
 import { collapsibleText } from '../collapsibleText.js';
 import { isServerReachable, markDegraded } from '../network.js';
@@ -180,6 +181,9 @@ function buildPage(d, onAdded) {
           : el('span', { class: 'cp-add', 'aria-hidden': 'true', html: icons.plus })
       );
     }
+    // A button to the keyboard and screen readers: named after the film, and for
+    // a missing one, after what the tap does (the "+" on it is only a picture).
+    pressable(card, { label: p.in_library ? p.title : `${t('preview.addToLibrary')}: ${p.title}` });
     card.addEventListener('click', () =>
       p.in_library
         ? openDetail(`/detail/${p.item_id}`)

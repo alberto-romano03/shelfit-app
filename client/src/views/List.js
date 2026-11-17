@@ -238,7 +238,16 @@ export default async function List(container, params) {
   editBtn.addEventListener('click', () => {
     if (!data) return;
     openModal((modal, close) => {
-      const input = el('input', { class: 'text-field', type: 'text', value: data.name, maxlength: '40' });
+      // Named for screen readers, focused with its text selected, and Enter saves,
+      // as in the New list sheet.
+      const input = el('input', {
+        class: 'text-field',
+        type: 'text',
+        value: data.name,
+        maxlength: '40',
+        'aria-label': t('lists.rename'),
+        'data-autofocus': '',
+      });
       const save = el('button', { class: 'btn btn-primary' }, [
         lucideIcon('check', 'btn-lucide'),
         el('span', { text: t('common.save') }),
@@ -256,6 +265,12 @@ export default async function List(container, params) {
         } catch (err) {
           save.disabled = false;
           toast(err.message || t('lists.failed'), 'bad');
+        }
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          save.click();
         }
       });
       modal.append(

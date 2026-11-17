@@ -27,6 +27,7 @@ import {
   segmentedControl,
   typewriterPlaceholder,
   pressable,
+  scrollMotion,
 } from '../ui.js';
 import { isServerReachable, markDegraded } from '../network.js';
 import { buildStatusBento } from '../statusSelect.js';
@@ -217,6 +218,10 @@ export default async function Search(container) {
   // title is on the page, so a card never keeps offering "+" for a title already
   // added (its tap would reopen the add sheet instead of the title).
   const keyOf = (r) => `${r.type}:${r.tmdb_id}`;
+  // What this page has learnt about titles since it loaded (key -> library id, or
+  // null once removed). A card drawn later from older data (a mood row, a
+  // re-rendered list) is painted with it, not with what that data said.
+  const known = new Map();
   function paintsLibrary(node, r, paint) {
     node.dataset.titleKey = keyOf(r);
     node._library = (itemId) => {
@@ -224,9 +229,11 @@ export default async function Search(container) {
       r.item_id = itemId ?? null;
       paint(itemId != null);
     };
+    if (known.has(keyOf(r))) node._library(known.get(keyOf(r)));
     return node;
   }
   function setInLibrary(r, itemId) {
+    known.set(keyOf(r), itemId ?? null);
     r.already_added = itemId != null;
     r.item_id = itemId ?? null;
     for (const node of container.querySelectorAll(`[data-title-key="${keyOf(r)}"]`)) {
@@ -303,7 +310,7 @@ export default async function Search(container) {
         target = ahead.reduce((best, e) =>
           Math.abs(e - desired) < Math.abs(best - desired) ? e : best
         );
-      rail.scrollTo({ left: target, behavior: 'smooth' });
+      rail.scrollTo({ left: target, behavior: scrollMotion() });
     }
     prev.addEventListener('click', () => go(-1));
     next.addEventListener('click', () => go(1));
@@ -846,7 +853,7 @@ export default async function Search(container) {
     scope.setLabel(2, `${t('search.scopeSeries')} ${shows.length}`);
 
     const shown = state.scope === 'movie' ? movies : state.scope === 'show' ? shows : list;
-    countEl.textContent = `${shown.length} ${t('search.titlesCount')}`;
+    countEl.textContent = t('lists.titles', { n: shown.length }); // "1 title", not "1 titles"
 
     const frag = document.createDocumentFragment();
     frag.append(resultsBar);
@@ -877,6 +884,7 @@ export default async function Search(container) {
     const q = input.value.trim();
     state.query = q;
     if (!q) {
+      reqId++; // an answer still on its way is for a search no longer asked
       state.results = null;
       scope.setLabel(0, t('search.scopeAll'));
       scope.setLabel(1, t('search.scopeMovies'));
@@ -952,6 +960,10 @@ export default async function Search(container) {
 
   input.addEventListener('input', () => {
     clearTimeout(timer);
+    // The text changed: the answer to the old text must not land (nor be saved
+    // to Recent), and a scope tap meanwhile has no old results to repaint.
+    reqId++;
+    state.results = null;
     const q = input.value.trim();
     counter.classList.toggle('has-query', !!q);
     if (q) {

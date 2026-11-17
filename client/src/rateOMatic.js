@@ -375,15 +375,20 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost, next
       el('span', { text: t('common.done') }),
     ]));
 
+    // What the end says depends on how it ended: all rated, some skipped, none
+    // rated, or nothing to rate from the start.
+    const nothing = !ratedCount && !skipped.length;
+    const title = nothing ? 'rom.nothingTitle' : ratedCount ? 'rom.doneTitle' : 'rom.skippedTitle';
+    const sub = nothing ? 'rom.nothingSub' : skipped.length ? 'rom.doneSubSkipped' : 'rom.doneSub';
     stage.replaceChildren(
       el('div', { class: 'rom-done' }, [
         el('div', { class: 'rom-done-badge', html: starSvg(true) }),
-        el('div', { class: 'rom-done-title', text: t('rom.doneTitle') }),
+        el('div', { class: 'rom-done-title', text: t(title) }),
         el('div', {
           class: 'rom-done-sub',
-          text: t('rom.doneSub'),
+          text: t(sub),
         }),
-        el('div', { class: 'rom-done-count', text: count }),
+        ratedCount ? el('div', { class: 'rom-done-count', text: count }) : null,
         actions,
       ])
     );

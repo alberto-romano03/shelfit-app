@@ -4,7 +4,7 @@
 // user-agent), newest activity first. Any other device can be signed out from
 // here; this device signs out with the Log out row above instead.
 
-import { el, toast, formatDate, skelLine, stateBlock, settingsRow, settingsHeader, iconAction } from '../ui.js';
+import { el, toast, formatDate, skelLine, stateBlock, settingsRow, settingsHeader, iconAction, confirmModal } from '../ui.js';
 import { t } from '../i18n.js';
 
 const MOBILE = /iPhone|iPad|Android/;
@@ -34,24 +34,31 @@ export function buildDevices(api) {
   }
 
   function sessionRow(s) {
+    // This device has no action: an empty end keeps its row a plain line, not
+    // a button that does nothing. Another device's sign-out is asked first.
     const end = s.current
-      ? null
+      ? []
       : iconAction({
           icon: 'log-out',
           label: t('devices.signOut'),
           danger: true,
-          onClick: async (e) => {
-            const btn = e.currentTarget;
-            btn.disabled = true;
-            try {
-              await api.revokeSession(s.id);
-              toast(t('devices.signedOut'), 'ok');
-              refresh();
-            } catch (err) {
-              btn.disabled = false;
-              toast(err.message || t('settings.failed'), 'bad');
-            }
-          },
+          onClick: () =>
+            confirmModal({
+              title: t('devices.signOutTitle', { name: s.label || t('devices.unknown') }),
+              body: t('devices.signOutBody'),
+              confirmLabel: t('devices.signOut'),
+              confirmIcon: 'log-out',
+              onConfirm: async () => {
+                try {
+                  await api.revokeSession(s.id);
+                } catch (err) {
+                  toast(err.message || t('settings.failed'), 'bad');
+                  throw err; // keeps the question open
+                }
+                toast(t('devices.signedOut'), 'ok');
+                refresh();
+              },
+            }),
         });
     return settingsRow({
       icon: MOBILE.test(s.label || '') ? 'smartphone' : 'earth',

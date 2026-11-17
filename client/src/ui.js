@@ -133,6 +133,16 @@ export function lucideIcon(name, className = '') {
 // reduced motion. Otherwise typing starts when the field scrolls into view (so the
 // effect is actually seen, not wasted below the fold) and stops the instant the
 // user types. Returns a cleanup that halts it — register it with onCleanup.
+// How a scroll the app makes itself should move: smoothly, unless the person
+// asked for reduced motion (a smooth scrollTo ignores the CSS setting).
+export function scrollMotion() {
+  const reduce =
+    typeof window !== 'undefined' &&
+    window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return reduce ? 'auto' : 'smooth';
+}
+
 export function typewriterPlaceholder(el, text, { speed = 55, startDelay = 320 } = {}) {
   const full = text || '';
   const reduce =
@@ -1107,7 +1117,8 @@ let scrollLocks = 0;
 function onLockTouchMove(e) {
   if (e.touches && e.touches.length > 1) return; // leave pinch-zoom alone
   const t = e.target;
-  if (!t || !t.closest || !t.closest('.modal, .sheet-body')) {
+  // The tour's pages scroll too when their words outgrow a short screen.
+  if (!t || !t.closest || !t.closest('.modal, .sheet-body, .sc-page')) {
     e.preventDefault();
   }
 }
@@ -1168,6 +1179,40 @@ export function fadeSwap(node, mutate) {
 // label reflects a STATE the user just changed — "Show more" → "Show less",
 // "Set as favorite" → "Remove as favorite" — so the change reads as a change
 // rather than a flicker. No-op when the text is already what was asked for.
+// Copy `text` to the clipboard; true only if it really was copied. Without the
+// Clipboard API it selects `field` (the shown link) and tries the old command,
+// whose false answer means nothing was copied.
+export async function copyText(text, field) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    if (!field) return false;
+    field.focus();
+    field.select();
+    try {
+      return document.execCommand('copy') === true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+// A Copy button's answer: "Copied" for a moment when it worked; when it didn't,
+// the link stays selected and a toast says to copy it by hand.
+export async function copyWithFeedback(btn, text, field) {
+  if (await copyText(text, field)) {
+    setLabel(btn, t('magic.copied'));
+    setTimeout(() => setLabel(btn, t('magic.copy')), 1500);
+  } else {
+    if (field) {
+      field.focus();
+      field.select();
+    }
+    toast(t('magic.copyByHand'));
+  }
+}
+
 export function setLabel(node, text) {
   if (!node) return;
   // An action button is [glyph][span] now, so writing textContent on the button
@@ -1408,7 +1453,7 @@ export function segmentedBar({
     // before it, leaving the chip out of sight.
     if (scrollIntoView && typeof b.scrollIntoView === 'function') {
       requestAnimationFrame(() => {
-        if (buttons[active] === b) b.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+        if (buttons[active] === b) b.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: scrollMotion() });
       });
     }
   }
@@ -1575,6 +1620,13 @@ export function openModal(buildContent, opts = {}) {
   buildContent(modal, close);
   lockScroll();
   document.body.append(backdrop);
+  // A field marked data-autofocus takes the focus (with its text selected) once
+  // the dialog is in the page; focusing it while being built does nothing.
+  const auto = modal.querySelector('[data-autofocus]');
+  if (auto && !closed) {
+    auto.focus({ preventScroll: true });
+    if (typeof auto.select === 'function') auto.select();
+  }
   if (!closed) restoreFocus = dialogA11y(modal, backdrop);
   dialogEnter(modal, backdrop, { popup: !!opts.center });
   if (!closed) untrack = trackSheet(close);
@@ -1588,7 +1640,7 @@ export function openModal(buildContent, opts = {}) {
 // the threshold, or with a downward flick, leaves from where the panel is (see
 // dialogMotion.js); anything less settles back. Upward it gives a little and resists, the way a native sheet does;
 // it can never close that way.
-function dragHandle(close, panel, backdrop) {
+export function dragHandle(close, panel, backdrop) {
   const wrap = el('div', { class: 'sheet-handle-wrap' }, [
     el('div', { class: 'sheet-handle' }),
   ]);

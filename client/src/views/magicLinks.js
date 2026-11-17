@@ -17,6 +17,8 @@ import {
   settingsHeader,
   iconAction,
   lucideIcon,
+  confirmModal,
+  copyWithFeedback,
 } from '../ui.js';
 import { t } from '../i18n.js';
 
@@ -91,17 +93,24 @@ export function buildMagicLinks(api) {
       icon: 'trash-2',
       label: t('magic.revoke'),
       danger: true,
-      onClick: async () => {
-        revoke.disabled = true;
-        try {
-          await api.revokeMagic(l.id);
-          toast(t('magic.revoked'), 'ok');
-          refresh();
-        } catch (err) {
-          revoke.disabled = false;
-          toast(err.message || t('magic.revokeFailed'), 'bad');
-        }
-      },
+      // Asked first, as removing a member or a Kodi box is: a revoked link
+      // can't be brought back, only replaced by a new one.
+      onClick: () =>
+        confirmModal({
+          title: t('magic.revokeTitle', { name: l.label || t('magic.unlabeled') }),
+          body: t('magic.revokeBody'),
+          confirmLabel: t('magic.revoke'),
+          onConfirm: async () => {
+            try {
+              await api.revokeMagic(l.id);
+            } catch (err) {
+              toast(err.message || t('magic.revokeFailed'), 'bad');
+              throw err; // keeps the question open
+            }
+            toast(t('magic.revoked'), 'ok');
+            refresh();
+          },
+        }),
     });
 
     return settingsRow({
@@ -191,22 +200,7 @@ export function buildMagicLinks(api) {
       lucideIcon('copy', 'btn-lucide'),
       el('span', { text: t('magic.copy') }),
     ]);
-    copy.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(link.url);
-      } catch {
-        urlField.select();
-        try {
-          document.execCommand('copy');
-        } catch {
-          /* clipboard unavailable */
-        }
-      }
-      // The label span, not the button — the button also holds the glyph.
-      const copyLabel = copy.querySelector('span');
-      copyLabel.textContent = t('magic.copied');
-      setTimeout(() => (copyLabel.textContent = t('magic.copy')), 1500);
-    });
+    copy.addEventListener('click', () => copyWithFeedback(copy, link.url, urlField));
 
     const done = el(
       'button',

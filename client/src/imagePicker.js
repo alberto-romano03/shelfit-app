@@ -38,12 +38,23 @@ export function openImagePicker(item, api, onChanged) {
   const known = item.custom_images || {};
   const custom = { poster: !!known.poster, backdrop: !!known.backdrop, fanart: !!known.fanart };
   let changed = false;
+  let closed = false;
+  // Candidates per slot, fetched once per open: back from the crop step to the
+  // list doesn't fetch and rebuild it again.
+  const candidates = {};
 
   // However the sheet is closed (Close, a tap outside, a swipe down), the page
   // behind reloads if something changed, and only then: a look-and-cancel costs
   // nothing.
   const onClose = () => {
+    closed = true;
     if (changed && onChanged) onChanged();
+  };
+  // A save or reset that lands after the sheet was closed (it was closed while
+  // "Saving…" showed) still reloads the page, or it would keep the old image.
+  const markChanged = () => {
+    changed = true;
+    if (closed && onChanged) onChanged();
   };
 
   openModal((modal, close) => {
@@ -146,7 +157,7 @@ export function openImagePicker(item, api, onChanged) {
           try {
             await api.resetCustomImage(item.type, item.tmdb_id, slot.key);
             custom[slot.key] = false;
-            changed = true;
+            markChanged();
             toast(t('images.resetDone', { name: slotLabel(slot.key) }), 'ok');
             show(stepSlot);
           } catch (err) {
@@ -227,8 +238,8 @@ export function openImagePicker(item, api, onChanged) {
         },
       ]);
 
-      api
-        .imageCandidates(item.type, item.tmdb_id, slot.key)
+      if (!candidates[slot.key]) candidates[slot.key] = api.imageCandidates(item.type, item.tmdb_id, slot.key);
+      candidates[slot.key]
         .then((res) => {
           busy.remove();
           custom[slot.key] = !!res.custom;
@@ -243,21 +254,24 @@ export function openImagePicker(item, api, onChanged) {
               { class: 'imgpick-item', 'aria-label': t('images.option', { n: i + 1, total: list.length }) },
               [el('img', { src: c.thumb, alt: '', loading: 'lazy' })]
             );
-            cell.addEventListener('click', () => show((r) => stepCrop(r, slot, c.url)));
+            cell.addEventListener('click', () => show((r) => stepCrop(r, slot, c.url, null, 'browse')));
             grid.append(cell);
           });
         })
         .catch((err) => {
+          delete candidates[slot.key]; // a failure is tried again next time
           busy.remove();
           grid.replaceWith(el('div', { class: 'imgflow-empty', text: err.message }));
         });
     }
 
     // ---- Step 4: crop ----
-    function stepCrop(root, slot, src, cleanup) {
+    // `from`: 'browse' when the image was picked from the provider's list, which
+    // is where Cancel and Back return to.
+    function stepCrop(root, slot, src, cleanup, from) {
       const back = () => {
         if (cleanup) cleanup();
-        show((r) => stepSource(r, slot));
+        show((r) => (from === 'browse' ? stepBrowse(r, slot) : stepSource(r, slot)));
       };
       head(root, t('images.cropTitle', { name: slotLabel(slot.key).toLowerCase() }), back);
 
@@ -289,12 +303,23 @@ export function openImagePicker(item, api, onChanged) {
       );
 
       const cropper = createCropper(canvas, frame, range, slot.ratio);
-      cropper.load(src);
-
-      const confirm = el('button', { class: 'btn btn-primary' }, [
+      // The full-size original can take a while: a spinner holds the frame until
+      // it is drawn, and a failed load says so instead of staying blank.
+      const loading = el('div', { class: 'crop-loading' }, [spinner({ compact: true })]);
+      frame.append(loading);
+      const confirm = el('button', { class: 'btn btn-primary', disabled: '' }, [
         lucideIcon('check', 'btn-lucide'),
         el('span', { text: t('ui.confirm.label') }),
       ]);
+      cropper.load(src, {
+        onLoad: () => {
+          loading.remove();
+          confirm.disabled = false;
+        },
+        onError: () => {
+          loading.replaceChildren(el('div', { class: 'crop-error', text: t('images.loadFailed') }));
+        },
+      });
       confirm.addEventListener('click', async () => {
         const image = cropper.export(slot.out[0], slot.out[1]);
         if (!image) {
@@ -323,7 +348,7 @@ export function openImagePicker(item, api, onChanged) {
         .setCustomImage(item.type, item.tmdb_id, slot.key, image)
         .then(() => {
           custom[slot.key] = true;
-          changed = true;
+          markChanged();
           toast(t('images.saved', { name: slotLabel(slot.key) }), 'ok');
           show(stepSlot);
         })
@@ -455,7 +480,7 @@ function createCropper(canvas, frame, range, ratio) {
   range.addEventListener('input', () => setScale((baseScale * Number(range.value)) / 100));
 
   return {
-    load(src) {
+    load(src, { onLoad, onError } = {}) {
       img = new Image();
       // TMDB and Fanart both serve permissive CORS headers; without this the
       // canvas would be tainted and the export would throw.
@@ -468,7 +493,9 @@ function createCropper(canvas, frame, range, ratio) {
         oy = (vh - img.naturalHeight * scale) / 2;
         range.value = '100';
         draw();
+        if (onLoad) onLoad();
       });
+      if (onError) img.addEventListener('error', onError);
       img.src = src;
     },
     // The visible frame, re-rendered at the slot's output size. This is all the

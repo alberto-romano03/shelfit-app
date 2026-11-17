@@ -980,6 +980,12 @@ function makeAvatarPlaceholder(name) {
 // set, and each has a "none" choice: the name's initial, the default gradient,
 // no badge. Nothing is saved until Save.
 
+// A badge's file name read as words: "gold_star.webp" -> "Gold star".
+function badgeName(filename) {
+  const words = String(filename || '').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : t('home.profile.badgeAlt');
+}
+
 // One picker tile: a selection ring with a gap (a transparent border plus
 // padding, painted in the accent when .active), so the art is never covered.
 function pickTile(shapeCls, content, selected, label, onPick) {
@@ -1057,6 +1063,7 @@ async function openProfileModal(profile, onSaved, onClosed) {
       class: 'pe-name',
       type: 'text',
       value: profile.display_name,
+      maxlength: '40', // the server's limit too
       'aria-label': t('home.profile.displayName'),
     });
     const initialOf = () => (nameInput.value.trim() || '?').charAt(0).toUpperCase();
@@ -1213,7 +1220,7 @@ async function openProfileModal(profile, onSaved, onClosed) {
         }
       ),
       ...(badges.badges || []).map((b) =>
-        pickTile('pe-tile--badge', cachedImg(b.url, { alt: '' }), state.active_badge === b.filename, b.filename, () => {
+        pickTile('pe-tile--badge', cachedImg(b.url, { alt: '' }), state.active_badge === b.filename, badgeName(b.filename), () => {
           state.active_badge = b.filename;
           paintBadge();
         })
@@ -1258,11 +1265,17 @@ async function openProfileModal(profile, onSaved, onClosed) {
       lucideIcon('check', 'btn-lucide'),
       el('span', { text: t('common.save') }),
     ]);
+    // A name is needed: an emptied field can't be saved (it would quietly keep
+    // the old name and still say "Profile updated").
+    nameInput.addEventListener('input', () => {
+      saveBtn.disabled = !nameInput.value.trim();
+    });
     saveBtn.addEventListener('click', async () => {
+      if (!nameInput.value.trim()) return;
       saveBtn.disabled = true;
       try {
         await api.updateProfile({
-          display_name: nameInput.value.trim() || profile.display_name,
+          display_name: nameInput.value.trim(),
           profile_image: state.profile_image,
           cover_image: state.cover_image,
           active_badge: state.active_badge || '',

@@ -13,7 +13,7 @@
 // it enters, leaves and traps scroll exactly like every other popup.
 
 import { trackSheet } from './sheetStack.js';
-import { el, lockScroll, unlockScroll } from './ui.js';
+import { el, lockScroll, unlockScroll, dragHandle, dialogA11y } from './ui.js';
 import { dialogEnter, dialogLeave } from './dialogMotion.js';
 import { t } from './i18n.js';
 
@@ -153,10 +153,11 @@ export function openShowcase({ onClose } = {}) {
   let index = 0;
 
   const backdrop = el('div', { class: 'modal-backdrop' });
-  const sheet = el('div', { class: 'showcase', role: 'dialog', 'aria-modal': 'true' });
+  const sheet = el('div', { class: 'showcase', 'aria-label': t('showcase.reopen') });
 
   const skip = el('button', { class: 'sc-skip', type: 'button', text: t('showcase.skip') });
-  const header = el('div', { class: 'sc-header' }, [el('div', { class: 'sc-handle' }), skip]);
+  // The handle drags the tour down to close it, as on every other sheet.
+  const header = el('div', { class: 'sc-header' }, [dragHandle(close, sheet, backdrop), skip]);
 
   const track = el('div', { class: 'sc-track' });
   PAGES.forEach((p) => {
@@ -184,7 +185,10 @@ export function openShowcase({ onClose } = {}) {
 
   function update() {
     track.style.transform = `translateX(${-index * 100}%)`;
-    pages.forEach((pg, i) => pg.classList.toggle('is-active', i === index));
+    pages.forEach((pg, i) => {
+      pg.classList.toggle('is-active', i === index);
+      pg.inert = i !== index; // the pages out of view are out of reach too
+    });
     dotEls.forEach((d, i) => d.classList.toggle('is-active', i === index));
     prevBtn.disabled = index === 0;
     nextBtn.innerHTML = isLast()
@@ -243,11 +247,13 @@ export function openShowcase({ onClose } = {}) {
   document.addEventListener('keydown', onKey);
 
   let untrack = () => {};
+  let restoreFocus = () => {};
   let closed = false, removed = false;
   function close() {
     if (closed) return;
     closed = true;
     untrack();
+    restoreFocus();
     document.removeEventListener('keydown', onKey);
     const done = () => {
       if (removed) return;
@@ -265,6 +271,9 @@ export function openShowcase({ onClose } = {}) {
   document.body.append(backdrop);
   dialogEnter(sheet, backdrop);
   update();
+  // Named, focus moved in and kept there, and given back on close.
+  restoreFocus = dialogA11y(sheet, backdrop);
+  sheet.removeAttribute('aria-labelledby'); // its name is the tour, not page one's title
   openInstance = { close };
   return openInstance;
 }

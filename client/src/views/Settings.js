@@ -684,7 +684,12 @@ export default async function Settings(container) {
           ? t('settings.install.subIOS')
           : t('settings.install.sub'),
         control: 'chevron',
-        onClick: () => openAddToHome(),
+        // The browser's prompt works once: after it, the row goes if there is
+        // nothing more it can do here.
+        onClick: async () => {
+          await openAddToHome();
+          if (!canInstall()) installSection.style.display = 'none';
+        },
       }).el
     );
   } else {
@@ -977,6 +982,7 @@ export default async function Settings(container) {
     const status = el('div', { class: 'muted backup-status' });
     status.style.display = 'none';
 
+    let saved = 'en-US'; // the language the server reports (or the last saved)
     const picker = selectPill({
       options: [
         { value: 'en-US', text: t('settings.metaLang.en') },
@@ -986,6 +992,7 @@ export default async function Settings(container) {
       className: 'selpill--block',
       onChange: async (value) => {
         picker.select.disabled = true;
+        const before = saved; // what the server has, to go back to on a failure
         status.style.display = '';
         status.textContent = t('settings.metaLangBusy');
         try {
@@ -999,10 +1006,12 @@ export default async function Settings(container) {
             return;
           }
           status.style.display = 'none';
+          saved = value;
         } catch (err) {
           if (isAbortError(err)) return;
           status.textContent = t('settings.metaLangFailed');
           toast(err.message || t('settings.metaLangFailed'), 'bad');
+          picker.set(before); // the pill shows what is really in use
         } finally {
           picker.select.disabled = false;
         }
@@ -1023,7 +1032,10 @@ export default async function Settings(container) {
     api
       .metadataLanguage()
       .then((res) => {
-        if (res && res.language) picker.set(res.language);
+        if (res && res.language) {
+          saved = res.language;
+          picker.set(res.language);
+        }
       })
       .catch((err) => {
         if (isAbortError(err)) return;

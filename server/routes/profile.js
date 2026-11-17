@@ -111,6 +111,10 @@ export default async function profileRoutes(fastify) {
         reply.code(400);
         return { error: 'display_name cannot be empty' };
       }
+      if (name.length > 40) {
+        reply.code(400);
+        return { error: 'display_name is longer than 40 characters' };
+      }
       fields.push('display_name = ?');
       params.push(name);
     }

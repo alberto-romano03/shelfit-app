@@ -66,8 +66,9 @@ function showSuggestion(s) {
           borrow.disabled = true;
           decline.disabled = true;
           try {
-            await api.acceptSuggestion(s.id);
-            toast(t('lend.added', { title: s.title }), 'ok');
+            const res = await api.acceptSuggestion(s.id);
+            // Borrowed means Plan to Watch; a title already owned stays as it is.
+            toast(t(res && res.already ? 'lend.already' : 'lend.added', { title: s.title }), 'ok');
             close();
           } catch (err) {
             borrow.disabled = false;

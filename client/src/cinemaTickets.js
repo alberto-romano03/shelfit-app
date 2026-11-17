@@ -20,6 +20,7 @@ import {
   selectPill,
   stateArt,
   watchState,
+  stateBlock,
 } from './ui.js';
 import { api } from './api.js';
 import { attachSwipe } from './swipe.js';
@@ -499,10 +500,6 @@ export function openCinemaTickets() {
       body.replaceChildren(empty);
     }
 
-    function showMessage(msg) {
-      body.replaceChildren(el('div', { class: 'cine-empty' }, [el('div', { class: 'cine-empty-text', text: msg })]));
-    }
-
     // --- Sort + collection --------------------------------------------------
     // Re-sort keeping the ticket in view the same one, so changing the order
     // (or an edited date moving a ticket) never jumps to a different ticket.
@@ -645,33 +642,40 @@ export function openCinemaTickets() {
     }
 
     // Shared app loader: the rotating disc + a random loading phrase.
-    body.replaceChildren(spinner({ compact: true }));
     // Load tickets + the cinema-name options together. A failed list fetch just
     // means the ticket's cinema field falls back to free text.
-    take('tickets', fetchTickets)
-      .then(async ([res, listRes]) => {
-        // The loader holds until the first ticket's backdrop is decoded (a beat
-        // at most), so the ticket never paints with an empty banner.
-        const [first] = firstTicketsOf(res, 1);
-        if (first && first.backdropPath) {
-          await capped(imageCache.ready(first.backdropPath), FIRST_PAINT_CAP_MS);
-        }
-        cinemas = (listRes && listRes.cinemas) || [];
-        all = (res.tickets || []).map(ticketFromApi);
-        if (!all.length) {
-          showEmpty();
-          return;
-        }
-        applySort();
-        index = 0;
-        viewSeg.el.style.display = '';
-        showOne();
-        // Warm every backdrop in display order at background priority (the same
-        // scheduler as the grid preloader, so it never delays a visible image).
-        // The collection then paints from RAM, and swiping in the single view
-        // lands on images that are already there.
-        imageCache.preload(tickets.map((tk) => tk.backdropPath).filter(Boolean));
-      })
-      .catch(() => showMessage(t('ticket.loadError')));
+    function load() {
+      body.replaceChildren(spinner({ compact: true }));
+      take('tickets', fetchTickets)
+        .then(async ([res, listRes]) => {
+          // The loader holds until the first ticket's backdrop is decoded (a beat
+          // at most), so the ticket never paints with an empty banner.
+          const [first] = firstTicketsOf(res, 1);
+          if (first && first.backdropPath) {
+            await capped(imageCache.ready(first.backdropPath), FIRST_PAINT_CAP_MS);
+          }
+          cinemas = (listRes && listRes.cinemas) || [];
+          all = (res.tickets || []).map(ticketFromApi);
+          if (!all.length) {
+            showEmpty();
+            return;
+          }
+          applySort();
+          index = 0;
+          viewSeg.el.style.display = '';
+          showOne();
+          // Warm every backdrop in display order at background priority (the same
+          // scheduler as the grid preloader, so it never delays a visible image).
+          // The collection then paints from RAM, and swiping in the single view
+          // lands on images that are already there.
+          imageCache.preload(tickets.map((tk) => tk.backdropPath).filter(Boolean));
+        })
+        .catch(() =>
+          body.replaceChildren(
+            stateBlock({ kind: 'error', tier: 'section', icon: 'ticket', title: t('ticket.loadError'), action: { onClick: load } })
+          )
+        );
+    }
+    load();
   });
 }

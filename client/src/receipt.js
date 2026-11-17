@@ -696,6 +696,7 @@ export function openReceipt(month) {
               tier: 'section',
               icon: 'receipt',
               title: key ? t('receipt.loadErrorThat') : t('receipt.loadErrorThis'),
+              action: { onClick: () => loadMonth(key) },
             })
           );
         });

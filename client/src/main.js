@@ -111,8 +111,11 @@ mountHeaderTitle(header);
 // into the glowing line and slides back. Purely decorative; resets on any
 // interaction and never blocks input. ---
 let logoIdleTimer = null;
+const motionReduced = () =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 function armLogoIdle() {
   clearTimeout(logoIdleTimer);
+  if (motionReduced()) return; // the idle spin is decoration
   logoIdleTimer = setTimeout(() => brand.classList.add('logo-idle-run'), 120000);
 }
 brandLogo.addEventListener('animationend', () => {
@@ -329,7 +332,7 @@ preloader
 window.addEventListener('shelfit:server-change', (ev) => {
   if (ev.detail && ev.detail.reachable && wasDegraded()) {
     clearDegraded();
-    navigate(location.pathname, { replace: true, transition: false });
+    navigate(location.pathname, { replace: true, transition: false, keepScroll: true });
   }
 });
 startNetworkMonitor();

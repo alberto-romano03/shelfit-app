@@ -188,7 +188,8 @@ let onScreen = null; // while a new page waits to start moving: the page still s
 
 function render(path, opts = {}) {
   const from = currentPath;
-  previousPath = from || '';
+  // Drawn again in place (keepScroll): still opened from where it was.
+  if (!opts.keepScroll) previousPath = from || '';
   currentPath = path;
   const nav = opts.nav || 'push';
   const hop = opts.transition && from !== null ? resolveHop(transitionFor ? transitionFor(from, path, nav) : null) : null;
@@ -209,7 +210,7 @@ function render(path, opts = {}) {
     leaving = container && container.isConnected ? pin(container, from).el : null;
   }
   onScreen = null;
-  window.scrollTo(0, 0);
+  if (!opts.keepScroll) window.scrollTo(0, 0);
   if (onChange) onChange(path);
 
   if (finishHop) finishHop();
@@ -271,12 +272,15 @@ function render(path, opts = {}) {
 
 // `transition: false` is for a silent re-render in place (a language change, the server
 // coming back), which must not look like a navigation. `kind: 'tab'` is a tab bar tap.
-export function navigate(path, { replace = false, transition = true, nav = 'push' } = {}) {
+// `keepScroll`: the same page drawn again where it stands (the server back after
+// an outage): no jump to the top, and views treat it as a return, restoring the
+// scroll they kept.
+export function navigate(path, { replace = false, transition = true, nav = 'push', keepScroll = false } = {}) {
   // Accept either form (callers pass literals like '/series' or a full
   // location.pathname): normalize to root-relative for state + matching, and
   // write the base-prefixed URL into history.
   path = stripBase(path);
-  lastNav = 'push';
+  lastNav = keepScroll ? 'pop' : 'push';
   const url = withBase(path);
   if (replace) {
     history.replaceState({ path, index: historyIndex }, '', url);
@@ -284,7 +288,7 @@ export function navigate(path, { replace = false, transition = true, nav = 'push
     historyIndex += 1;
     history.pushState({ path, index: historyIndex }, '', url);
   }
-  render(path, { nav, transition });
+  render(path, { nav, transition, keepScroll });
 }
 
 // A page's own Back arrow. With an earlier page of the app in history it goes

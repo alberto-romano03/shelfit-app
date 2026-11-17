@@ -17,6 +17,7 @@ import {
   clear,
   stateBlock,
   pressable,
+  scrollMotion,
 } from '../ui.js';
 import { isServerReachable, markDegraded } from '../network.js';
 import { saveUpNext, getUpNext, saveUpcoming, getUpcoming, formatSyncTime } from '../offlineCache.js';
@@ -371,7 +372,7 @@ function buildHorizonRailway(horizon) {
     } else {
       target = ahead.reduce((best, e) => (Math.abs(e - desired) < Math.abs(best - desired) ? e : best));
     }
-    scroller.scrollTo({ left: target, behavior: 'smooth' });
+    scroller.scrollTo({ left: target, behavior: scrollMotion() });
   }
   leftBtn.addEventListener('click', () => scrollToDir(-1));
   rightBtn.addEventListener('click', () => scrollToDir(1));
@@ -547,8 +548,11 @@ export default async function Upcoming(container) {
   // double render.
   let done = false;
   function showOffline() {
-    if (done) return;
+    // Flagged even with the page already drawn: going offline aborted this view's
+    // requests (onServerChange), so only a re-mount on recovery gets it updating
+    // again.
     markDegraded(); // recovery re-mounts this view when the server returns
+    if (done) return;
     if (painted) return; // session content already on screen: keep it
     // Prefer the full durable payload while within its TTL: the whole view — "On
     // the Horizon" railway included — renders offline with countdowns recomputed

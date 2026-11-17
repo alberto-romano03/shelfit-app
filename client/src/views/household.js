@@ -20,6 +20,7 @@ import {
   settingsRule,
   openModal,
   lucideIcon,
+  copyWithFeedback,
 } from '../ui.js';
 import { t } from '../i18n.js';
 
@@ -196,8 +197,7 @@ export function buildHousehold(api) {
           save,
         ])
       );
-      input.focus();
-      input.select();
+      input.setAttribute('data-autofocus', ''); // openModal focuses and selects it
     }, { handle: true });
   }
 
@@ -341,21 +341,7 @@ export function buildHousehold(api) {
       lucideIcon('copy', 'btn-lucide'),
       el('span', { text: t('magic.copy') }),
     ]);
-    copy.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(res.invite_url);
-      } catch {
-        urlField.select();
-        try {
-          document.execCommand('copy');
-        } catch {
-          /* clipboard unavailable */
-        }
-      }
-      const label = copy.querySelector('span');
-      label.textContent = t('magic.copied');
-      setTimeout(() => (label.textContent = t('magic.copy')), 1500);
-    });
+    copy.addEventListener('click', () => copyWithFeedback(copy, res.invite_url, urlField));
     const done = el('button', { class: 'btn btn-primary', onClick: closeForm }, [
       lucideIcon('check', 'btn-lucide'),
       el('span', { text: t('common.done') }),

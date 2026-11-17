@@ -63,6 +63,10 @@
   /* The page's side margin. Sheets use it too: with 18px their content sat 2px off
      the page behind them. */
   --gutter: 16px;
+  /* The side padding, grown in landscape on a notched iPhone so content clears
+     the notch and the rounded corners (in portrait the insets are 0). */
+  --gutter-l: max(var(--gutter), env(safe-area-inset-left));
+  --gutter-r: max(var(--gutter), env(safe-area-inset-right));
 
   /* ===== Motion tokens =====================================================
      Every state transition in the app draws its timing from here, so the whole
@@ -386,6 +390,7 @@ select {
 /* ============================= App layout ============================= */
 #app {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 .app-header {
   position: sticky;
@@ -396,6 +401,8 @@ select {
   justify-content: space-between;
   padding: 10px 16px;
   padding-top: calc(10px + env(safe-area-inset-top));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(12px);
   /* No hairline under the field: it blends into the page, and the blurred
@@ -575,7 +582,7 @@ html.theme-reveal::view-transition-new(root) {
 }
 
 .view {
-  padding: 12px var(--gutter) calc(var(--nav-h) + env(safe-area-inset-bottom) + 40px);
+  padding: 12px var(--gutter-r) calc(var(--nav-h) + env(safe-area-inset-bottom) + 40px) var(--gutter-l);
   max-width: 900px;
   margin: 0 auto;
 }
@@ -639,6 +646,8 @@ body.grid-virtual-active #app {
   min-height: 0;
   /* The list starts under the filters and scrolls on beneath them. */
   padding-top: var(--grid-chrome-h, 0px);
+  /* A poster focused by the keyboard scrolls clear of the filters, not under them. */
+  scroll-padding-top: var(--grid-chrome-h, 0px);
   /* Flex owns the height now — override the inline pixel height the JS still sets. */
   height: auto !important;
 }
@@ -884,6 +893,14 @@ button:active,
 .gc-empty > .empty {
   margin: auto 0;
 }
+/* The grid's recycled cells keep theirs in place, shown only when needed. */
+.gc-noart {
+  position: absolute;
+  inset: 0;
+}
+.gc-noart[hidden] {
+  display: none;
+}
 .poster-placeholder {
   width: 100%;
   height: 100%;
@@ -1039,6 +1056,13 @@ button:active,
   width: 12px;
   height: 12px;
 }
+/* An 18px dot with a 40px reach: a near miss clears instead of opening the list. */
+.selpill-clear::after {
+  content: '';
+  position: absolute;
+  inset: -11px;
+  border-radius: 50%;
+}
 /* Alphabetical letter picker — secondary nav strip shown only for the Title A–Z
    sort. Plain text labels, horizontally scrollable, aligned to the same content
    edge as the chips/filter controls above it (no card, no backgrounds). */
@@ -1078,8 +1102,9 @@ button:active,
 }
 .letter-pick {
   flex: 0 0 auto;
-  min-width: 20px;
-  padding: 3px;
+  min-width: 24px;
+  /* Tall enough to hit (the strip scrolls, so an invisible reach would be clipped). */
+  padding: 11px 4px;
   border: none;
   background: none;
   color: var(--text-primary);
@@ -1096,14 +1121,6 @@ button:active,
 }
 .letter-pick.is-active {
   color: var(--accent-ink);
-}
-.chips {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  margin-bottom: 12px;
-  -webkit-overflow-scrolling: touch;
 }
 .chip {
   /* Active chip, and the offline-disabled dim, both ease instead of snapping. */
@@ -1204,9 +1221,15 @@ button:active,
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   padding-bottom: 6px;
   font-size: 20px;
   font-weight: 700;
+}
+/* A long name, even one unbroken word, wraps inside the row on a narrow phone. */
+.profile-name > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .profile-name img.badge {
   width: 32px;
@@ -1599,6 +1622,12 @@ button:active,
 }
 .detail-head.owned {
   margin-bottom: 46px;
+}
+/* A title page's poster is 130px wide (below), so 195px tall: the head matches
+   it, and the titles' bottom lines up with the poster's (the 165px above is the
+   Person page's 110px portrait). */
+.detail-head:has(.detail-poster) {
+  height: 195px;
 }
 @media (prefers-reduced-motion: reduce) {
   .detail-poster-wrap.owned .detail-disc-spin { animation: none; }
@@ -2022,9 +2051,17 @@ textarea.notes {
   background: var(--accent);
 }
 .link-btn {
+  position: relative;
   color: var(--accent-ink);
   font-size: 13px;
   padding: 6px;
+}
+/* A reach of about 44px around the words (Mark all watched sits in a row that
+   opens the season everywhere else). */
+.link-btn::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
 }
 
 /* ============================= Season view ============================= */
@@ -2239,11 +2276,13 @@ textarea.notes {
   );
   opacity: 0.32;
 }
-[data-theme='light'] .episode .thumb.no-still::before {
+/* Not for a watched episode: it dims to its own value below, under System light
+   as under Light (the mirror selector would otherwise outrank it). */
+[data-theme='light'] .episode:not(.is-watched) .thumb.no-still::before {
   opacity: 0.45;
 }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) .episode .thumb.no-still::before {
+  :root:not([data-theme='dark']) .episode:not(.is-watched) .thumb.no-still::before {
     opacity: 0.45;
   }
 }
@@ -4347,6 +4386,16 @@ body.modal-open {
 .ep-main:focus-visible {
   outline-offset: -2px;
 }
+/* Real buttons and links get the same ring, in place of the browser's own. The
+   tab bar clips anything outside its buttons, so there it is drawn inside. */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tabbar button:focus-visible {
+  outline-offset: -3px;
+}
 
 /* A popup takes focus as it opens (ui.js dialogA11y) so keyboard and screen
    readers land in it; the panel itself never shows a focus ring for that. */
@@ -4357,13 +4406,14 @@ body.modal-open {
   width: 100%;
   max-width: 520px;
   max-height: 88vh;
+  max-height: 88dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   background: var(--surface);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
-  padding: 20px var(--gutter) calc(20px + env(safe-area-inset-bottom));
+  padding: 20px var(--gutter-r) calc(20px + env(safe-area-inset-bottom)) var(--gutter-l);
   box-shadow: var(--shadow-sheet);
 }
 /* With a drag handle the handle wrap owns the top space; the modal's own top
@@ -4478,8 +4528,10 @@ body.modal-open {
   transition: background var(--dur-short) var(--ease-state),
     scale var(--dur-long) var(--ease-out);
 }
-.rewatch-step-btn:hover {
-  background: var(--border);
+@media (hover: hover) {
+  .rewatch-step-btn:hover {
+    background: var(--border);
+  }
 }
 .rewatch-step-btn:active {
   scale: var(--press-small);
@@ -5115,6 +5167,7 @@ button.srow:active {
 /* Round icon action at the end of a list row (revoke, delete). 36px, so it is
    a real target — the text links it replaced were about 26px tall. */
 .icon-act {
+  position: relative;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -5128,6 +5181,13 @@ button.srow:active {
   cursor: pointer;
   transition: background-color var(--dur-short) var(--ease-state);
 }
+/* Drawn at 36px, reached at 44px. */
+.icon-act::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+}
 .icon-act-ico {
   width: 17px;
   height: 17px;
@@ -5140,7 +5200,9 @@ button.srow:active {
   mask-size: contain;
 }
 .icon-act {
-  transition: scale var(--dur-long) var(--ease-out);
+  transition:
+    background-color var(--dur-short) var(--ease-state),
+    scale var(--dur-long) var(--ease-out);
 }
 .icon-act:active {
   scale: var(--press-small);
@@ -5854,6 +5916,7 @@ button.srow:active {
   align-items: center;
   justify-content: center;
   min-height: 50vh;
+  min-height: 50dvh;
 }
 .loader {
   display: flex;
@@ -5869,6 +5932,7 @@ button.srow:active {
    area instead of the whole viewport. */
 .loader--compact {
   min-height: 40vh;
+  min-height: 40dvh;
 }
 
 /* ---- Skeleton (ghost-frame) loading ---- */
@@ -7145,7 +7209,9 @@ img.mood-emoji {
 /* ===================== Tall bottom sheet ===================== */
 .modal.sheet {
   height: 90vh;
+  height: 90dvh;
   max-height: 90vh;
+  max-height: 90dvh;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -7168,7 +7234,7 @@ img.mood-emoji {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 2px var(--gutter) 8px;
+  padding: 2px var(--gutter-r) 8px var(--gutter-l);
 }
 .sheet-header h3 {
   margin: 0;
@@ -7208,13 +7274,13 @@ img.mood-emoji {
 .sheet-body {
   flex: 1;
   overflow-y: auto;
-  padding: 0 var(--gutter) var(--gutter);
+  padding: 0 var(--gutter-r) var(--gutter) var(--gutter-l);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain; /* keep scroll inside the sheet, no page bleed */
   touch-action: pan-y;
 }
 .sheet-footer {
-  padding: 12px var(--gutter) calc(12px + env(safe-area-inset-bottom));
+  padding: 12px var(--gutter-r) calc(12px + env(safe-area-inset-bottom)) var(--gutter-l);
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
@@ -7223,11 +7289,6 @@ img.mood-emoji {
 }
 
 /* Wrapping chip rows (filters) */
-.chips.wrap {
-  flex-wrap: wrap;
-  overflow-x: visible;
-}
-
 /* ===================== Dust It Off ===================== */
 .dust-group {
   margin-top: 4px;
@@ -7310,6 +7371,17 @@ img.mood-emoji {
   /* The disc logo turns slowly while loading (reuses the generic `spin`), rather
      than fading in and out. */
   animation: spin 2.4s linear infinite;
+}
+/* Still says "loading" with reduced motion: a slow breath instead of a turn. */
+@media (prefers-reduced-motion: reduce) {
+  .loader-logo {
+    animation: loader-breathe 2.4s ease-in-out infinite alternate;
+  }
+}
+@keyframes loader-breathe {
+  to {
+    opacity: 0.45;
+  }
 }
 
 /* ================= Poster aspect / max width ================= */
@@ -8603,6 +8675,14 @@ button.lw-card.lw-new:disabled:active {
 }
 .logo-idle-run .brand-logo { animation: logo-idle 2.4s ease-in-out; will-change: transform; }
 .logo-idle-run .brand-line { animation: brand-line-glow 2.4s ease-in-out; }
+/* The idle flourish is decoration: none with reduced motion (main.js doesn't
+   start it either). */
+@media (prefers-reduced-motion: reduce) {
+  .logo-idle-run .brand-logo,
+  .logo-idle-run .brand-line {
+    animation: none;
+  }
+}
 /* The disc slides LEFT into the glowing line (the "DVD slot") where the slot's
    edge masks it, waits ~400ms fully hidden inside, then re-emerges from that
    SAME line, sliding back RIGHT to its origin. Enter/exit are mirror
@@ -9425,6 +9505,13 @@ textarea.notes:focus,
   color: var(--accent-ink);
   font-weight: 600;
 }
+/* The words under a slider are its stops: each reaches about 40px tall. */
+.rcpt-blur-level::after,
+.dur-level::after {
+  content: '';
+  position: absolute;
+  inset: -7px -2px;
+}
 @media (prefers-reduced-motion: reduce) {
   .rcpt-blur-fill,
   .rcpt-blur-rail {
@@ -9471,6 +9558,7 @@ textarea.notes:focus,
      fly clear), which means anything that does not fit spills rather than
      scrolls. */
   max-height: 94vh;
+  max-height: 94dvh;
 }
 .rom-head {
   display: flex;
@@ -9742,8 +9830,10 @@ textarea.notes:focus,
     border-color var(--dur-short) var(--ease-state),
     scale var(--dur-long) var(--ease-out);
 }
-.kodi-play-btn:hover {
-  background: color-mix(in srgb, var(--kodi-blue) 18%, transparent);
+@media (hover: hover) {
+  .kodi-play-btn:hover {
+    background: color-mix(in srgb, var(--kodi-blue) 18%, transparent);
+  }
 }
 .kodi-play-btn:active {
   scale: var(--press-wide);
@@ -9985,6 +10075,7 @@ textarea.notes:focus,
   display: flex;
   flex-direction: column;
   max-height: 88vh;
+  max-height: 88dvh;
   overflow: hidden; /* the stage scrolls, not the whole sheet */
   padding: 16px 16px calc(14px + env(safe-area-inset-bottom));
 }
@@ -11258,6 +11349,7 @@ textarea.lend-message-input:focus {
    the body scrolls for unusually tall tickets. */
 .modal.sheet:has(.cine-sheet-body) {
   height: 90vh;
+  height: 90dvh;
   /* The ticket is cream paper with punched notches: on a white sheet both vanish. */
   background: var(--ticket-sheet);
 }
@@ -11573,6 +11665,7 @@ textarea.lend-message-input:focus {
    bottom padding, since a sticky child stops short of its scroller's padding. */
 .cine-new-modal {
   max-height: 94vh;
+  max-height: 94dvh;
   padding-bottom: 0;
 }
 .cine-new-foot {
@@ -11737,7 +11830,7 @@ textarea.lend-message-input:focus {
   border: none;
   background: transparent;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px; /* under 16px, iOS zooms the page in on focus */
   font-weight: 600;
   color: var(--ink);
   padding: 0;
@@ -12211,6 +12304,7 @@ textarea.lend-message-input:focus {
   color: var(--text-primary);
 }
 .np-act-link {
+  position: relative;
   flex: 0 0 auto;
   padding: 8px 10px;
   border: 0;
@@ -12221,6 +12315,12 @@ textarea.lend-message-input:focus {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+}
+.np-act-link::after {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
+  border-radius: var(--r-pill);
 }
 @media (prefers-reduced-motion: reduce) {
   .np-toast { transition: opacity var(--dur-short) var(--ease-state); }
@@ -12376,6 +12476,7 @@ textarea.lend-message-input:focus {
 /* ===================== Title / person pickers ===================== */
 .picker-list {
   max-height: 46vh;
+  max-height: 46dvh;
   overflow-y: auto;
   margin-top: 12px;
   display: flex;
@@ -12744,7 +12845,9 @@ textarea.lend-message-input:focus {
   width: 100%;
   max-width: 520px;
   height: 92vh;
+  height: 92dvh;
   max-height: 92vh;
+  max-height: 92dvh;
   background: var(--surface);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   box-shadow: var(--shadow-sheet);
@@ -12759,12 +12862,8 @@ textarea.lend-message-input:focus {
   flex: none;
   padding: 8px 16px 4px;
 }
-.sc-handle {
-  width: 40px;
-  height: 4px;
-  border-radius: var(--r-pill);
-  background: var(--border);
-  margin: 4px auto 0;
+.sc-header .sheet-handle-wrap {
+  padding: 4px 0;
 }
 .sc-skip {
   position: absolute;
@@ -13605,6 +13704,7 @@ textarea.lend-message-input:focus {
   display: grid;
   gap: 8px;
   max-height: 52vh;
+  max-height: 52dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
@@ -13662,6 +13762,20 @@ textarea.lend-message-input:focus {
 /* The crop FRAME is the viewport: it is locked to the target ratio and the
    image is panned and zoomed behind it, so there is no second rectangle to
    drag and the result is always exactly the ratio the slot needs. */
+.crop-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.crop-error {
+  max-width: 80%;
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+}
 .crop-stage {
   position: relative;
   /* Height-capped, not width-driven: the Confirm / Cancel pair must stay on

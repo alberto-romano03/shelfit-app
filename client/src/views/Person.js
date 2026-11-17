@@ -27,8 +27,10 @@ import {
   poster,
   cachedImg,
   segmentedControl,
+  confirmModal,
 } from '../ui.js';
 import { withBase } from '../basePath.js';
+import { isServerReachable, markDegraded } from '../network.js';
 import { collapsibleText } from '../collapsibleText.js';
 import { openPersonPicker } from '../pickers.js';
 import { t, locale, fmtNumber } from '../i18n.js';
@@ -205,6 +207,12 @@ export async function Person(container, params) {
     person = await loadApi.person(tmdbId);
   } catch (err) {
     if (isAbortError(err)) return;
+    if (!isServerReachable()) {
+      // Server unreachable: keep the skeleton, as the title pages do; the page
+      // is drawn again once it is back. A 4xx is a real error, below.
+      markDegraded();
+      return;
+    }
     container.innerHTML = '';
     container.append(
       stateBlock({
@@ -230,12 +238,17 @@ export async function Person(container, params) {
       toast(t('person.imageTooLarge'), 'bad');
       return;
     }
+    // Up to 8 MB on the way: say so while it goes.
+    toast(t('person.uploading'));
     try {
       const res = await api.uploadPersonPhoto(tmdbId, file);
       // A new version, so the new photo shows at once (and the old one stays cached).
       if (res && res.photo_url) person.photo_url = res.photo_url;
       toast(t('person.photoUpdated'), 'ok');
-      render();
+      // Only the two pictures change: the filter, the timeline and the scroll stay.
+      const imgs = container.querySelectorAll('img[data-person-photo]');
+      if (imgs.length === 2) imgs.forEach((img) => (img.src = withBase(person.photo_url)));
+      else render(); // the hero had no picture to swap (none before): draw it again
     } catch (err) {
       toast(err.message || t('person.uploadFailed'), 'bad');
     }
@@ -261,7 +274,8 @@ export async function Person(container, params) {
               onPick: async (p) => {
                 try {
                   await api.setFavoritePerson(p.tmdb_id);
-                  navigate(`/person/${p.tmdb_id}`);
+                  // In place of this one: Back must not land on the person replaced.
+                  navigate(`/person/${p.tmdb_id}`, { replace: true });
                 } catch (err) {
                   toast(err.message || t('person.changeFailed'), 'bad');
                 }
@@ -273,15 +287,25 @@ export async function Person(container, params) {
           icon: 'trash-2',
           label: t('person.removePerson'),
           danger: true,
-          onClick: async (_c, cl) => {
-            try {
-              await api.setFavoritePerson(null);
-              cl();
-              toast(t('person.removed'), 'ok');
-              navigate('/');
-            } catch (err) {
-              toast(err.message || t('person.removeFailed'), 'bad');
-            }
+          // Asked first, like removing a title; the question's button locks
+          // while it saves, and the page leaves history with the person.
+          onClick: (_c, cl) => {
+            cl();
+            confirmModal({
+              title: t('person.removeTitle', { name: person.name || t('person.fallbackName') }),
+              body: t('person.removeBody'),
+              confirmLabel: t('person.removePerson'),
+              onConfirm: async () => {
+                try {
+                  await api.setFavoritePerson(null);
+                } catch (err) {
+                  toast(err.message || t('person.removeFailed'), 'bad');
+                  throw err; // keeps the question open
+                }
+                toast(t('person.removed'), 'ok');
+                navigate('/', { replace: true });
+              },
+            });
           },
         },
       ];
@@ -321,7 +345,7 @@ export async function Person(container, params) {
     // --- Hero: their own portrait, blown up, blurred and dimmed into an ambient
     // wash (always about them, whatever their roles look like), fading into the
     // page like the title hero. Back and options float on it.
-    const heroImg = el('img', { class: 'person-hero-img', src: photoUrl, alt: '' });
+    const heroImg = el('img', { class: 'person-hero-img', src: photoUrl, alt: '', 'data-person-photo': '' });
     heroImg.addEventListener('error', () => heroImg.remove());
     const menuBtn = el('button', {
       class: 'icon-btn icon-btn--overlay',
@@ -344,7 +368,7 @@ export async function Person(container, params) {
 
     // --- Head: the portrait overlapping the hero (Detail's poster head), the
     // name growing upward beside it.
-    const photo = el('img', { src: photoUrl, alt: person.name || '' });
+    const photo = el('img', { src: photoUrl, alt: person.name || '', 'data-person-photo': '' });
     photo.addEventListener('error', () => photo.replaceWith(el('div', { class: 'person-photo-empty' })));
     const metaRow = (icon, text) =>
       text

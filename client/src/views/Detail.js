@@ -52,6 +52,7 @@ import {
   settingsRow,
   epLabel,
   pressable,
+  skelLine,
 } from '../ui.js';
 
 // Who this member can suggest a title to (see openSuggestSheet). Fetched when a
@@ -1409,6 +1410,7 @@ export async function renderCollectionSection(api, body, anchor, btc, d) {
     // titles open their real detail; a title not in the library opens a no-add
     // preview of the same detail view (with an Add option there).
     card.addEventListener('click', () => openCollectionTitle(p));
+    pressable(card, { label: p.title });
     cell.append(
       card,
       el('div', { class: 'coll-row-title', text: p.title }),
@@ -1700,11 +1702,21 @@ function openAddToListSheet(d) {
     modal.append(listWrap);
 
     async function load() {
-      listWrap.innerHTML = '';
+      // The rows' shapes while the lists load, so the sheet opens at its size
+      // instead of growing when they arrive.
+      listWrap.replaceChildren(
+        ...[0, 1].map(() =>
+          el('div', { class: 'settings-row', 'aria-hidden': 'true' }, [
+            skelLine({ width: '45%' }),
+            skelLine({ width: '44px', height: '26px' }),
+          ])
+        )
+      );
       let data;
       try {
         data = await api.lists(`?type=${d.type}&tmdbId=${d.tmdb_id}`);
       } catch {
+        listWrap.innerHTML = '';
         listWrap.append(
           stateBlock({
             kind: 'error',
@@ -1715,12 +1727,13 @@ function openAddToListSheet(d) {
         );
         return;
       }
+      listWrap.innerHTML = '';
       const lists = data.lists || [];
       if (!lists.length) {
         listWrap.append(el('div', { class: 'muted', text: t('detail.noLists') }));
       }
       for (const l of lists) {
-        const cb = el('input', { type: 'checkbox' });
+        const cb = el('input', { type: 'checkbox', role: 'switch', 'aria-label': l.name });
         cb.checked = !!l.contains;
         cb.addEventListener('change', async () => {
           try {

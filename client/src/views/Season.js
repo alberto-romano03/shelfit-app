@@ -829,7 +829,7 @@ export default async function Season(container, params) {
         if (gap > 0) {
           // The catch up asks first; the status news is not lost meanwhile.
           if (res.status_changed) toast(t('finish.started'), 'ok');
-          promptCatchUp(ep, gap);
+          promptCatchUp(ep, gap, res);
         }
         else offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
       } catch (err) {
@@ -866,8 +866,14 @@ export default async function Season(container, params) {
     });
   }
 
-  function promptCatchUp(ep, count) {
+  // `res`: the mark's own answer. Declining the catch up still offers what the
+  // mark itself would have (resume a paused or shelved series).
+  function promptCatchUp(ep, count, res) {
+    let accepted = false;
     confirmModal({
+      onClose: () => {
+        if (!accepted) offerShelve(res, { id, onShelved: () => navigate(location.pathname, { replace: true }) });
+      },
       title: t('season.catchUpTitle'),
       body: t('season.catchUpBody', { n: count }),
       confirmLabel: t('season.markN', { n: count }),
@@ -877,6 +883,7 @@ export default async function Season(container, params) {
       onConfirm: async (close) => {
             try {
               const res = await api.catchUpEpisodes(id, data.season_number, ep.episode_number);
+              accepted = true; // its own answer brings its own offer, below
               close();
               if (res.caught_up) confetti.trigger(); // catching up finished the series
               const reload = () => navigate(location.pathname, { replace: true });

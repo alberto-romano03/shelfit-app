@@ -25,7 +25,7 @@
 
 import { tileFor, learnPosterHue } from './posterColour.js';
 import { createApi, isAbortError } from './api.js';
-import { el, stateBlock, longPress } from './ui.js';
+import { el, stateBlock, longPress, scrollMotion } from './ui.js';
 import { imageCache } from './imageCache.js';
 import { isServerReachable, markDegraded } from './network.js';
 import { afterTransition } from './router.js';
@@ -144,13 +144,24 @@ function createCell(onItemClick, onItemHold) {
   // Never hold a frame on decoding: a page change paints its first frame at once
   // and the posters (already in memory) land a moment later.
   img.decoding = 'async';
+  // A title with no poster (none known, or its file missing) shows its name on
+  // the app's placeholder, as a poster elsewhere does, never a blank box.
+  const noArt = el('div', { class: 'poster-placeholder gc-noart', 'aria-hidden': 'true' });
+  noArt.hidden = true;
+  const showNoArt = () => {
+    if (!currentItem) return;
+    noArt.textContent = currentItem.title_it || currentItem.title_orig || t('ui.noImage');
+    noArt.hidden = false;
+    node.classList.remove('skeleton', 'tile-wait');
+  };
   img.addEventListener('error', () => {
     img.removeAttribute('src');
+    showNoArt();
   });
   const badge = el('div', { class: 'rating-badge' });
   badge.style.display = 'none';
   const retryBtn = el('button', { class: 'gc-retry', type: 'button', text: '↻', 'aria-label': t('common.retry') }); // the glyph alone says nothing
-  const node = el('div', { class: 'poster-card gc-cell' }, [img, badge, retryBtn]);
+  const node = el('div', { class: 'poster-card gc-cell' }, [img, noArt, badge, retryBtn]);
   node.tabIndex = -1; // the grid's roving focus picks the one in Tab order
 
   let currentItem = null;
@@ -183,6 +194,7 @@ function createCell(onItemClick, onItemHold) {
     node.setAttribute('aria-label', item.title_it || item.title_orig || item.title || '');
     node.removeAttribute('aria-hidden');
     node.classList.remove('is-skel', 'is-retry', 'poster-tile', 'tile-wait');
+    noArt.hidden = true;
     if (item.rating) {
       badge.style.display = '';
       badge.innerHTML = `★ ${item.rating}`;
@@ -210,7 +222,10 @@ function createCell(onItemClick, onItemHold) {
     } else {
       node.classList.add('skeleton');
     }
-    if (!item.poster_url) return;
+    if (!item.poster_url) {
+      showNoArt();
+      return;
+    }
     imageCache
       .load(item.poster_url)
       .then((u) => {
@@ -232,6 +247,7 @@ function createCell(onItemClick, onItemHold) {
   }
   function showSkeleton() {
     currentItem = null;
+    noArt.hidden = true;
     retryHandler = null;
     delete node.dataset.itemId;
     // A placeholder: nothing to press or read.
@@ -246,6 +262,7 @@ function createCell(onItemClick, onItemHold) {
   }
   function showRetry(fn) {
     currentItem = null;
+    noArt.hidden = true;
     retryHandler = fn;
     delete node.dataset.itemId;
     // Only its retry button is a control.
@@ -272,7 +289,7 @@ function createDivider() {
 // `.el`, then calls `.load(filter)` on mount and on every chip/genre/sort change.
 // `onUpdate` gets the same summary as `.load` when a background check swaps in
 // newer content.
-export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup, onUpdate }) {
+export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup, onUpdate, onClearGenre }) {
   const ac = new AbortController();
   const api = createApi(ac.signal);
 
@@ -438,7 +455,7 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
   function scrollToGroup(label) {
     if (!rows.length) return;
     const row = rows.find((r) => r.kind === 'div' && r.label === label);
-    if (row) scroller.scrollTo({ top: row.y, behavior: 'smooth' });
+    if (row) scroller.scrollTo({ top: row.y, behavior: scrollMotion() });
   }
 
   function applyCell(cell, idx) {
@@ -610,6 +627,26 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
     if (s === store) render(); // ignore late pages from a superseded filter
   }
 
+  // Nothing to show. With a filter on, it's the filter (and, for a genre, the
+  // way to drop it); with none, this shelf is empty, said for films or series.
+  function emptyState() {
+    const f = currentFilter;
+    if (f.genre || (f.status && f.status !== 'all') || f.owned) {
+      return {
+        icon: 'shelving-unit',
+        title: t('grid.emptyFiltered'),
+        detail: t('grid.emptyFilteredDetail'),
+        action:
+          f.genre && onClearGenre ? { label: t('grid.clearGenre'), icon: 'x', onClick: onClearGenre } : undefined,
+      };
+    }
+    return {
+      icon: 'shelving-unit',
+      title: t('grid.empty'),
+      detail: t(type === 'show' ? 'grid.emptyDetailShows' : 'grid.emptyDetail'),
+    };
+  }
+
   function showEmpty(on, msg) {
     emptyNode.style.display = on ? '' : 'none';
     if (on) {
@@ -617,11 +654,9 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
       emptyNode.append(
         msg && typeof msg === 'object'
           ? stateBlock(msg)
-          : stateBlock({
-              icon: 'shelving-unit',
-              title: msg || t('grid.empty'),
-              detail: t('grid.emptyDetail'),
-            })
+          : msg
+            ? stateBlock({ icon: 'shelving-unit', title: msg, detail: t('grid.emptyDetail') })
+            : stateBlock(emptyState())
       );
       spacer.style.height = '0px';
     }

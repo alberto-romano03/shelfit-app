@@ -9,6 +9,19 @@ import { withBase } from './basePath.js';
 import { forgetCurrentUser } from './userScope.js';
 import { t } from './i18n.js';
 
+// What a failed request says, in the app's language: the browser's own words for
+// a lost connection ("Failed to fetch", "Load failed") and a bare "HTTP 500" are
+// English and say nothing useful. The server's own message, when it sends one,
+// is kept. A transport failure keeps no status, as before (callers test that).
+function httpMessage(status) {
+  return status >= 500 ? t('api.serverError') : t('api.httpError', { status });
+}
+function unreachable(cause) {
+  const err = new Error(t('api.unreachable'));
+  err.cause = cause;
+  return err;
+}
+
 // True for fetch aborts (navigation teardown) — callers ignore these silently.
 export function isAbortError(err) {
   return !!err && (err.name === 'AbortError' || err.code === 20);
@@ -100,7 +113,7 @@ function buildApi(signal) {
         // unreachable, but a single failure isn't proof — let network.js confirm
         // with a health probe instead of flipping the UI offline on this alone.
         reportServerSuspect();
-        throw err;
+        throw unreachable(err);
       }
     }
     // A service-worker cached fallback is NOT proof the server is up; only real
@@ -125,7 +138,7 @@ function buildApi(signal) {
         forgetCurrentUser();
         window.location.href = withBase('/login');
       }
-      const err = new Error((data && data.error) || `HTTP ${res.status}`);
+      const err = new Error((data && data.error) || httpMessage(res.status));
       err.status = res.status;
       err.data = data;
       throw err;
@@ -256,7 +269,7 @@ function buildApi(signal) {
       const res = await fetch(withBase('/api/profile/photo'), opts);
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const err = new Error((data && data.error) || `HTTP ${res.status}`);
+        const err = new Error((data && data.error) || httpMessage(res.status));
         err.status = res.status;
         throw err;
       }
@@ -294,7 +307,7 @@ function buildApi(signal) {
       const res = await fetch(withBase(`/api/persons/${tmdbId}/photo`), opts);
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const err = new Error((data && data.error) || `HTTP ${res.status}`);
+        const err = new Error((data && data.error) || httpMessage(res.status));
         err.status = res.status;
         throw err;
       }

@@ -76,7 +76,13 @@ export async function openAddToHome() {
     deferredPrompt = null; // a prompt can only be used once
     return;
   }
-  // iOS (and any browser with no native prompt): show instructions.
+  // Not iOS and no prompt (already used, or this browser never offers one): the
+  // Safari steps would be wrong here; point to the browser's own menu instead.
+  if (!isIOS()) {
+    toast(t('a2hs.useMenu'));
+    return;
+  }
+  // iOS: show the Share-sheet instructions.
   openSheet(
     (sheet, close) => {
       sheet.append(

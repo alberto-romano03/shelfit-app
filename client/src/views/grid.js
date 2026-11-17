@@ -25,6 +25,7 @@ import {
   segmentedBar,
   stateBlock,
   selectPill,
+  pressable,
 } from '../ui.js';
 import { isServerReachable, markDegraded } from '../network.js';
 import { pget, planKey } from '../persist.js';
@@ -264,6 +265,12 @@ export async function gridView(container, type) {
     onItemHold: openPosterMenu,
     onActiveGroup: highlightLetter,
     onUpdate: applyViewInfo, // a background check swapped in newer content
+    // The empty state's way out when only the genre is hiding titles.
+    onClearGenre: () => {
+      state.genre = '';
+      genrePill.set('');
+      renderGrid();
+    },
   });
   const simpleGrid = skelGrid(12);
 
@@ -486,6 +493,7 @@ export async function gridView(container, type) {
       }
     } catch (err) {
       if (isAbortError(err)) return; // navigated away
+      if (seq !== renderSeq) return; // an older chip's failure: the newer one owns the grid
       if (!isServerReachable()) {
         // Transport failure OR a 5xx from the reverse proxy while the backend is
         // down (api.js flags both) → switch the whole view to offline mode.
@@ -612,7 +620,7 @@ export async function gridView(container, type) {
         card.append(el('div', { class: 'rating-badge', html: `★ ${it.rating}` }));
       }
       card.addEventListener('click', () => openDetail(`/detail/${it.id}`));
-      return card;
+      return pressable(card, { label: it.title });
     });
     crossfadeSwap(() => {
       simpleGrid.className = 'grid';
