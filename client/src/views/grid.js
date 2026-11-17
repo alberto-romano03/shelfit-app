@@ -495,7 +495,7 @@ export async function gridView(container, type) {
       }
       setMode('simple');
       showLetterPicker(false);
-      simpleGrid.className = 'grid';
+      simpleGrid.className = 'grid grid-empty';
       simpleGrid.innerHTML = '';
       simpleGrid.append(
         stateBlock({
@@ -572,7 +572,7 @@ export async function gridView(container, type) {
       // UNLOADED (null) so a later render (chip tap / reconnect) retries.
       if (state.status === 'plan_to_watch') {
         crossfadeSwap(() => {
-          simpleGrid.className = 'grid';
+          simpleGrid.className = 'grid grid-empty';
           simpleGrid.innerHTML = '';
           simpleGrid.append(
             stateBlock({
@@ -594,7 +594,7 @@ export async function gridView(container, type) {
     setMode('simple');
     if (!planItems.length) {
       crossfadeSwap(() => {
-        simpleGrid.className = 'grid';
+        simpleGrid.className = 'grid grid-empty';
         simpleGrid.innerHTML = '';
         simpleGrid.append(
           stateBlock({

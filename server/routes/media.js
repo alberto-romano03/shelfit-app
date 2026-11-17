@@ -61,7 +61,9 @@ function clampInt(v, def, min, max) {
 // value, 0 meaning unrated (which sorts last). Only the title/rating sorts group.
 function gridGroupKey(item, sort) {
   if (sort === 'title') {
-    const ch = (item.title_it || '').trim().charAt(0).toUpperCase();
+    // Accents off first: the list sorts "È stata la mano di Dio" among the Es,
+    // so its divider must be E too, not '#' in the middle of them.
+    const ch = (item.title_it || '').trim().normalize('NFD').replace(/\p{M}/gu, '').charAt(0).toUpperCase();
     return /[A-Z]/.test(ch) ? ch : '#';
   }
   return item.rating ? item.rating : 0;

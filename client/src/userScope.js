@@ -10,6 +10,9 @@
 // the right cache synchronously, before any request has answered.
 
 const LAST_UID_KEY = 'shelfit:last-uid';
+// Per-member keys a sign-out keeps (persist.js names): device-level knowledge
+// about the member, not their library.
+const KEEP_ON_SIGN_OUT = ['showcase:seen'];
 // Keys from before per-member storage. Removed once, on the first start of this
 // version, so a former single-user cache can't surface under anyone's profile.
 const LEGACY_RE = /^shelfit:(profile|stats|home|plan|discover|showcase|search|kodi-enabled|oc):/;
@@ -113,7 +116,10 @@ function lastPrefix() {
 // logout response clears the uid cookie.
 export async function forgetCurrentUser(prefix = userPrefix() || lastPrefix()) {
   if (prefix) {
-    removeKeys(localStorage, (k) => k.startsWith(prefix));
+    // Kept: that this member has seen the first-run tour, or it would open again
+    // after every profile switch on a shared device.
+    const keep = new Set(KEEP_ON_SIGN_OUT.map((k) => prefix + k));
+    removeKeys(localStorage, (k) => k.startsWith(prefix) && !keep.has(k));
     removeKeys(sessionStorage, (k) => k.startsWith(prefix));
   }
   try {

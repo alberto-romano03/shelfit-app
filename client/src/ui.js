@@ -219,7 +219,10 @@ export function typewriterPlaceholder(el, text, { speed = 55, startDelay = 320 }
 //
 // `danger` gives the row the single destructive treatment used app-wide; put
 // such a row last in its group, after settingsRule().
+let srowSeq = 0; // ids tying a switch to its row's words
+
 export function settingsRow(opts = {}) {
+  const rowId = `srow-${++srowSeq}`;
   const isSwitch = opts.control === 'switch';
   // A row holding a switch or its own round action isn't itself a button: only that
   // control is tappable, and a button can't hold another one.
@@ -232,16 +235,22 @@ export function settingsRow(opts = {}) {
   node.append(lucideIcon(opts.icon || 'circle-check', 'srow-ico'));
 
   const main = el('div', { class: 'srow-main' }, [
-    el('div', { class: 'srow-label', text: opts.label || '' }),
+    el('div', { class: 'srow-label', id: `${rowId}-label`, text: opts.label || '' }),
   ]);
-  const sub = opts.sub ? el('div', { class: 'srow-sub', text: opts.sub }) : null;
+  const sub = opts.sub ? el('div', { class: 'srow-sub', id: `${rowId}-sub`, text: opts.sub }) : null;
   if (sub) main.append(sub);
   node.append(main);
 
   const end = el('div', { class: 'srow-end' });
   let input = null;
   if (isSwitch) {
-    input = el('input', { type: 'checkbox' });
+    // The row's own words name the switch (the label wraps only the slider).
+    input = el('input', {
+      type: 'checkbox',
+      role: 'switch',
+      'aria-labelledby': `${rowId}-label`,
+      'aria-describedby': sub ? `${rowId}-sub` : null,
+    });
     input.checked = !!opts.checked;
     input.addEventListener('change', () => {
       if (opts.onChange) opts.onChange(input.checked);
@@ -260,18 +269,41 @@ export function settingsRow(opts = {}) {
 
   // A verb row reports where it lives: spinner while working, then a short
   // result that clears itself. No separate results block, no toast needed.
+  // holdMs 0 keeps the result until the next one.
   let clearTimer = null;
+  let spin = null; // the spinner while busy
+  let locked = false; // what setDisabled() asked for; busy(false) gives it back
+  // An emptied end slot gets the row's chevron back.
+  const restoreEnd = () => {
+    if (opts.control === 'chevron' && !end.firstChild) end.append(lucideIcon('chevron-right', 'srow-chev'));
+  };
   function report(text, holdMs = 2600) {
     clearTimeout(clearTimer);
     clear(end);
+    spin = null;
     end.textContent = text || '';
-    if (text) clearTimer = setTimeout(() => (end.textContent = ''), holdMs);
+    if (!text) restoreEnd();
+    else if (holdMs > 0) {
+      clearTimer = setTimeout(() => {
+        end.textContent = '';
+        restoreEnd();
+      }, holdMs);
+    }
   }
+  // Ending the busy phase takes away only the spinner: a result reported while
+  // working stays on screen, and the row is as enabled as it was before.
   function busy(on) {
-    clearTimeout(clearTimer);
-    clear(end);
-    if (on) end.append(lucideIcon('refresh-cw', 'srow-spin'));
-    node.disabled = !!on && tag === 'button';
+    if (on) {
+      clearTimeout(clearTimer);
+      clear(end);
+      spin = lucideIcon('refresh-cw', 'srow-spin');
+      end.append(spin);
+    } else {
+      if (spin) spin.remove();
+      spin = null;
+      restoreEnd();
+    }
+    if (tag === 'button') node.disabled = on ? true : locked;
   }
 
   if (!isSwitch && opts.onClick) {
@@ -311,9 +343,10 @@ export function settingsRow(opts = {}) {
     setDisabled(v) {
       // A switch row is a <div>, where `disabled` means nothing: dim the row and
       // disable the checkbox instead. A verb row is a real <button>.
-      node.classList.toggle('is-disabled', !!v);
-      if (input) input.disabled = !!v;
-      else node.disabled = !!v;
+      locked = !!v;
+      node.classList.toggle('is-disabled', locked);
+      if (input) input.disabled = locked;
+      else node.disabled = locked || !!spin;
     },
   };
 }
@@ -362,6 +395,7 @@ export function confirmModal({
   cancelLabel = t('common.cancel'),
   cancelIcon = 'x',
   onConfirm,
+  onClose, // told once the question has gone, answered or not
 } = {}) {
   return openModal(
     (modal, close) => {
@@ -391,7 +425,7 @@ export function confirmModal({
         ])
       );
     },
-    { handle: true }
+    { handle: true, onClose }
   );
 }
 
@@ -816,7 +850,9 @@ export function skelHero({ cls = '', blankRight = true } = {}) {
       html: icons.back,
       'aria-label': t('common.back'),
       style: { position: 'absolute', top, left: '8px', zIndex: 3 },
-      onClick: () => history.back(),
+      // The router's Back (Home when there is no earlier page); loaded on use, as
+      // the router itself imports this module.
+      onClick: () => import('./router.js').then((m) => m.goBack()),
     }),
     blankRight
       ? el('div', { class: 'icon-btn icon-btn--overlay is-blank', style: { position: 'absolute', top, right: '8px', zIndex: 3 } })
@@ -1135,8 +1171,10 @@ export function fadeSwap(node, mutate) {
 export function setLabel(node, text) {
   if (!node) return;
   // An action button is [glyph][span] now, so writing textContent on the button
-  // itself would delete the glyph. When there is a label span, that is the label.
-  const target = node.querySelector(':scope > span') || node;
+  // itself would delete the glyph. When there is a label span, that is the label;
+  // a lucideIcon() glyph is a span too (a masked one), so it is skipped.
+  const target =
+    [...node.children].find((c) => c.tagName === 'SPAN' && !c.style.maskImage && !c.style.webkitMaskImage) || node;
   const next = String(text == null ? '' : text);
   if (target.textContent === next) return;
   fadeSwap(node, () => {
@@ -1452,7 +1490,7 @@ export function segmentedBar({
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let dialogSeq = 0;
-function dialogA11y(panel, backdrop) {
+export function dialogA11y(panel, backdrop) {
   const before = document.activeElement;
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-modal', 'true');

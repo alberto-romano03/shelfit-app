@@ -3,12 +3,13 @@
 // are added to shelfIt. One title at a time: poster, title/year, and the shared
 // watch-status selector pre-filled with the sync's proposal. Arrows and swipe
 // (shared gesture) navigate; a fixed confirm button commits every reviewed
-// status at once. Closing without confirming discards the discoveries.
+// status at once. Closing without confirming discards the discoveries (until the
+// next sync finds them again), so a close asks first.
 
 import { trackSheet } from './sheetStack.js';
 import { api } from './api.js';
 import { navigate } from './router.js';
-import { el, icons, poster, toast, lockScroll, unlockScroll, setLabel, lucideIcon } from './ui.js';
+import { el, icons, poster, toast, lockScroll, unlockScroll, setLabel, lucideIcon, confirmModal, dialogA11y } from './ui.js';
 import { dialogEnter, dialogLeave } from './dialogMotion.js';
 import { attachSwipe } from './swipe.js';
 import { createStatusSelect } from './statusSelect.js';
@@ -86,19 +87,48 @@ export function openKodiReview(discoveries) {
   const modal = el('div', { class: 'modal ksync-modal' });
   backdrop.append(modal);
   backdrop.addEventListener('click', (e) => {
-    if (e.target === backdrop) close();
+    if (e.target === backdrop) requestClose();
   });
 
   let closing = false;
   let untrack = () => {};
+  let restoreFocus = () => {};
   function close() {
     if (closing) return;
     closing = true;
     untrack();
+    restoreFocus();
     dialogLeave(modal, backdrop, () => {
       backdrop.remove();
       unlockScroll();
       reviewOpen = false;
+    });
+  }
+  // Every way out but Add (the X, a tap outside, Back, Escape) would drop the
+  // whole batch, which the server has already handed over: ask first. Keep
+  // reviewing puts the sheet back as it was, Back gesture included.
+  let asking = false;
+  function requestClose() {
+    if (closing || asking) return;
+    asking = true;
+    untrack();
+    untrack = () => {};
+    let discard = false;
+    confirmModal({
+      title: t('kodiSync.discardTitle'),
+      body: t('kodiSync.discardBody', { n: items.length }),
+      confirmLabel: t('kodiSync.discard'),
+      confirmIcon: 'x',
+      cancelLabel: t('kodiSync.keepReviewing'),
+      onConfirm: () => {
+        discard = true;
+      },
+      // Then the sheet closes, or carries on as it was.
+      onClose: () => {
+        asking = false;
+        if (discard) close();
+        else untrack = trackSheet(requestClose);
+      },
     });
   }
 
@@ -111,7 +141,7 @@ export function openKodiReview(discoveries) {
       class: 'icon-btn ksync-close',
       html: icons.close,
       'aria-label': t('common.close'),
-      onClick: close,
+      onClick: requestClose,
     }),
   ]);
   const summary = el('div', { class: 'ksync-summary', text: summaryText(nMovies, nShows) });
@@ -137,7 +167,9 @@ export function openKodiReview(discoveries) {
     lucideIcon('plus', 'btn-lucide'),
     confirmLabel,
   ]);
-  const footer = el('div', { class: 'ksync-footer' }, [confirmBtn]);
+  // Why Add is still off: it waits until the titles have been looked through.
+  const gateHint = el('div', { class: 'ksync-hint muted', text: t('kodiSync.gateHint') });
+  const footer = el('div', { class: 'ksync-footer' }, [confirmBtn, gateHint]);
 
   modal.append(head, summary, stage, progress, footer);
 
@@ -147,6 +179,7 @@ export function openKodiReview(discoveries) {
     nextBtn.disabled = index === items.length - 1;
     confirmLabel.textContent = t('kodiSync.addTitles', { n: items.length });
     confirmBtn.disabled = !hasNavigated;
+    gateHint.hidden = hasNavigated;
   }
 
   function buildCard() {
@@ -232,8 +265,14 @@ export function openKodiReview(discoveries) {
   confirmBtn.addEventListener('click', commit);
 
   lockScroll();
-  untrack = trackSheet(close);
+  untrack = trackSheet(requestClose);
   document.body.append(backdrop);
   dialogEnter(modal, backdrop);
   mount();
+  // A dialog to a keyboard or screen reader too: named by its heading, focus
+  // moved in and kept there, and given back when it closes.
+  const heading = head.querySelector('.ksync-heading');
+  heading.id = 'ksync-title';
+  restoreFocus = dialogA11y(modal, backdrop);
+  modal.setAttribute('aria-labelledby', heading.id);
 }

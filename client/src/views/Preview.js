@@ -6,7 +6,7 @@
 import { collapsibleText } from '../collapsibleText.js';
 import { followTitle } from '../headerTitle.js';
 import { createApi, isAbortError } from '../api.js';
-import { navigate, onCleanup } from '../router.js';
+import { navigate, onCleanup, goBack } from '../router.js';
 import { isServerReachable, markDegraded } from '../network.js';
 import { openAddModal } from './Search.js';
 import { renderCollectionSection } from './Detail.js';
@@ -106,7 +106,7 @@ export default async function Preview(container, params) {
         left: '8px',
         zIndex: 3,
       },
-      onClick: () => history.back(),
+      onClick: goBack,
     })
   );
 
@@ -154,9 +154,11 @@ export default async function Preview(container, params) {
           overview: meta.overview,
         },
         {
-          onAdded: (newId) => {
-            if (newId) navigate(`/detail/${newId}`, { replace: true });
-            else toast(t('preview.addedToLibrary'), 'ok');
+          onAdded: (newId, close) => {
+            if (newId) {
+              close();
+              navigate(`/detail/${newId}`, { replace: true });
+            } else toast(t('preview.addedToLibrary'), 'ok');
           },
         }
       ),

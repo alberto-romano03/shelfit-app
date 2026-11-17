@@ -8,7 +8,7 @@ import { initRouter, navigate, start } from './router.js';
 import { el, icons, playOnce } from './ui.js';
 import { startNetworkMonitor, wasDegraded, clearDegraded } from './network.js';
 import { initKodi } from './kodi.js';
-import { initNowPlaying } from './nowPlaying.js';
+import { initNowPlaying, dismissNowPlaying } from './nowPlaying.js';
 import { openKodiReviewFromPending } from './kodiSync.js';
 import { withBase } from './basePath.js';
 import { initInstallPrompt } from './addToHome.js';
@@ -92,6 +92,14 @@ const searchBtn = el('button', {
   html: icons.search,
   onClick: () => {
     playOnce(searchBtn, 'search-look');
+    // Already on Search: back to its field, keeping what was typed.
+    if (currentPath === '/search') {
+      const field = document.querySelector('.view input[type="search"]');
+      if (field) {
+        field.focus();
+        return;
+      }
+    }
     navigate('/search');
   },
 });
@@ -140,7 +148,9 @@ const tabButtons = TABS.map((tab) => {
     onClick: () => {
       resetGridSection(tab.path);
       if (tab.path === '/upcoming') resetUpcoming();
-      navigate(tab.path, { nav: 'tab' });
+      // The tab already on screen goes back to its top in place, without a new
+      // history entry (three taps on Home must not need three Backs).
+      navigate(tab.path, { nav: 'tab', replace: currentPath === tab.path });
     },
   });
   btn.append(label);
@@ -189,6 +199,9 @@ initRouter({
   ],
   onChange: (path) => {
     settleDeferredOnRoute(path);
+    // A new page, not the same one reloading (a Now Playing action reloads the
+    // title it changed, and its Undo must stay on screen).
+    if (path !== currentPath) dismissNowPlaying();
     // Track the route history (one step back) for the Settings-icon toggle.
     if (path !== currentPath) previousPath = currentPath;
     currentPath = path;

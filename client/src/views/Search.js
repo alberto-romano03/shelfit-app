@@ -914,7 +914,9 @@ export default async function Search(container) {
         return;
       }
       if (!isServerReachable()) {
-        // Server unreachable; keep the ghost rows, recovery re-renders.
+        // Server unreachable; keep the ghost rows, recovery re-renders. The
+        // re-render mounts Search afresh, so hand it the query to run again.
+        pendingQuery = q;
         markDegraded();
         showSkeleton();
         return;
@@ -1010,8 +1012,9 @@ export default async function Search(container) {
 // Shared "Add to library" dialog. Title + collapsible summary, a separator, then
 // the same status bento used on the detail page — tapping a status adds the
 // title with it. onAdded runs on the first add (collection views handle it in
-// place); onChange runs on every change of whether the title is in the library,
-// with its library id or null (Search repaints the cards showing that title).
+// place); onChange runs on every change the sheet makes (added, a new status,
+// removed again), with the library id or null (Search repaints the cards showing
+// that title, a collection repaints itself).
 export function openAddModal(r, { onAdded, onChange } = {}) {
   openModal((modal, close) => {
     // --- Title + type ---
@@ -1049,7 +1052,9 @@ export function openAddModal(r, { onAdded, onChange } = {}) {
             clearHighlights();
             cell.classList.add('selected');
             toast(t('search.addedToLibrary'), 'ok');
-            if (onAdded) onAdded(itemId);
+            // onAdded may leave for the new title's page: it gets `close` so the
+            // sheet doesn't stay open over it (a second tap would delete the title).
+            if (onAdded) onAdded(itemId, close);
             if (onChange) onChange(itemId);
           } else if (status === currentStatus) {
             if (adopted) {
@@ -1072,6 +1077,7 @@ export function openAddModal(r, { onAdded, onChange } = {}) {
             clearHighlights();
             cell.classList.add('selected');
             toast(t('search.statusUpdated'), 'ok');
+            if (onChange) onChange(itemId);
           }
         } catch (err) {
           if (err.status === 409 && err.data && err.data.item_id) {

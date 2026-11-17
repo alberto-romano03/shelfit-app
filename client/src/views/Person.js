@@ -11,7 +11,7 @@
 // /api/persons/:id/photo. The client never talks to TMDB or its CDN.
 
 import { api, createApi, isAbortError } from '../api.js';
-import { navigate, openDetail, onCleanup } from '../router.js';
+import { navigate, openDetail, onCleanup, goBack } from '../router.js';
 import {
   el,
   skelOverview,
@@ -158,7 +158,7 @@ function personSkeleton() {
           class: 'icon-btn icon-btn--overlay',
           html: icons.back,
           'aria-label': t('common.back'),
-          onClick: () => history.back(),
+          onClick: goBack,
         }),
       ]),
       el('div', { class: 'person-hero-btn person-hero-btn--right' }, [
@@ -231,7 +231,9 @@ export async function Person(container, params) {
       return;
     }
     try {
-      await api.uploadPersonPhoto(tmdbId, file);
+      const res = await api.uploadPersonPhoto(tmdbId, file);
+      // A new version, so the new photo shows at once (and the old one stays cached).
+      if (res && res.photo_url) person.photo_url = res.photo_url;
       toast(t('person.photoUpdated'), 'ok');
       render();
     } catch (err) {
@@ -312,8 +314,9 @@ export async function Person(container, params) {
     container.innerHTML = '';
     container.append(fileInput);
 
-    // ?v busts the cache so a freshly uploaded photo shows immediately.
-    const photoUrl = withBase(`/api/persons/${tmdbId}/photo?v=${Date.now()}`);
+    // Versioned by the server (the file's change time), so the browser keeps it
+    // between visits and a new upload is a new URL.
+    const photoUrl = withBase(person.photo_url || `/api/persons/${tmdbId}/photo`);
 
     // --- Hero: their own portrait, blown up, blurred and dimmed into an ambient
     // wash (always about them, whatever their roles look like), fading into the
@@ -333,7 +336,7 @@ export async function Person(container, params) {
           class: 'icon-btn icon-btn--overlay',
           html: icons.back,
           'aria-label': t('common.back'),
-          onClick: () => history.back(),
+          onClick: goBack,
         }),
       ]),
       el('div', { class: 'person-hero-btn person-hero-btn--right' }, [menuBtn]),

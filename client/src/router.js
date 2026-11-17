@@ -287,6 +287,16 @@ export function navigate(path, { replace = false, transition = true, nav = 'push
   render(path, { nav, transition });
 }
 
+// A page's own Back arrow. With an earlier page of the app in history it goes
+// there; opened straight on a deep link (a push notification, a shared link)
+// there is none, and plain history.back() would do nothing or leave the app, so
+// it goes Home instead.
+export function goBack() {
+  const index = history.state && Number.isFinite(history.state.index) ? history.state.index : historyIndex;
+  if (index > 0) history.back();
+  else navigate('/', { replace: true });
+}
+
 // Open a title's detail page.
 export function openDetail(path) {
   navigate(path);

@@ -7,7 +7,7 @@
 
 import { deferred } from '../undoable.js';
 import { createApi, isAbortError } from '../api.js';
-import { onCleanup } from '../router.js';
+import { onCleanup, goBack } from '../router.js';
 import {
   el,
   icons,
@@ -194,7 +194,7 @@ export default async function Lists(container) {
 
   const editBtn = el('button', { class: 'icon-btn', type: 'button' });
   const head = el('div', { class: 'lp-head' }, [
-    el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
+    el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: goBack }),
     el('h2', { class: 'lp-title', text: t('home.myLists') }),
     editBtn,
   ]);

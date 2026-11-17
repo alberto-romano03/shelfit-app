@@ -15,10 +15,13 @@ export function markTitleChanged(itemId) {
 
 // `signature()` sums up what the page shows now; `fetchSignature()` asks the
 // server for the same. Call it while the page is mounting (it registers cleanup).
-export function keepTitleFresh(itemId, { signature, fetchSignature }) {
+// `beforeReload()`, if given, runs just before (Detail drops its retained copy).
+export function keepTitleFresh(itemId, { signature, fetchSignature, beforeReload }) {
   let alive = true;
   const reload = () => {
-    if (alive) navigate(location.pathname, { replace: true });
+    if (!alive) return;
+    if (beforeReload) beforeReload();
+    navigate(location.pathname, { replace: true });
   };
   const onChanged = (e) => {
     if (e.detail && e.detail.itemId === String(itemId)) reload();

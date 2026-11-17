@@ -657,8 +657,14 @@ export function openReceipt(month) {
     // default open), avoiding any client/server timezone disagreement. Re-callable:
     // the picker swaps months in place without reopening the sheet.
     let loadToken = 0;
+    // Print waits for the month on screen: before it loads (or after a failed
+    // load) there is nothing to print, and while another month loads `data` still
+    // holds the last one.
+    let loading = true;
     function loadMonth(key) {
       const token = ++loadToken;
+      loading = true;
+      saveBtn.disabled = true;
       body.innerHTML = '';
       body.append(spinner());
       (key ? api.receipt(key) : take('receipt', () => api.receipt()))
@@ -678,6 +684,8 @@ export function openReceipt(month) {
           state.posterUrl = backgrounds.length ? backgrounds[0].poster_url : null;
           if (!backgrounds.length) state.bgType = 'color'; // no posters → solid colour
           build();
+          loading = false;
+          saveBtn.disabled = false;
         })
         .catch(() => {
           if (token !== loadToken) return;
@@ -973,6 +981,7 @@ export function openReceipt(month) {
 
     // --- Export: redraw the identical layout at 1080×1920 and download ------
     async function exportImage(btn) {
+      if (loading || !data) return;
       btn.disabled = true;
       const label = btn.textContent;
       setLabel(btn, t('receipt.rendering'));
@@ -1054,7 +1063,7 @@ export function openReceipt(month) {
       } catch (err) {
         toast(err.message || t('receipt.exportError'), 'bad');
       } finally {
-        btn.disabled = false;
+        btn.disabled = loading;
         setLabel(btn, label);
       }
     }

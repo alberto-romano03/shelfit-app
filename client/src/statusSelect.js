@@ -103,13 +103,24 @@ export function createStatusSelect({ status, onSelect, title, suffix } = {}) {
 
   btn.addEventListener('click', () => {
     openModal((modal, close) => {
+      // One save at a time: a second tap while the first is on its way is ignored.
+      let saving = false;
       const grid = buildStatusBento({
         selected: current,
         onSelect: async (key) => {
+          if (saving) return;
+          // The status it already has: nothing to save (a save would still touch
+          // the title, and finishing again clears a rewatch's stopped minute).
+          if (key === current) {
+            close();
+            return;
+          }
+          saving = true;
           try {
             const r = onSelect ? onSelect(key, current) : undefined;
             if (r && typeof r.then === 'function') await r;
           } catch {
+            saving = false;
             return; // keep the chooser open; caller surfaced the error
           }
           current = key;

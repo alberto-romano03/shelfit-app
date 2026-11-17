@@ -137,6 +137,7 @@ export default async function Home(container) {
 
   // ------ 1) Ghost frame, rendered instantly ------
   let profileData = null; // filled when the profile request resolves
+  let penBusy = false; // the profile editor is on its way (it loads badges first)
 
   const cover = el('div', { class: 'profile-cover' });
 
@@ -170,9 +171,29 @@ export default async function Home(container) {
         // The pen writes once its dialog has gone, back in view, rather than on the
         // tap the dialog then covers. Saving redraws Home, so the button is looked
         // up then (and nothing plays if Home was left meanwhile).
-        onClick: () => {
-          if (profileData) {
-            openProfileModal(profileData, () => navigate('/'), afterDialog('.edit-cover-btn', 'pen-writes'));
+        // The editor loads the badges and favourites before it opens: the pen
+        // shows it is working and ignores more taps meanwhile. Saving redraws
+        // Home in place (no second Home in history).
+        onClick: async (e) => {
+          const pen = e.currentTarget;
+          if (penBusy) return;
+          if (!profileData) {
+            toast(t('home.profile.unavailable'), 'bad');
+            return;
+          }
+          penBusy = true;
+          pen.classList.add('is-busy');
+          pen.setAttribute('aria-busy', 'true');
+          try {
+            await openProfileModal(
+              profileData,
+              () => navigate('/', { replace: true }),
+              afterDialog('.edit-cover-btn', 'pen-writes')
+            );
+          } finally {
+            penBusy = false;
+            pen.classList.remove('is-busy');
+            pen.removeAttribute('aria-busy');
           }
         },
       }),
@@ -348,7 +369,7 @@ export default async function Home(container) {
   }
 
   const section = el('div', {}, [el('div', { class: 'section-title', text: t('home.watching.title') })]);
-  const cachedWatching = getWatching();
+  let cachedWatching = getWatching(); // what is painted; refreshed after a change
   let watchRow;
   if (Array.isArray(cachedWatching)) {
     // Durable copy exists → paint it immediately (real posters, no ghost).
@@ -796,77 +817,106 @@ export default async function Home(container) {
       }
     });
 
-  api
-    .stats()
-    .then((stats) => {
-      const movies = {
-        time: stats.total_minutes_movies || 0,
-        done: stats.total_movies_completed || 0,
-      };
-      const eps = {
-        time: stats.total_minutes_shows || 0,
-        est: !!stats.is_estimated,
-        count: stats.total_episodes_watched || 0,
-      };
-      if (!pequal(movies, cached.movies)) {
-        statValueEls.movies_time.textContent = formatWatchTime(movies.time, false);
-        statValueEls.movies_done.textContent = statCount(movies.done);
-        cached.movies = movies;
-        pset(PK.statsMovies, movies);
-      }
-      if (!pequal(eps, cached.eps)) {
-        statValueEls.shows_time.textContent = formatWatchTime(eps.time, eps.est);
-        statValueEls.eps.textContent = statCount(eps.count);
-        cached.eps = eps;
-        pset(PK.statsEpisodes, eps);
-      }
-    })
-    .catch((err) => {
-      if (isAbortError(err)) return;
-      if (!isServerReachable()) markDegraded();
-      if (!cached.movies && !cached.eps) {
-        Object.values(statValueEls).forEach((v) => (v.textContent = '–'));
-      }
-    });
-
-  api
-    .media('?status=watching')
-    .then((watching) => {
-      const items = (watching.items || []).filter((i) => i.type === 'show' || i.type === 'movie');
-      // Nothing changed since the durable copy → leave the instantly-painted cards
-      // in place (no flash), and don't re-persist.
-      if (Array.isArray(cachedWatching) && watchingSig(items) === watchingSig(cachedWatching)) {
-        return;
-      }
-      if (!items.length) {
-        whenStill(() => watchRow.replaceWith(el('div', { class: 'muted', text: t('home.watching.empty') })));
-        persistWatching([]); // remember the empty state
-        return;
-      }
-      // Proactively warm these above-the-fold posters.
-      imageCache.preload(items.map((i) => i.poster_url).filter(Boolean));
-      const row = el('div', { class: 'hscroll' }, items.map(watchingCard));
-      whenStill(() => {
-        watchRow.replaceWith(row);
-        watchRow = row;
+  const loadStats = () =>
+    api
+      .stats()
+      .then((stats) => {
+        const movies = {
+          time: stats.total_minutes_movies || 0,
+          done: stats.total_movies_completed || 0,
+        };
+        const eps = {
+          time: stats.total_minutes_shows || 0,
+          est: !!stats.is_estimated,
+          count: stats.total_episodes_watched || 0,
+        };
+        if (!pequal(movies, cached.movies)) {
+          statValueEls.movies_time.textContent = formatWatchTime(movies.time, false);
+          statValueEls.movies_done.textContent = statCount(movies.done);
+          cached.movies = movies;
+          pset(PK.statsMovies, movies);
+        }
+        if (!pequal(eps, cached.eps)) {
+          statValueEls.shows_time.textContent = formatWatchTime(eps.time, eps.est);
+          statValueEls.eps.textContent = statCount(eps.count);
+          cached.eps = eps;
+          pset(PK.statsEpisodes, eps);
+        }
+      })
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        if (!isServerReachable()) markDegraded();
+        if (!cached.movies && !cached.eps) {
+          Object.values(statValueEls).forEach((v) => (v.textContent = '–'));
+        }
       });
-      // Store the list + poster bytes so the next launch paints instantly.
-      persistWatching(items);
-    })
-    .catch((err) => {
-      if (isAbortError(err)) return;
-      if (!isServerReachable()) {
-        // Server unreachable (transport failure OR a 5xx from the reverse proxy
-        // while the backend is down) → keep whatever is painted (cached cards or
-        // the ghost); recover on reconnect. A 4xx falls through to the error below.
-        markDegraded();
-        return;
-      }
-      // Only surface an error when there's no durable copy already on screen.
-      if (!Array.isArray(cachedWatching)) {
-        watchRow.replaceWith(el('div', { class: 'muted', text: t('home.watching.loadError') }));
-      }
-    });
+  loadStats();
+
+  const loadWatching = () =>
+    api
+      .media('?status=watching')
+      .then((watching) => {
+        const items = (watching.items || []).filter((i) => i.type === 'show' || i.type === 'movie');
+        // Nothing changed since the durable copy → leave the instantly-painted cards
+        // in place (no flash), and don't re-persist.
+        if (Array.isArray(cachedWatching) && watchingSig(items) === watchingSig(cachedWatching)) {
+          return;
+        }
+        cachedWatching = items;
+        if (!items.length) {
+          const empty = el('div', { class: 'muted', text: t('home.watching.empty') });
+          whenStill(() => {
+            watchRow.replaceWith(empty);
+            watchRow = empty;
+          });
+          persistWatching([]); // remember the empty state
+          return;
+        }
+        // Proactively warm these above-the-fold posters.
+        imageCache.preload(items.map((i) => i.poster_url).filter(Boolean));
+        const row = el('div', { class: 'hscroll' }, items.map(watchingCard));
+        whenStill(() => {
+          watchRow.replaceWith(row);
+          watchRow = row;
+        });
+        // Store the list + poster bytes so the next launch paints instantly.
+        persistWatching(items);
+      })
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        if (!isServerReachable()) {
+          // Server unreachable (transport failure OR a 5xx from the reverse proxy
+          // while the backend is down) → keep whatever is painted (cached cards or
+          // the ghost); recover on reconnect. A 4xx falls through to the error below.
+          markDegraded();
+          return;
+        }
+        // Only surface an error when there's no durable copy already on screen.
+        if (!Array.isArray(cachedWatching)) {
+          const failed = el('div', { class: 'muted', text: t('home.watching.loadError') });
+          watchRow.replaceWith(failed);
+          watchRow = failed;
+        }
+      });
+  loadWatching();
+
+  // A change made from Home itself (a poster's hold menu, the Now Playing toast,
+  // a dialog off the Desk) is a library write: read Currently watching and the
+  // stats again, once the writes settle. Same-as-painted answers change nothing.
+  let changeTimer = null;
+  const onLibraryChanged = () => {
+    clearTimeout(changeTimer);
+    changeTimer = setTimeout(() => {
+      if (ac.signal.aborted) return;
+      loadStats();
+      loadWatching();
+    }, 700);
+  };
+  window.addEventListener('shelfit:library-changed', onLibraryChanged);
+  onCleanup(() => {
+    clearTimeout(changeTimer);
+    window.removeEventListener('shelfit:library-changed', onLibraryChanged);
+  });
 
   // ------ Silently warm the "Back to the Shelf" queue in the background ------
   // The above fetches (profile/stats/watching/lists) are already dispatched;
@@ -1264,6 +1314,10 @@ const RD_SWITCH_MS = 280; // type switch — each half (exit, then enter)
 const RD_SWITCH_SCALE = 0.92; // how far the card shrinks while away
 const RD_DECODE_CAP_MS = 1500; // longest a shuffle waits for the next art to decode
 
+// Types whose pick was on the disc in an earlier open of the popup this session:
+// opening it again moves on to a new title rather than the same one.
+const shelfSeen = new Set();
+
 // --- Rediscover Your Collection modal -------------------------------------
 // Backed by a prefetch queue (shelfQueue). The shared queue is warmed in the
 // background on home load, so the first open is normally instant; if it hasn't
@@ -1280,6 +1334,16 @@ function openRediscoverModal() {
   // user shuffles within that type.
   const queue = () => getSharedShelfQueue(state.type);
   let renderToken = 0;
+  const seenBefore = new Set(shelfSeen); // as it was when this open began
+  let shownItem = null; // the title the disc and its line show now (tap opens it)
+
+  // The queue's head, unless that type's head was already shown in an earlier
+  // open: then the next one, once per open.
+  async function headOf(res) {
+    if (!res.first || !seenBefore.has(state.type)) return res.first;
+    seenBefore.delete(state.type);
+    return (await queue().next()) || res.first;
+  }
 
   openModal((modal, close) => {
     // Movies / TV Shows. Both queues are already warm, so this is a presentation
@@ -1327,6 +1391,17 @@ function openRediscoverModal() {
     const titleEl = el('div', { class: 'cd-title' });
     const subEl = el('div', { class: 'cd-sub' });
     const meta = el('div', { class: 'cd-meta' }, [titleEl, subEl]);
+    // The disc and its title open that title's page: rediscovering it is the
+    // point, and remembering it to search for it later is not.
+    const openShown = () => {
+      if (!shownItem || !shownItem.id || switching) return;
+      const id = shownItem.id;
+      close();
+      openDetail(`/detail/${id}`);
+    };
+    pressable(meta);
+    meta.addEventListener('click', openShown);
+    switchWrap.addEventListener('click', openShown);
 
     const shuffleBtn = el('button', {
       class: 'btn btn-primary',
@@ -1440,9 +1515,20 @@ function openRediscoverModal() {
       cdLabel.style.backgroundImage = '';
       titleEl.textContent = msg;
       subEl.textContent = '';
+      shownItem = null;
+      meta.classList.remove('is-openable');
+      switchWrap.classList.remove('is-openable');
+      meta.removeAttribute('aria-label');
+      meta.tabIndex = -1;
     }
 
     function setMeta(item) {
+      shownItem = item;
+      shelfSeen.add(state.type);
+      meta.classList.add('is-openable');
+      switchWrap.classList.add('is-openable');
+      meta.setAttribute('aria-label', t('home.shelf.openTitle', { title: item.title || t('home.shelf.untitled') }));
+      meta.tabIndex = 0;
       titleEl.textContent = item.title || t('home.shelf.untitled');
       subEl.innerHTML = '';
       if (item.year) subEl.append(document.createTextNode(String(item.year)));
@@ -1538,7 +1624,7 @@ function openRediscoverModal() {
       // Content swaps while the card is invisible — never mid-transition.
       if (res.failed) setMessage(t('home.shelf.loadError'));
       else if (res.empty) setMessage(emptyMessage());
-      else renderPick(res.first, true);
+      else renderPick(await headOf(res), true);
       switchWrap.classList.remove('rd-leaving');
       meta.classList.remove('rd-leaving');
       setTimeout(() => {
@@ -1554,7 +1640,7 @@ function openRediscoverModal() {
       const res = await queue().ensureLoaded(state.type);
       if (res.failed) return setMessage(t('home.shelf.loadError'));
       if (res.empty) return setMessage(emptyMessage());
-      renderPick(res.first);
+      renderPick(await headOf(res));
     }
 
     setMessage(t('home.shelf.loading'));

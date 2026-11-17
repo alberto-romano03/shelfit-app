@@ -61,6 +61,7 @@ function makeAngles() {
 }
 
 export function openRateOMatic() {
+  let session = null;
   openModal((modal, close) => {
     modal.classList.add('rom-modal');
     // The plain <h3> every popup uses, with the session's "n / N" on the right.
@@ -73,15 +74,34 @@ export function openRateOMatic() {
     // The one rating row, under the deck (filled per front card by the session).
     const rateHost = el('div', { class: 'rom-rate' });
     const footerLabel = el('span', { text: t('common.cancel') });
+    // Next sends the front card on as a swipe right would, for anyone who would
+    // rather tap (or can't drag); the arrow keys do the same.
+    const nextBtn = el('button', { class: 'btn btn-primary', onClick: () => session && session.next(1) }, [
+      el('span', { text: t('rom.next') }),
+      lucideIcon('chevron-right', 'btn-lucide'),
+    ]);
     const footer = el('div', { class: 'rom-footer' }, [
       el('button', { class: 'btn btn-secondary', onClick: close }, [lucideIcon('x', 'btn-lucide'), footerLabel]),
+      nextBtn,
     ]);
     modal.append(head, stage, rateHost, footer);
-    runSession({ stage, close, footer, footerLabel, counter, rateHost });
-  }, { handle: true });
+    modal.addEventListener('keydown', (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey || !session) return;
+      if (e.target.closest && e.target.closest('input, textarea')) return;
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      e.preventDefault();
+      session.next(e.key === 'ArrowRight' ? 1 : -1);
+    });
+    session = runSession({ stage, close, footer, footerLabel, counter, rateHost, nextBtn });
+  }, {
+    handle: true,
+    // Closing keeps what the front card was given: the stars and heart save on a
+    // swipe, so without this the last card's rating would be lost on Cancel.
+    onClose: () => session && session.commitFront(),
+  });
 }
 
-function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
+function runSession({ stage, close, footer, footerLabel, counter, rateHost, nextBtn }) {
   let queue = [];
   let index = 0; // queue position of the current front card
   let ratedCount = 0;
@@ -91,12 +111,14 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
   let backCard = null;
   let animating = false;
   let ctrl = null; // the rating row, rebuilt for each front card
+  let ctrlCard = null; // the card that row belongs to
 
   load();
 
   function load() {
     footerLabel.textContent = t('common.cancel');
     rateHost.style.display = '';
+    nextBtn.style.display = 'none'; // until there is a card to send on
     showLoading();
     take('rom', () => api.unrated())
       .then(async (data) => {
@@ -131,6 +153,7 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
   function showError() {
     footerLabel.textContent = t('common.close');
     rateHost.style.display = 'none';
+    nextBtn.style.display = 'none';
     stage.replaceChildren(
       stateBlock({
         kind: 'error',
@@ -186,12 +209,14 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
       onRate: async () => {},
       onFavorite: async () => {},
     });
+    ctrlCard = card;
     rateHost.replaceChildren(ctrl.element);
     counter.textContent = `${index + 1} / ${queue.length}`;
   }
 
   function mount() {
     setDeckChrome(true); // restored if returning from the completion screen
+    nextBtn.style.display = '';
     stack = el('div', { class: 'rom-stack' });
     stage.replaceChildren(stack);
     frontCard = buildCard(queue[index]);
@@ -216,6 +241,7 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
   // Save whatever rating / favourite the row holds for this card. Returns true
   // if a star rating was assigned (→ rated, not skipped).
   function commitCard(card) {
+    card._committed = true;
     const rating = ctrl.getRating();
     const favorite = ctrl.getFavorite();
     const patch = {};
@@ -308,6 +334,15 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
     setTimeout(finish, 540); // safety net if transitionend is missed
   }
 
+  // ---- Without a swipe: the Next button, the arrow keys, closing the sheet ----
+  function next(dir) {
+    if (animating || !frontCard || !frontCard.isConnected) return;
+    flyOut(frontCard, dir);
+  }
+  function commitFront() {
+    if (ctrl && ctrlCard && !ctrlCard._committed) commitCard(ctrlCard);
+  }
+
   // ---- Completion ----
   function restart() {
     queue = shuffle(skipped.slice());
@@ -353,4 +388,6 @@ function runSession({ stage, close, footer, footerLabel, counter, rateHost }) {
       ])
     );
   }
+
+  return { next, commitFront };
 }

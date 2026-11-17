@@ -15,7 +15,7 @@
 
 import { deferred } from '../undoable.js';
 import { api as sharedApi, createApi, isAbortError } from '../api.js';
-import { navigate, openDetail, onCleanup, cameBack, afterTransition } from '../router.js';
+import { navigate, openDetail, onCleanup, cameBack, afterTransition, goBack, cameFrom } from '../router.js';
 import {
   el,
   icons,
@@ -179,7 +179,7 @@ export default async function List(container, params) {
   const heroActions = el('div', { class: 'list-hero-actions is-blank' }, [editBtn, delBtn]);
   const hero = el('div', { class: 'detail-hero list-hero' }, [
     heroImg,
-    el('div', { class: 'list-hero-back' }, [overlayBtn(icons.back, t('common.back'), () => history.back())]),
+    el('div', { class: 'list-hero-back' }, [overlayBtn(icons.back, t('common.back'), goBack)]),
     heroActions,
     el('div', { class: 'list-hero-title' }, [eyebrow, title]),
   ]);
@@ -280,13 +280,20 @@ export default async function List(container, params) {
       confirmLabel: t('lists.deleteConfirm'),
       onConfirm: () => {
         pageCache.delete(id);
+        // Back to where the list was opened from (My Lists, usually), so this
+        // page leaves history and Back can't land on the deleted list. Opened
+        // straight on its link, there is nowhere to go back to: My Lists.
+        const from = cameFrom();
+        const hasBack = !!from && history.state && history.state.index > 0;
+        const landOn = hasBack ? from : '/lists';
         deferred({
           msg: t('lists.deleted'),
           run: (a) => a.deleteList(id),
           selector: `[data-list-id="${id}"]`,
-          stayOn: '/',
+          stayOn: landOn,
         });
-        navigate('/');
+        if (hasBack) history.back();
+        else navigate('/lists', { replace: true });
       },
     });
   });
@@ -339,12 +346,17 @@ export default async function List(container, params) {
       return;
     }
     clear(container);
+    // A list that no longer exists can't be retried: offer the way out instead
+    // (the hero, with its Back arrow, went with the cleared page).
+    const gone = err.status === 404;
     container.append(
       stateBlock({
         kind: 'error',
         title: t('lists.loadError'),
         error: err.message,
-        action: { onClick: () => navigate(location.pathname + location.search, { replace: true }) },
+        action: gone
+          ? { label: t('common.back'), icon: 'chevron-left', onClick: goBack }
+          : { onClick: () => navigate(location.pathname + location.search, { replace: true }) },
       })
     );
     return;

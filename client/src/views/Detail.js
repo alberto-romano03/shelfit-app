@@ -8,7 +8,7 @@ import { posterHue, savedPosterHue, tilesForHue } from '../posterColour.js';
 import { markedToast, undoable, deferred } from '../undoable.js';
 import { followTitle } from '../headerTitle.js';
 import { api, createApi, isAbortError } from '../api.js';
-import { navigate, openDetail, onCleanup, cameFrom } from '../router.js';
+import { navigate, openDetail, onCleanup, cameFrom, goBack } from '../router.js';
 import { isServerReachable, markDegraded, reportServerSuspect } from '../network.js';
 import { savePlanDetail, getPlanDetail, formatSyncTime } from '../offlineCache.js';
 import { createRatingControls } from '../ratingControls.js';
@@ -549,6 +549,13 @@ export default async function Detail(container, params) {
       dom.scrollY = window.scrollY;
     });
     if (dom.fresh) keepTitleFresh(id, dom.fresh);
+    // What lives outside the nodes (the header title, the end-time clock) and any
+    // background fill cut short by leaving (Kodi, the collection row) starts again.
+    if (dom.reattach) {
+      const again = new AbortController();
+      onCleanup(() => again.abort());
+      dom.reattach(again.signal);
+    }
     requestAnimationFrame(() => window.scrollTo(0, dom.scrollY || 0));
     return;
   }
@@ -655,7 +662,7 @@ export default async function Detail(container, params) {
     html: icons.back,
     'aria-label': t('common.back'),
     style: { position: 'absolute', top: 'calc(8px + env(safe-area-inset-top))', left: '8px', zIndex: 3 },
-    onClick: () => history.back(),
+    onClick: goBack,
   });
   const menuBtn = el('button', {
     class: 'icon-btn icon-btn--overlay',
@@ -738,10 +745,13 @@ export default async function Detail(container, params) {
     return Math.max(0, meta.runtime - d.stopped_at);
   }
   paintRuntime();
-  if (runtimeRow && d.type === 'movie') {
+  function startClock() {
+    if (!runtimeRow || d.type !== 'movie') return;
+    paintRuntime();
     const clock = setInterval(paintRuntime, 30000);
     onCleanup(() => clearInterval(clock));
   }
+  startClock();
   if (meta.genres && meta.genres.length) metaRows.push(metaRow('tag', meta.genres.join(', ')));
 
   const titles = el('div', { class: 'detail-titles' }, [
@@ -754,7 +764,8 @@ export default async function Detail(container, params) {
       ? el('div', { class: 'detail-updated', text: t('detail.dataUpdated', { date: formatDate(d.cached_at) }) })
       : null,
   ]);
-  onCleanup(followTitle(titles.querySelector('h2'), d.title_it));
+  const followHeader = () => onCleanup(followTitle(titles.querySelector('h2'), d.title_it));
+  followHeader();
 
   const head = el('div', { class: 'detail-head' }, [posterWrap, titles]);
 
@@ -1063,7 +1074,8 @@ export default async function Detail(container, params) {
   // branded with the Kodi logo. It appears only once a match is confirmed;
   // until then the owned toggle takes the full row width, so a disabled /
   // offline / unmatched Kodi leaves no trace.
-  const kodiBtn = el('button', { class: 'kodi-play-btn' });
+  // Named on the button too: beside the stop key it shows only the logo.
+  const kodiBtn = el('button', { class: 'kodi-play-btn', 'aria-label': t('detail.playOnKodi') });
   kodiBtn.innerHTML =
     `<img class="kodi-logo-img" src="${withBase('/icons/kodi.svg')}" alt="" aria-hidden="true"><span>${t('detail.playOnKodi')}</span>`;
   const kodiSlot = el('div', { class: 'kodi-slot' });
@@ -1116,10 +1128,15 @@ export default async function Detail(container, params) {
   const cinemaRow = isMovie
     ? el('div', { class: 'detail-actions-row' }, [ownedBtn, cinemaBtn])
     : null;
-  async function checkKodi() {
+  // Set once the match has answered; a match cut short by leaving the page runs
+  // again when the retained page is re-attached.
+  let kodiChecked = false;
+  async function checkKodi(client, signal) {
     if (!isKodiActive()) return; // disabled / offline → skip the match entirely
     // Load-time GET → abortable client, so a quick navigate-away cancels it.
-    const kodiId = await matchKodi(d.tmdb_id, d.type, loadApi);
+    const kodiId = await matchKodi(d.tmdb_id, d.type, client);
+    if (signal.aborted) return;
+    kodiChecked = true;
     if (kodiId == null) return; // not in Kodi's library → button never appears
     kodiBtn.addEventListener('click', async () => {
       kodiFeedback.textContent = t('detail.playingOnKodi');
@@ -1329,38 +1346,51 @@ export default async function Detail(container, params) {
     : {
         signature: () => detailSignature(d),
         fetchSignature: async () => detailSignature(await api.mediaDetail(id)),
+        // The reload must build from the server, not re-attach this copy.
+        beforeReload: () => detailDom.delete(id),
       };
   if (fresh) keepTitleFresh(id, fresh);
-  detailDom.set(id, { nodes: [hero, head, body], hero, backdropUrl: d.backdrop_url, scrollY: 0, fresh });
+  const btc = d.type === 'movie' && meta ? meta.belongs_to_collection : null;
+  let collectionDone = !(btc && btc.id);
+  const fillCollection = (client) =>
+    renderCollectionSection(client, body, notesWrap, btc, d).then((done) => {
+      if (done) collectionDone = true;
+    });
+  const reattach = (signal) => {
+    followHeader();
+    startClock();
+    const client = createApi(signal);
+    if (!kodiChecked) checkKodi(client, signal);
+    if (!collectionDone) fillCollection(client);
+  };
+  detailDom.set(id, { nodes: [hero, head, body], hero, backdropUrl: d.backdrop_url, scrollY: 0, fresh, reattach });
   while (detailDom.size > DETAIL_DOM_MAX) {
     detailDom.delete(detailDom.keys().next().value);
   }
 
   // Background Kodi match — non-blocking, populates the Play button if found.
-  checkKodi();
+  checkKodi(loadApi, ac.signal);
 
   // --- "More from this Collection" (movies in a TMDB collection) ---
   // loadApi (abortable) so the background collection fetch is cancelled if the
   // user navigates away before it resolves.
-  const btc = d.type === 'movie' && meta ? meta.belongs_to_collection : null;
-  if (btc && btc.id) {
-    renderCollectionSection(loadApi, body, notesWrap, btc, d);
-  }
+  if (!collectionDone) fillCollection(loadApi);
 }
 
 // Fetch the collection asynchronously and append a horizontal row of the other
 // films. Non-blocking: nothing is shown if the collection has no siblings.
 // `api` is the page's abort-bound client so the fetch is cancelled on navigate.
 // Exported so the no-add Preview view can render the same section.
+// Resolves true once the collection has answered (row added or nothing to add).
 export async function renderCollectionSection(api, body, anchor, btc, d) {
   let coll;
   try {
     coll = await api.collectionDetail(btc.id);
   } catch {
-    return; // includes AbortError on navigate-away
+    return false; // includes AbortError on navigate-away
   }
   const others = (coll.parts || []).filter((p) => String(p.tmdb_id) !== String(d.tmdb_id));
-  if (!others.length) return;
+  if (!others.length) return true;
 
   const row = el('div', { class: 'coll-row' });
   for (const p of others) {
@@ -1389,6 +1419,7 @@ export async function renderCollectionSection(api, body, anchor, btc, d) {
 
   body.insertBefore(el('div', { class: 'section-title', text: t('detail.moreFromCollection') }), anchor);
   body.insertBefore(row, anchor);
+  return true;
 }
 
 // Open a collection sibling's full detail — no modal, no auto-add. Owned titles
@@ -1563,7 +1594,7 @@ export async function openPosterMenu(item) {
         label: t('detail.viewOnTmdb'),
         onClick: () => {
           close();
-          window.open(`https://www.themoviedb.org/${item.type === 'movie' ? 'movie' : 'tv'}/${item.tmdb_id}`, '_blank', 'noopener');
+          openExternal(`https://www.themoviedb.org/${item.type === 'movie' ? 'movie' : 'tv'}/${item.tmdb_id}`);
         },
       }).el;
       tmdbRow.querySelector('.srow-ico').replaceWith(

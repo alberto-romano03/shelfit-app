@@ -81,13 +81,20 @@ export function openTitlePicker({ type, title, onPick }) {
       }
     };
 
-    // One paginated sweep of the library for this type (pageSize is generous so
-    // it's a single request for any realistic library).
-    api
-      .mediaPage(type, { status: 'all', page: 1, pageSize: 500 })
-      .then((res) => {
+    // The whole library for this type: the server serves at most 200 a page, so
+    // read every page (one request for most libraries).
+    const readAll = async () => {
+      const items = [];
+      for (let page = 1; ; page++) {
+        const res = await api.mediaPage(type, { status: 'all', page, pageSize: 200 });
+        items.push(...(res.items || []));
+        if (!res.totalPages || page >= res.totalPages) return items;
+      }
+    };
+    readAll()
+      .then((items) => {
         const folder = type === 'movie' ? 'movies' : 'shows';
-        all = (res.items || []).map((it) => ({
+        all = items.map((it) => ({
           id: it.id,
           tmdb_id: it.tmdb_id,
           title: it.title_it || it.title || '',

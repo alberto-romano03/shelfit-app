@@ -14,6 +14,7 @@ import {
   tmdbPhotoPath,
   EXT_FOR_MIME,
   PERSONS_DIR,
+  photoUrl,
 } from '../persons.js';
 
 // Same cap as the profile photo, independent of the global 512 KB bodyLimit.
@@ -128,7 +129,7 @@ export default async function personRoutes(fastify) {
       removeCustomPhotos(id);
       fs.writeFileSync(customPhotoPath(id, EXT_FOR_MIME[sniffed] || '.jpg'), buf);
       reply.code(201);
-      return { tmdb_id: id, has_custom_photo: true, photo_url: `/api/persons/${id}/photo` };
+      return { tmdb_id: id, has_custom_photo: true, photo_url: photoUrl(id) };
     }
   );
 
@@ -137,7 +138,7 @@ export default async function personRoutes(fastify) {
   fastify.delete('/api/persons/:tmdbId/photo', async (request) => {
     const id = Number(request.params.tmdbId);
     if (Number.isInteger(id) && id > 0) removeCustomPhotos(id);
-    return { tmdb_id: id, has_custom_photo: false, photo_url: `/api/persons/${id}/photo` };
+    return { tmdb_id: id, has_custom_photo: false, photo_url: photoUrl(id) };
   });
 
   // GET /api/persons/:tmdbId/photo → custom upload first, else the cached TMDB

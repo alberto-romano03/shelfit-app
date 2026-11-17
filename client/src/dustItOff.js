@@ -464,7 +464,12 @@ export function openDustItOff() {
       return grid;
     }
 
+    // Which search is current: Adjust filters or a new search makes any answer
+    // still on its way from an older one moot.
+    let runSeq = 0;
+
     function renderFilters() {
+      runSeq++;
       typeToggle.style.display = '';
       adjustBtn.style.display = 'none';
       body.className = 'sheet-body';
@@ -574,6 +579,7 @@ export function openDustItOff() {
 
     // --- Run / result ---
     async function run() {
+      const mine = ++runSeq;
       typeToggle.style.display = 'none';
       adjustBtn.style.display = 'flex';
       body.className = 'sheet-body';
@@ -585,20 +591,36 @@ export function openDustItOff() {
       try {
         first = await nextPick();
       } catch (err) {
-        body.innerHTML = '';
-        body.append(
-          stateBlock({ kind: 'error', tier: 'section', title: t('dust.error') })
-        );
+        if (mine !== runSeq) return;
+        showStuck(stateBlock({ kind: 'error', tier: 'section', title: t('dust.error'), action: { onClick: run } }));
         return;
       }
+      if (mine !== runSeq) return; // filters reopened, or another search began
       if (!first) {
-        body.innerHTML = '';
-        body.append(
-          stateBlock({ tier: 'section', title: t('dust.empty') })
-        );
+        showStuck(stateBlock({ tier: 'section', title: t('dust.empty') }));
         return;
       }
       renderResult(first);
+    }
+
+    // No pick to show (an error, or nothing matched): the state, and the way on:
+    // Close, and back to the filters to change them.
+    function showStuck(block) {
+      body.innerHTML = '';
+      body.append(block);
+      footer.innerHTML = '';
+      footer.append(
+        el('div', { class: 'dust-actions' }, [
+          el('button', { class: 'btn btn-secondary', onClick: close }, [
+            lucideIcon('x', 'btn-lucide'),
+            el('span', { text: t('common.close') }),
+          ]),
+          el('button', { class: 'btn btn-primary', onClick: renderFilters }, [
+            lucideIcon('signpost', 'btn-lucide'),
+            el('span', { text: t('dust.adjustFilters') }),
+          ]),
+        ])
+      );
     }
 
     // --- Result: the pick as a card. The backdrop opens it and the poster

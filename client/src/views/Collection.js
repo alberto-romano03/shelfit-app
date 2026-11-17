@@ -8,7 +8,7 @@
 // place.
 
 import { createApi, isAbortError } from '../api.js';
-import { navigate, openDetail, onCleanup, cameBack, afterTransition } from '../router.js';
+import { navigate, openDetail, onCleanup, cameBack, afterTransition, goBack } from '../router.js';
 import {
   el,
   poster,
@@ -131,7 +131,7 @@ function buildPage(d, onAdded) {
         left: '8px',
         zIndex: 3,
       },
-      onClick: () => history.back(),
+      onClick: goBack,
     })
   );
   const art = poster(d.poster_url, name);
@@ -191,7 +191,9 @@ function buildPage(d, onAdded) {
               year: p.year,
               overview: p.overview,
             },
-            { onAdded }
+            // Every change the sheet makes (add, a new status, the undo that
+            // removes it again) repaints the collection, not only the first add.
+            { onChange: () => onAdded() }
           )
     );
     grid.append(

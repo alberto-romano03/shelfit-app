@@ -4,7 +4,7 @@
 // are built from what actually exists; Account appears only when auth is on.
 
 import { api, createApi, isAbortError, markLibraryChanged } from '../api.js';
-import { onCleanup } from '../router.js';
+import { onCleanup, goBack } from '../router.js';
 import { currentTheme, revealTheme } from '../theme.js';
 import { getPref, setPref } from '../prefs.js';
 import { pushSupported, enablePush, disablePush, currentPushEndpoint, syncPushLang } from '../push.js';
@@ -15,6 +15,7 @@ import { buildHousehold } from './household.js';
 import { buildDevices } from './devices.js';
 import { PK, pget, pset } from '../persist.js';
 import { canInstall, isIOS, openAddToHome } from '../addToHome.js';
+import { isServerReachable, markDegraded } from '../network.js';
 import {
   el,
   icons,
@@ -66,7 +67,7 @@ export default async function Settings(container) {
   const isMaster = (s) => !!s && (!s.enabled || !s.user || s.user.role === 'master');
 
   const header = el('div', { class: 'lp-head' }, [
-    el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
+    el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: goBack }),
     el('h2', { class: 'lp-title', text: t('common.settings') }),
   ]);
 
@@ -276,7 +277,9 @@ export default async function Settings(container) {
           renderUsage(d.usage);
         } catch (err) {
           toast(err.message, 'bad');
+          // Put the switch back as the server has it.
           renderUsage(null);
+          loadUsage();
         }
       },
     });
@@ -306,11 +309,39 @@ export default async function Settings(container) {
       usageSection.append(el('div', { class: 'settings-row' }, [skelLine({ width: '60%' })]));
       return;
     }
+    if (list === 'error') {
+      usageSection.append(
+        stateBlock({
+          kind: 'error',
+          tier: 'section',
+          title: t('settings.usage.loadError'),
+          action: {
+            onClick: () => {
+              renderUsage(null);
+              loadUsage();
+            },
+          },
+        })
+      );
+      return;
+    }
     const cards = el('div', { class: 'usage-cards' });
     for (const u of list) cards.append(buildUsageCard(u));
     usageSection.append(cards);
   }
   renderUsage(null); // ghost frame
+  // Offline, the page waits for the server (markDegraded: it is drawn again when
+  // the server is back); a real failure shows the error with a retry.
+  function loadUsage() {
+    return api
+      .usage()
+      .then((d) => renderUsage(d.usage || []))
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        if (!isServerReachable()) markDegraded();
+        renderUsage('error');
+      });
+  }
 
   // --- Backup: export / import the whole library as an XML file ---
   const backupSection = el('div', { class: 'settings-section' });
@@ -786,7 +817,14 @@ export default async function Settings(container) {
           if (any && any.reminders) prefs = any.reminders;
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        // Whether this device notifies is unknown: the switches would show
+        // everything off and a tap would fail. They wait for the server.
+        if (!isServerReachable()) markDegraded();
+        setBusy(true);
+        for (const { row } of kindRows) row.setSub(t('settings.notif.unavailable'));
+      });
   }
 
   // --- Account (log out) — only shown when login is enabled ---
@@ -987,7 +1025,13 @@ export default async function Settings(container) {
       .then((res) => {
         if (res && res.language) picker.set(res.language);
       })
-      .catch(() => { /* offline / error — keep the default */ });
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        // The default showing is only a guess: not to be changed from until the
+        // server answers (offline, the page is drawn again when it is back).
+        if (!isServerReachable()) markDegraded();
+        picker.select.disabled = true;
+      });
   }
 
   // Built once the master is confirmed (below): a member gets no Kodi tab, so
@@ -1144,13 +1188,7 @@ export default async function Settings(container) {
       .catch(() => { /* no picker: the import fills the caller's library */ });
     tabBar.refresh(); // the track just got wider: re-measure the chips
 
-    api
-      .usage()
-      .then((d) => renderUsage(d.usage || []))
-      .catch((err) => {
-        if (isAbortError(err)) return;
-        renderUsage([]);
-      });
+    loadUsage();
 
     api
       .importStatus()

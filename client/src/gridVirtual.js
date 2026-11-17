@@ -180,7 +180,7 @@ function createCell(onItemClick, onItemHold) {
     node.dataset.itemId = item.id;
     // A title: a button named after it (the poster image alone says nothing).
     node.setAttribute('role', 'button');
-    node.setAttribute('aria-label', item.title || '');
+    node.setAttribute('aria-label', item.title_it || item.title_orig || item.title || '');
     node.removeAttribute('aria-hidden');
     node.classList.remove('is-skel', 'is-retry', 'poster-tile', 'tile-wait');
     if (item.rating) {

@@ -71,6 +71,9 @@ export function initNowPlaying(headerActionsEl) {
     body,
     acts,
   ]);
+  // Hidden, it is only see-through: inert keeps its buttons out of Tab and away
+  // from screen readers until it opens.
+  toastEl.inert = true;
   document.body.appendChild(toastEl);
   els = { poster, source, sourceName, title, meta, chips, acts };
 
@@ -269,6 +272,7 @@ function openToast() {
   const top = header ? header.getBoundingClientRect().bottom + 8 : 72;
   toastEl.style.top = `${Math.round(top)}px`;
   toastEl.classList.remove('dismissing');
+  toastEl.inert = false;
   requestAnimationFrame(() => toastEl.classList.add('show'));
   toastOpen = true;
   // Auto-dismiss after a brief peek.
@@ -281,7 +285,14 @@ function closeToast() {
   autoCloseTimer = null;
   toastEl.classList.add('dismissing');
   toastEl.classList.remove('show');
+  toastEl.inert = true;
   toastOpen = false;
+}
+
+// Leaving the page (its "Open the series" link, a tab, Back) takes the toast
+// away with it, instead of leaving it over the next page until its timer runs out.
+export function dismissNowPlaying() {
+  if (toastOpen) closeToast();
 }
 
 // Never overlap an open modal / bottom sheet.

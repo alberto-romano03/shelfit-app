@@ -15,7 +15,7 @@ import { timeHintsOn, hoursAndMinutes } from '../timeHints.js';
 import { haptic } from '../haptic.js';
 import { markedToast } from '../undoable.js';
 import { api, createApi, isAbortError } from '../api.js';
-import { navigate, openDetail, onCleanup } from '../router.js';
+import { navigate, openDetail, onCleanup, goBack } from '../router.js';
 import {
   el,
   icons,
@@ -110,7 +110,7 @@ function seasonSkeleton() {
   // the title are shimmers.
   view.append(
     el('div', { class: 'season-head' }, [
-      el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
+      el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: goBack }),
       el('div', { class: 'season-head-text' }, [
         // 11 + 8 + 22 + 4 = 45px, the real series link over the 20px title.
         skelLine({ width: '96px', height: '11px', margin: '0 0 8px' }),
@@ -297,7 +297,7 @@ export default async function Season(container, params) {
   }
 
   const header = el('div', { class: 'season-head' }, [
-    el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: () => history.back() }),
+    el('button', { class: 'icon-btn', html: icons.back, 'aria-label': t('common.back'), onClick: goBack }),
     el('div', { class: 'season-head-text' }, [
       seriesLink,
       el('h2', { class: 'season-title', text: data.name || t('season.title', { num: n }) }),
