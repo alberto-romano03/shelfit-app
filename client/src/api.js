@@ -82,7 +82,13 @@ function buildApi(signal) {
         res = await fetch(withBase(url), opts);
         break;
       } catch (err) {
-        if (isAbortError(err)) throw err; // navigation teardown — never retry
+        if (isAbortError(err)) {
+          // Navigation teardown: never retry. A write cut off this way may still
+          // have reached the server, so tell the cached views all the same; a
+          // needless refresh costs far less than a stale page.
+          if (method !== 'GET') markLibraryChanged();
+          throw err;
+        }
         // A transient transport failure (e.g. a keep-alive socket the server
         // closed as we reused it). Back off briefly and retry on a fresh
         // connection before concluding anything about reachability.
@@ -128,10 +134,7 @@ function buildApi(signal) {
     // (e.g. the Movies/Series grid) invalidate. GETs never mutate, so pure
     // navigation keeps caches warm. Bump the generation BEFORE dispatching so any
     // refetch the event triggers can't reuse a GET that predates this write.
-    if (method !== 'GET') {
-      writeGeneration++;
-      window.dispatchEvent(new CustomEvent('shelfit:library-changed'));
-    }
+    if (method !== 'GET') markLibraryChanged();
     return data;
   }
 

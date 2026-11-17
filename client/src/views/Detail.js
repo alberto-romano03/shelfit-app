@@ -21,6 +21,7 @@ import { confetti } from '../confetti.js';
 import { offerShelve } from '../finishSeries.js';
 import { openStopSheet, stopLabel } from '../stoppedAt.js';
 import { openNewTicketModal } from '../cinemaTickets.js';
+import { keepTitleFresh } from '../titleSync.js';
 import { t, locale, getLang } from '../i18n.js';
 import {
   confirmModal,
@@ -506,6 +507,18 @@ function detailSkeleton() {
   return frag;
 }
 
+// What an outside change would alter on a title page: status, rewatches, the
+// stopped-at minute, the watch date and the episodes watched.
+function detailSignature(x) {
+  return JSON.stringify([
+    x.status,
+    x.rewatch_count || 0,
+    x.stopped_at || null,
+    x.watch_date || null,
+    x.progress ? x.progress.watched_episodes : null,
+  ]);
+}
+
 export default async function Detail(container, params) {
   const id = params.id;
 
@@ -524,6 +537,7 @@ export default async function Detail(container, params) {
     onCleanup(() => {
       dom.scrollY = window.scrollY;
     });
+    if (dom.fresh) keepTitleFresh(id, dom.fresh);
     requestAnimationFrame(() => window.scrollTo(0, dom.scrollY || 0));
     return;
   }
@@ -1270,7 +1284,17 @@ export default async function Detail(container, params) {
   // re-attaches it instantly instead of rebuilding. Any later in-place additions
   // (Kodi button, collection row) mutate `body`, which is one of these nodes, so
   // they're captured too. Evict the least-recently-used once over the cap.
-  detailDom.set(id, { nodes: [hero, head, body], hero, backdropUrl: d.backdrop_url, scrollY: 0 });
+  // A change made elsewhere while this page is open (the Now Playing toast, the
+  // nightly Kodi sync, another device) reloads it, so the status, the rewatch
+  // count and the minute never stay stale under the controls that edit them.
+  const fresh = offline
+    ? null
+    : {
+        signature: () => detailSignature(d),
+        fetchSignature: async () => detailSignature(await api.mediaDetail(id)),
+      };
+  if (fresh) keepTitleFresh(id, fresh);
+  detailDom.set(id, { nodes: [hero, head, body], hero, backdropUrl: d.backdrop_url, scrollY: 0, fresh });
   while (detailDom.size > DETAIL_DOM_MAX) {
     detailDom.delete(detailDom.keys().next().value);
   }

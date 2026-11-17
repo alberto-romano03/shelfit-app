@@ -111,6 +111,26 @@ describe('stopped at', () => {
     assert.equal((await season()).episodes[0].stopped_at, 12);
   });
 
+  it('records a note on an unwatched episode as watched, as a tick would', async () => {
+    h.db.prepare("UPDATE items SET status = 'plan_to_watch', current_season = NULL WHERE id = ?").run(show);
+    await stop(2, 20);
+    const res = await a.patch(`/api/progress/${show}/1/2`, { notes: 'the twin did it' });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.created, true);
+    assert.equal(res.json.watch_count, 1);
+    assert.equal(res.json.status_changed, 'watching');
+    const s = await season();
+    assert.equal(s.episodes[1].watched, true);
+    assert.equal(s.episodes[1].notes, 'the twin did it');
+    assert.equal(s.episodes[1].stopped_at, null); // the minute goes with the tick
+    const row = h.db.prepare('SELECT status, current_season FROM items WHERE id = ?').get(show);
+    assert.equal(row.status, 'watching');
+    assert.equal(row.current_season, 1);
+    // A second note only edits it.
+    const again = await a.patch(`/api/progress/${show}/1/2`, { notes: 'or not' });
+    assert.equal(again.json.created, undefined);
+  });
+
   it('keeps one member out of another member\'s series', async () => {
     const memberId = await addUser(h.db, { name: 'Giulia', password: 'member-pass-1' });
     const b = client(h.app, await login(h.app, 'member-pass-1', memberId));

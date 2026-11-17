@@ -415,15 +415,25 @@ export default async function progressRoutes(fastify) {
     async (request, reply) => {
       const { item_id, season, episode } = request.params;
       const { notes } = request.body || {};
-      if (!getItem(item_id, request.user.id)) {
+      const item = getItem(item_id, request.user.id);
+      if (!item) {
         reply.code(404);
         return { error: 'item not found' };
       }
       const existing = getProgressIdStmt.get(item_id, season, episode);
       if (!existing) {
-        // Allow attaching a note by creating the watched record.
-        insertNoteRowStmt.run(item_id, season, episode, notes ?? null);
-        return { ok: true, created: true };
+        // A note needs a watched record, so a note on an episode not yet watched
+        // records it as watched, the same as ticking it: its season becomes the
+        // current one, a planned series starts Watching and the stats follow.
+        // (The insert also clears the episode's stopped-at minute, migration 9.)
+        let statusChanged = null;
+        db.transaction(() => {
+          insertNoteRowStmt.run(item_id, season, episode, notes ?? null);
+          setCurrentSeasonStmt.run(season, item_id);
+          statusChanged = startedWatching(item, true);
+          scheduleStatsRecompute(db);
+        })();
+        return { ok: true, created: true, watch_count: 1, status_changed: statusChanged };
       }
       updateNoteStmt.run(notes ?? null, item_id, season, episode);
       return { ok: true };

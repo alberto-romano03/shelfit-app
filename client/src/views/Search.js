@@ -208,7 +208,29 @@ export default async function Search(container) {
   // open the add-to-library sheet.
   function openTitle(r) {
     if (r.already_added && r.item_id) openDetail(`/detail/${r.item_id}`);
-    else openAddModal(r);
+    else openAddModal(r, { onChange: (itemId) => setInLibrary(r, itemId) });
+  }
+
+  // Every poster, button and row painted from a title can show it in (or out of)
+  // the library. An add or a removal repaints them all in place, wherever that
+  // title is on the page, so a card never keeps offering "+" for a title already
+  // added (its tap would reopen the add sheet instead of the title).
+  const keyOf = (r) => `${r.type}:${r.tmdb_id}`;
+  function paintsLibrary(node, r, paint) {
+    node.dataset.titleKey = keyOf(r);
+    node._library = (itemId) => {
+      r.already_added = itemId != null;
+      r.item_id = itemId ?? null;
+      paint(itemId != null);
+    };
+    return node;
+  }
+  function setInLibrary(r, itemId) {
+    r.already_added = itemId != null;
+    r.item_id = itemId ?? null;
+    for (const node of container.querySelectorAll(`[data-title-key="${keyOf(r)}"]`)) {
+      if (node._library) node._library(itemId);
+    }
   }
 
   // --- Shared pieces -------------------------------------------------------
@@ -218,16 +240,22 @@ export default async function Search(container) {
   // number is never printed twice on one card.
   function posterOf(item, { badge = true } = {}) {
     const card = poster(item.thumb_url, item.title);
-    if (item.already_added) card.append(el('div', { class: 'ai-mark', html: icons.check }));
-    else if (badge && item.rating) {
-      card.append(
-        el('div', { class: 'rating-badge' }, [
-          el('span', { text: '★' }),
-          el('span', { text: String(item.rating) }),
-        ])
-      );
-    }
-    return card;
+    const mark = el('div', { class: 'ai-mark', html: icons.check });
+    const score =
+      badge && item.rating
+        ? el('div', { class: 'rating-badge' }, [
+            el('span', { text: '★' }),
+            el('span', { text: String(item.rating) }),
+          ])
+        : null;
+    const paint = (on) => {
+      mark.remove();
+      if (score) score.remove();
+      if (on) card.append(mark);
+      else if (score) card.append(score);
+    };
+    paint(!!item.already_added);
+    return paintsLibrary(card, item, paint);
   }
 
   function cell(item) {
@@ -317,14 +345,14 @@ export default async function Search(container) {
       for (const g of (item.genres || []).slice(0, 2)) {
         meta.append(el('span', { class: 'gc', text: g }));
       }
-      const open = el(
-        'button',
-        { class: 'btn btn-primary', type: 'button', onClick: () => openTitle(item) },
-        [
-          lucideIcon(item.already_added ? 'library-big' : 'plus', 'btn-lucide'),
-          el('span', { text: item.already_added ? t('search.inLibrary') : t('preview.addToLibrary') }),
-        ]
-      );
+      const open = el('button', { class: 'btn btn-primary', type: 'button', onClick: () => openTitle(item) });
+      const paintOpen = (on) =>
+        open.replaceChildren(
+          lucideIcon(on ? 'library-big' : 'plus', 'btn-lucide'),
+          el('span', { text: on ? t('search.inLibrary') : t('preview.addToLibrary') })
+        );
+      paintOpen(!!item.already_added);
+      paintsLibrary(open, item, paintOpen);
       const card = el('article', { class: 'pk-card' }, [
         posterOf(item),
         el('div', { class: 'pk-body' }, [
@@ -709,12 +737,14 @@ export default async function Search(container) {
   // Plan to Watch, because that is what "I'll get to this" means, and the
   // status is changed from the detail page like any other.
   function addButton(r) {
-    const btn = el('button', {
-      class: 'ht-add' + (r.already_added ? ' on' : ''),
-      type: 'button',
-      'aria-label': r.already_added ? t('search.inLibrary') : t('search.quickAdd'),
-      html: r.already_added ? icons.check : icons.plus,
-    });
+    const btn = el('button', { class: 'ht-add', type: 'button' });
+    const paint = (on) => {
+      btn.classList.toggle('on', on);
+      btn.innerHTML = on ? icons.check : icons.plus;
+      btn.setAttribute('aria-label', on ? t('search.inLibrary') : t('search.quickAdd'));
+    };
+    paint(!!r.already_added);
+    paintsLibrary(btn, r, paint);
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (r.already_added) {
@@ -727,18 +757,11 @@ export default async function Search(container) {
       btn.dataset.busy = '1';
       try {
         const res = await api.addMedia(r.tmdb_id, r.type, 'plan_to_watch');
-        r.already_added = true;
-        r.item_id = res && res.id;
-        btn.classList.add('on');
-        btn.innerHTML = icons.check;
-        btn.setAttribute('aria-label', t('search.inLibrary'));
+        setInLibrary(r, res && res.id);
         toast(t('search.quickAdded'), 'ok');
       } catch (err) {
         if (err.status === 409 && err.data && err.data.item_id) {
-          r.already_added = true;
-          r.item_id = err.data.item_id;
-          btn.classList.add('on');
-          btn.innerHTML = icons.check;
+          setInLibrary(r, err.data.item_id);
           toast(t('search.alreadyInLibrary'));
         } else {
           toast(err.message || t('search.somethingWrong'), 'bad');
@@ -975,9 +998,10 @@ export default async function Search(container) {
 
 // Shared "Add to library" dialog. Title + collapsible summary, a separator, then
 // the same status bento used on the detail page — tapping a status adds the
-// title with it. By default it navigates to the new title's detail page (Search
-// behaviour); pass onAdded to instead handle it in place (collection views).
-export function openAddModal(r, { onAdded } = {}) {
+// title with it. onAdded runs on the first add (collection views handle it in
+// place); onChange runs on every change of whether the title is in the library,
+// with its library id or null (Search repaints the cards showing that title).
+export function openAddModal(r, { onAdded, onChange } = {}) {
   openModal((modal, close) => {
     // --- Title + type ---
     const heading = el('h3', { text: `${r.title}${r.year ? ' (' + r.year + ')' : ''}` });
@@ -993,6 +1017,9 @@ export function openAddModal(r, { onAdded } = {}) {
     // it via Cancel / View full details themselves. ---
     let itemId = null; // library id once added; null when not in the library
     let currentStatus = null;
+    // Found already in the library (the card was out of date): this sheet did not
+    // add it, so a second tap on its status must not delete it.
+    let adopted = false;
     let busy = false;
     let bento;
     const clearHighlights = () =>
@@ -1012,13 +1039,21 @@ export function openAddModal(r, { onAdded } = {}) {
             cell.classList.add('selected');
             toast(t('search.addedToLibrary'), 'ok');
             if (onAdded) onAdded(itemId);
+            if (onChange) onChange(itemId);
           } else if (status === currentStatus) {
+            if (adopted) {
+              // Not added here: undoing would delete the title, its progress and
+              // its lists. It stays; the sheet only says so.
+              toast(t('search.alreadyInLibrary'));
+              return;
+            }
             // Reclick the active status → undo (remove from library).
             await api.deleteMedia(itemId);
             itemId = null;
             currentStatus = null;
             cell.classList.remove('selected');
             toast(t('search.removedFromLibrary'), 'ok');
+            if (onChange) onChange(null);
           } else {
             // Added already → just change the status.
             await api.updateMedia(itemId, { status });
@@ -1029,12 +1064,21 @@ export function openAddModal(r, { onAdded } = {}) {
           }
         } catch (err) {
           if (err.status === 409 && err.data && err.data.item_id) {
-            // Already in the library (e.g. added elsewhere) — adopt it.
+            // Already in the library (added elsewhere, the card out of date):
+            // adopt it and give it the status just picked, which is what the tap
+            // asked for.
             itemId = err.data.item_id;
-            currentStatus = status;
-            clearHighlights();
-            cell.classList.add('selected');
-            toast(t('search.alreadyInLibrary'));
+            adopted = true;
+            if (onChange) onChange(itemId);
+            try {
+              await api.updateMedia(itemId, { status });
+              currentStatus = status;
+              clearHighlights();
+              cell.classList.add('selected');
+              toast(t('search.alreadyInLibraryStatus'), 'ok');
+            } catch (e) {
+              toast(e.message || t('search.somethingWrong'), 'bad');
+            }
           } else {
             toast(err.message || t('search.somethingWrong'), 'bad');
           }

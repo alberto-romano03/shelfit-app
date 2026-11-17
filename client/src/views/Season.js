@@ -14,7 +14,7 @@
 import { timeHintsOn, hoursAndMinutes } from '../timeHints.js';
 import { haptic } from '../haptic.js';
 import { markedToast } from '../undoable.js';
-import { createApi, isAbortError } from '../api.js';
+import { api, createApi, isAbortError } from '../api.js';
 import { navigate, openDetail, onCleanup } from '../router.js';
 import {
   el,
@@ -38,6 +38,7 @@ import { imageCache } from '../imageCache.js';
 import { isServerReachable, markDegraded } from '../network.js';
 import { confetti } from '../confetti.js';
 import { offerShelve } from '../finishSeries.js';
+import { keepTitleFresh } from '../titleSync.js';
 import { withBase } from '../basePath.js';
 import { t } from '../i18n.js';
 import { openStopSheet, stopLabel } from '../stoppedAt.js';
@@ -138,7 +139,10 @@ function seasonSkeleton() {
 export default async function Season(container, params) {
   const ac = new AbortController();
   onCleanup(() => ac.abort());
-  const api = createApi(ac.signal);
+  // Reads go through a client the page's teardown cancels; writes use the shared
+  // `api`, so a tick or a note made just before leaving still completes, and the
+  // other pages (What's Next, the grids, the title page) hear about it.
+  const loadApi = createApi(ac.signal);
 
   container.append(seasonSkeleton());
   const id = params.id;
@@ -148,7 +152,7 @@ export default async function Season(container, params) {
   // First page (with total/totalPages) — everything the initial paint needs.
   let first;
   try {
-    first = await api.seasonPage(id, n, 1, PAGE_SIZE);
+    first = await loadApi.seasonPage(id, n, 1, PAGE_SIZE);
   } catch (err) {
     if (isAbortError(err)) return; // navigated away — ignore silently
     if (!isServerReachable()) {
@@ -406,6 +410,13 @@ export default async function Season(container, params) {
     if (watchedCount !== null) paintRing();
   }
   paintProgress();
+  // A change made elsewhere while this page is open (the Now Playing toast, the
+  // nightly Kodi sync, another device) reloads it, so ticking again never counts
+  // on a stale row.
+  keepTitleFresh(id, {
+    signature: () => String(watchedCount),
+    fetchSignature: async () => String((await loadApi.seasonPage(id, n, 1, PAGE_SIZE)).watched_count ?? null),
+  });
   const seasonView = el('div', { class: 'season-view' }, [header, actionRow, listSep, scroller]);
 
   let ROW_H = FALLBACK_ROW_H;
@@ -491,7 +502,14 @@ export default async function Season(container, params) {
     let currentEp = null;
     let retryHandler = null;
     main.addEventListener('click', () => {
-      if (currentEp) openEpisodeSheet(currentEp);
+      if (!currentEp) return;
+      // Not out yet: no minute to stop at and no note (a note records it as
+      // watched), the same as its tick.
+      if (isUpcoming(currentEp)) {
+        toast(t('season.notOutYet', { date: formatDate(currentEp.air_date) }));
+        return;
+      }
+      openEpisodeSheet(currentEp);
     });
     // Only a tap on an unwatched episode draws the tick. Rows are recycled while
     // scrolling, so the watched state alone must never animate.
@@ -664,7 +682,7 @@ export default async function Season(container, params) {
     if (pageStatus[p] === 'loading' || pageStatus[p] === 'loaded') return;
     pageStatus[p] = 'loading'; // in-range rows already show skeletons while pending
     try {
-      const res = await api.seasonPage(id, n, p, pageSize);
+      const res = await loadApi.seasonPage(id, n, p, pageSize);
       placePage(p, res.episodes || []);
       pageStatus[p] = 'loaded';
     } catch (err) {
@@ -740,10 +758,22 @@ export default async function Season(container, params) {
           refreshEp(ep);
         }
         if (noteText !== existing) {
-          await api.episodeNotes(id, data.season_number, ep.episode_number, noteText);
+          const res = await api.episodeNotes(id, data.season_number, ep.episode_number, noteText);
           ep.notes = noteText;
-          refreshEp(ep); // refresh the note dot
-          toast(noteText ? t('season.noteSaved') : t('season.noteDeleted'), 'ok');
+          // A note on an episode not yet watched records it as watched (the server
+          // creates its watched row): tick it here too, and let the count, the time
+          // left and the minute follow, as a tick would.
+          const marked = !!(res && res.created) && !ep.watched;
+          if (marked) {
+            ep.watched = true;
+            ep.watch_count = res.watch_count || 1;
+            noteMarked(ep, 1);
+          }
+          refreshEp(ep); // the tick and the note line
+          toast(
+            marked ? t('season.noteSavedWatched') : noteText ? t('season.noteSaved') : t('season.noteDeleted'),
+            'ok'
+          );
         }
       },
     });
@@ -841,7 +871,7 @@ export default async function Season(container, params) {
                 }
               } else {
                 try {
-                  const fresh = await api.seasonPage(id, n, 1, pageSize);
+                  const fresh = await loadApi.seasonPage(id, n, 1, pageSize);
                   for (const nu of fresh.episodes || []) {
                     const idx = indexByEp.get(nu.episode_number);
                     if (idx == null) continue;

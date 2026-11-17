@@ -18,6 +18,7 @@ import { t, getLang } from './i18n.js';
 import { navigate } from './router.js';
 import { offerShelve } from './finishSeries.js';
 import { refreshNowPlaying } from './kodi.js';
+import { markTitleChanged } from './titleSync.js';
 
 const epCode = (np) => `S${String(np.season || 0).padStart(2, '0')} E${String(np.episode || 0).padStart(2, '0')}`;
 // "3ª" / "3rd": the time this viewing would be.
@@ -51,6 +52,7 @@ function planFor(np) {
         return t('nowPlaying.doneAdded');
       },
       undo: () => (added ? api.deleteMedia(added) : null),
+      item: () => added,
     };
   }
   if (isEp && m.uncertain) {
@@ -147,9 +149,13 @@ export function fillActions(row, np, { onBusy } = {}) {
     return;
   }
   if (plan.done) {
-    showDone(row, plan.done, plan.undo);
+    showDone(row, plan.done, plan.undo, () => m.item_id);
     return;
   }
+
+  // The title an action or its Undo changes, so a Season or title page open on it
+  // reloads (titleSync.js). An Add only knows it once the title is added.
+  const itemOf = plan.item || (() => m.item_id);
 
   const btn = el('button', { class: 'np-act-btn', type: 'button' }, [
     lucideIcon(plan.icon, 'btn-lucide np-act-ico'),
@@ -166,7 +172,8 @@ export function fillActions(row, np, { onBusy } = {}) {
       const doneText = await plan.run();
       state.done = doneText;
       state.undo = plan.undo;
-      showDone(row, doneText, plan.undo);
+      showDone(row, doneText, plan.undo, itemOf);
+      markTitleChanged(itemOf());
       refreshNowPlaying();
     } catch (err) {
       toast((err && err.message) || t('nowPlaying.failed'), 'bad');
@@ -193,7 +200,7 @@ function linkButton(label, onClick) {
   });
 }
 
-function showDone(row, text, undo) {
+function showDone(row, text, undo, itemOf) {
   row.replaceChildren();
   row.className = 'np-act is-done';
   row.append(lucideIcon('check', 'btn-lucide np-act-ico'), el('span', { class: 'np-act-note', text }));
@@ -203,6 +210,7 @@ function showDone(row, text, undo) {
       try {
         await undo();
         toast(t('nowPlaying.undone'), 'ok');
+        if (itemOf) markTitleChanged(itemOf());
       } catch (err) {
         toast((err && err.message) || t('nowPlaying.failed'), 'bad');
         return;
