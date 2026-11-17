@@ -640,6 +640,8 @@ export default async function Detail(container, params) {
     onClick: () => openMenu(d, reload),
   });
   hero.append(backBtn, menuBtn);
+  // So the menu's favourite cell opens already right (see openMenu).
+  if (!offline) refreshFavPicks().catch(() => {});
 
   // Offline: there's no cached backdrop, so the hero shows the shimmer skeleton.
   // The "saved information" note itself sits between the poster and the
@@ -1737,6 +1739,20 @@ function menuHeading(d) {
   return head;
 }
 
+// The current favourite film and series (their TMDB ids), fetched as a title page
+// opens so its options menu already knows whether this title is the one, instead
+// of opening on "Set as…" and turning to "Remove" a moment later.
+let favPicks = null;
+function refreshFavPicks() {
+  return api.favorites().then((f) => {
+    favPicks = {
+      movie: f && f.movie ? String(f.movie.tmdb_id) : null,
+      show: f && f.show ? String(f.show.tmdb_id) : null,
+    };
+    return favPicks;
+  });
+}
+
 function openMenu(d, reload) {
   openModal((modal, close) => {
     // Same bento language as the status selector: each action is a cell with a
@@ -1846,9 +1862,13 @@ function openMenu(d, reload) {
 
     // "The Wall" favourite toggle — one cell, movie OR show depending on what
     // this page is showing. Always full width, below Clear cache / Remove, in
-    // gold. The current pick is fetched when the menu opens, so the label starts
-    // as "Set as…" and flips to "Remove as favorite" if this title is already it.
-    let isFav = false;
+    // gold. The current picks were fetched when the page opened, so the cell
+    // opens already saying "Set as…" or "Remove as favorite"; they are checked
+    // again now in case they changed elsewhere, and it only changes if they did.
+    const isPicked = () =>
+      !!favPicks && (d.type === 'movie' ? favPicks.movie : favPicks.show) === String(d.tmdb_id);
+    let isFav = isPicked();
+    let favTouched = false; // a tap wins over a check still on its way
     const favIcon = lucideIcon('star', 'status-ico');
     const favLabel = el('span', { class: 'status-cell-label' });
     const favCell = el('button', {
@@ -1875,22 +1895,23 @@ function openMenu(d, reload) {
       fadeSwap(favIcon, applyIcon);
     }
     paintFav();
-    api
-      .favorites()
-      .then((f) => {
-        const cur = d.type === 'movie' ? f.movie : f.show;
-        isFav = !!(cur && String(cur.tmdb_id) === String(d.tmdb_id));
+    refreshFavPicks()
+      .then(() => {
+        if (favTouched || isPicked() === isFav) return;
+        isFav = isPicked();
         paintFav();
       })
       .catch(() => {
-        /* leave it on "Set as…" — the click still works */
+        /* keep what the page already knew — the click still works */
       });
     favCell.addEventListener('click', async () => {
+      favTouched = true;
       favCell.disabled = true;
       try {
         const save = d.type === 'movie' ? api.setFavoriteMovie : api.setFavoriteShow;
         await save(isFav ? null : d.tmdb_id);
         isFav = !isFav;
+        if (favPicks) favPicks[d.type === 'movie' ? 'movie' : 'show'] = isFav ? String(d.tmdb_id) : null;
         paintFav();
         toast(isFav ? t('detail.pinnedToWall') : t('detail.removedFromWall'), 'ok');
       } catch (err) {
