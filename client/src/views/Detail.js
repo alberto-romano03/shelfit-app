@@ -473,8 +473,11 @@ function detailSkeleton() {
         skelTitle('22%'),
         rating(),
         skelTitle('30%'),
-        el('div', { class: 'muted' }, [skelText('44%')]),
-        el('div', { class: 'progress-bar' }),
+        el('div', { class: 'prog-skel' }, [
+          el('div', { class: 'skeleton prog-skel-pct' }),
+          el('div', { class: 'skeleton prog-skel-track' }),
+          el('div', { class: 'prog-skel-line' }, [skelText('40%')]),
+        ]),
         skelTitle('26%'),
         el('div', { class: 'skeleton', style: { height: '354px', borderRadius: 'var(--r-md)' } }),
       ]
@@ -1183,18 +1186,6 @@ export default async function Detail(container, params) {
   // --- Series progress + seasons ---
   if (d.type === 'show' && d.progress) {
     const p = d.progress;
-    const episodesLeft = p.total_episodes - p.watched_episodes;
-    const perEpisode = avgRuntime(meta.episode_run_time);
-    const progressLine =
-      timeHintsOn() && perEpisode && episodesLeft > 0
-        ? `${t('detail.progressCount', { watched: p.watched_episodes, total: p.total_episodes })} · ${roughlyLeft(episodesLeft * perEpisode)}`
-        : t('detail.progressWatched', { watched: p.watched_episodes, total: p.total_episodes, percent: p.percent });
-    body.append(
-      el('div', { class: 'section-title', text: t('detail.progress') }),
-      el('div', { class: 'muted', text: progressLine }),
-      el('div', { class: 'progress-bar' }, [el('div', { style: { width: `${p.percent}%` } })])
-    );
-
     const seasonsWrap = el('div', {});
     // The season you're on: the one you last marked in if it isn't finished, else
     // the next unfinished one after it, else the first unfinished (an episode
@@ -1208,6 +1199,7 @@ export default async function Detail(container, params) {
         unfinished.find((s) => marked != null && s.season_number > marked) ||
         unfinished[0] ||
         null;
+    body.append(el('div', { class: 'section-title', text: t('detail.progress') }), progressSection(p, onSeason, avgRuntime(meta && meta.episode_run_time)));
     // Mark all watched marks only episodes already out. A season still airing
     // with every one of those watched has nothing to mark: no button (the server
     // sends aired_left; null when it can't tell, and the button stays). One tap
@@ -1693,6 +1685,64 @@ function openSuggestSheet(d) {
       ])
     );
   }, { onClose: () => stopTypewriter() });
+}
+
+// Series progress: how much of the show, then a track cut into its seasons (each
+// as long as its episodes, filled as far as watched, the one you're on ringed),
+// their numbers under it, and what is left. Finished seasons need no tick: a
+// full segment and a gold number say it.
+// `perEpisode`: the show's usual episode length in minutes, for the time left.
+function progressSection(p, onSeason, perEpisode) {
+  const seasons = p.seasons.filter((s) => s.total > 0);
+  const watched = p.watched_episodes;
+  const total = p.total_episodes;
+  // Out and not yet seen, when the server could tell for every season (else every
+  // unwatched episode counts, as before).
+  const airedKnown = seasons.every((s) => s.aired_left != null);
+  const left = airedKnown ? seasons.reduce((n, s) => n + s.aired_left, 0) : total - watched;
+  const roughly = (n) => (timeHintsOn() && perEpisode && n > 0 ? ` · ${roughlyLeft(n * perEpisode)}` : '');
+  const line =
+    watched >= total
+      ? t('detail.seasonAllWatched', { total })
+      : !watched
+        ? t('detail.progressToWatch', { n: total }) + roughly(total)
+        : left > 0
+          ? t('detail.progressLeft', { n: left }) + roughly(left)
+          : t('detail.progressCaughtUp', { n: total - watched });
+
+  const track = el('div', { class: 'prog-track', 'aria-hidden': 'true' });
+  const labels = el('div', { class: 'prog-labels', 'aria-hidden': 'true' });
+  const fills = [];
+  const short = seasons.length > 10; // many seasons: the number alone fits
+  for (const s of seasons) {
+    const current = s === onSeason;
+    const done = s.watched >= s.total;
+    const fill = el('i');
+    const seg = el('div', { class: 'prog-seg' + (current ? ' is-current' : '') }, [fill]);
+    seg.style.flexGrow = String(s.total);
+    track.append(seg);
+    fills.push([fill, (s.watched / s.total) * 100]);
+    const label = el('span', {
+      class: current ? 'is-current' : done ? 'is-done' : null,
+      text: short ? String(s.season_number) : `S${s.season_number}`,
+    });
+    label.style.flexGrow = String(s.total);
+    labels.append(label);
+  }
+  // Filled once on screen, so each season grows to where you are.
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => fills.forEach(([fill, pct]) => (fill.style.width = `${pct}%`)))
+  );
+
+  return el('div', { class: 'prog' }, [
+    el('div', { class: 'prog-head' }, [
+      el('div', { class: 'prog-pct' }, [`${p.percent}%`, el('small', { text: t('detail.progressPctLabel') })]),
+      el('div', { class: 'prog-count', text: `${watched}/${total}` }),
+    ]),
+    track,
+    labels,
+    el('div', { class: 'muted prog-line', text: line }),
+  ]);
 }
 
 function openAddToListSheet(d) {

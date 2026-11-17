@@ -1995,16 +1995,99 @@ textarea.notes {
   resize: vertical;
 }
 
-.progress-bar {
-  height: 8px;
-  border-radius: var(--r-pill);
-  background: var(--surface-elevated);
-  overflow: hidden;
-  margin: 8px 0;
+/* Series progress (Detail.js progressSection): the share watched, a track cut
+   into seasons sized by their episodes, their numbers under it, what is left. */
+.prog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
 }
-.progress-bar > div {
-  height: 100%;
-  background: var(--success);
+.prog-pct {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.prog-pct small {
+  margin-left: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.prog-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.prog-track,
+.prog-labels {
+  display: flex;
+  gap: 4px;
+}
+.prog-track {
+  margin: 10px 0 6px;
+}
+.prog-seg,
+.prog-labels > span {
+  flex: 1 1 0;
+  min-width: 4px;
+}
+.prog-seg {
+  position: relative;
+  height: 10px;
+  border-radius: 3px;
+  /* Not a surface tone: on the light page those all but vanish. */
+  background: color-mix(in srgb, var(--text-secondary) 22%, transparent);
+  overflow: hidden;
+}
+.prog-seg > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 900ms var(--ease-out);
+}
+/* The season you're on (the one outlined in Seasons below). */
+.prog-seg.is-current {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.prog-labels > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.prog-labels > .is-done {
+  color: var(--accent-ink);
+}
+.prog-labels > .is-current {
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.prog-line {
+  margin-top: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .prog-seg > i {
+    transition: none;
+  }
+}
+/* Its skeleton: the same three tiers at the same heights. */
+.prog-skel-pct {
+  width: 30%;
+  height: 22px;
+  border-radius: var(--r-sm);
+}
+.prog-skel-track {
+  height: 10px;
+  margin: 12px 0 23px;
+  border-radius: 3px;
+}
+.prog-skel-line {
+  height: 16px;
 }
 
 /* Season accordion */
