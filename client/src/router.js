@@ -26,6 +26,7 @@ let routes = [];
 // unchanged, while the next one builds.
 let container = null;
 let onChange = null;
+let pageTitle = null; // (path, page) -> the page's name, for document.title
 // (from, to, nav) => { kind, dir }: the move a hop gets (see main.js and pageMotion.js).
 let transitionFor = null;
 let currentPath = null; // the path on screen, for transitionFor
@@ -101,6 +102,7 @@ function compile(pattern) {
 
 export function initRouter(opts) {
   onChange = opts.onChange || null;
+  pageTitle = opts.pageTitle || null;
   transitionFor = opts.transitionFor || null;
   routes = opts.routes.map((r) => ({ ...r, ...compile(r.path) }));
 
@@ -129,10 +131,13 @@ function match(path) {
   return null;
 }
 
+// Busy until its view's first real paint (mount), so a screen reader knows the
+// skeleton is not the page.
 function newPage() {
   const page = document.createElement('main');
   page.className = 'view';
   page.id = 'view';
+  page.setAttribute('aria-busy', 'true');
   return page;
 }
 
@@ -148,6 +153,15 @@ function mount(path, page, myToken) {
     viewPromise = Promise.reject(err);
   }
   return viewPromise
+    .finally(() => {
+      page.removeAttribute('aria-busy');
+      // Named after what it shows, once that is on screen (a title page's name
+      // arrives with its data, after the skeleton).
+      if (pageTitle && myToken === renderToken) {
+        const name = pageTitle(path, page);
+        document.title = name ? `${name} · shelfit` : 'shelfit';
+      }
+    })
     .then((cleanup) => {
       // A view may ALSO return a cleanup; append it rather than replacing the
       // ones it registered via onCleanup, so both kinds run on navigate-away.
@@ -217,9 +231,21 @@ function render(path, opts = {}) {
   settled = new Promise((resolve) => {
     finishHop = resolve;
   });
+  // A real move to another page (not the first load, not a page drawn again in
+  // place): the new page takes the focus, so keyboard and screen-reader users
+  // start reading it instead of from nowhere (the control they used is gone).
+  const moveFocus = from !== null && opts.transition !== false && !opts.keepScroll;
   const finished = () => {
     if (myToken !== renderToken) return;
     settle(container);
+    if (moveFocus && container && container.isConnected) {
+      const active = document.activeElement;
+      // Not away from something the user already moved on to (a sheet, a field).
+      if (!active || active === document.body || !active.isConnected || active.closest('.page-ghost, .tabbar, header')) {
+        container.setAttribute('tabindex', '-1');
+        container.focus({ preventScroll: true });
+      }
+    }
     if (finishHop) finishHop();
     finishHop = null;
   };

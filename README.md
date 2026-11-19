@@ -183,9 +183,10 @@ SQLite database and cache folder that you own.
 | Layer | Technology | Version |
 | --- | --- | --- |
 | Runtime | Node.js | 22 |
-| Backend | Fastify | ^4 |
-| Database | SQLite via better-sqlite3 | ^9 |
+| Backend | Fastify | ^5 |
+| Database | SQLite via better-sqlite3 | ^13 |
 | Frontend | Vanilla JavaScript (no framework) | — |
+| Browsers | Safari and iOS, current Chrome, Edge and Firefox (theme colours use CSS `light-dark()`) | Safari 17.5+ |
 | Build / dev | Vite | ^5 |
 | Metadata | The Movie Database (TMDB) API | v3 |
 | Artwork (optional) | Fanart.tv API | v3 |
@@ -194,7 +195,7 @@ SQLite database and cache folder that you own.
 | Packaging | Docker (multi-stage, `node:22-alpine`) | — |
 | Reverse proxy (optional) | Caddy | 2 |
 
-There are **no runtime dependencies beyond the five in `package.json`** — push
+There are **no runtime dependencies beyond the four in `package.json`**: push
 notifications, the XML parser, the image pipeline and every visual effect are
 built on Node and browser primitives.
 
@@ -442,6 +443,8 @@ PUBLIC_URL=https://myserver.tail1234.ts.net
 ```
 
 It builds magic-link URLs and is the one non-localhost origin allowed by CORS.
+With an `https` address the session cookie is always `Secure` and named
+`__Secure-shelfit_session` (a session under the old name moves over by itself).
 Open **`https://myserver.tail1234.ts.net/shelfit/`** from any device with
 Tailscale connected, or `http://localhost/shelfit/` on the host.
 
@@ -476,6 +479,7 @@ All variables are read from `.env` at container startup. Only `TMDB_API_KEY` and
 | `APP_PASSWORD_RESET` | Set `true` together with a new `APP_PASSWORD` to change the master password once (it also signs the master out everywhere), then remove both lines. Members' passwords are reset from **Settings → Household**. | No | `false` |
 | `ALLOW_NO_AUTH` | Run with no login gate (trusted LAN only). Without it the server refuses to start in production with no password. | No | `false` |
 | `PORT` | Port the Node server listens on inside the container. | No | `3000` |
+| `TRUSTED_PROXY` | Comma-separated host names or IPs of the reverse proxy. Only these (and loopback) may set `X-Forwarded-For`/`-Proto`/`-Host`; any other peer is taken as the client itself. | No | `caddy` |
 | `PUBLIC_URL` | External origin the app is reached at — no trailing slash, **no sub-path**. Used for magic-link URLs and as the only non-localhost CORS origin. | No | request host |
 | `FANART_API_KEY` | Fanart.tv key for clear logos / disc art. | No | — |
 | `CACHE_MAX_AGE_DAYS_MOVIES` | Days before cached movie metadata is refreshed. | No | `180` |
@@ -626,16 +630,14 @@ The client bundle is **baked into the Docker image**, so a plain restart only
 picks up changes under `server/`.
 
 ```bash
-# Server-only change:
-docker compose up -d --build shelfit
-
-# Client change (JS/CSS/HTML/icons): first bump the service-worker cache name in
-# client/public/sw.js  →  const CACHE = 'shelfit-shell-v71';
-# otherwise the cache-first service worker keeps serving the old shell.
 docker compose up -d --build shelfit
 ```
 
-Then reload the app once. In an installed PWA, close and reopen it.
+The build stamps the service worker with a hash of the built files, so any
+client change ships a new worker and a fresh shell cache: no version to bump.
+Open devices pick it up the next time the app comes back to the foreground, and
+run it from the next launch (or from a later return to the app after a few
+minutes away).
 
 ### Upgrading from a single-user version
 
@@ -742,8 +744,9 @@ Caddy is passing the Docker gateway instead of the device IP: add the global
 shown in setup B.
 
 **Old UI after a rebuild.**
-Bump `CACHE` in `client/public/sw.js` and rebuild; the service worker is
-cache-first for the shell. As a last resort, clear site data for the origin.
+Close and reopen the app (an installed PWA: swipe it away first). The new
+service worker installs in the background and serves the new build from the
+next launch. As a last resort, clear site data for the origin.
 
 **Server exits with "Refusing to start with authentication disabled".**
 Set `APP_PASSWORD` in `.env`, or deliberately set `ALLOW_NO_AUTH=true` for a

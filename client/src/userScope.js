@@ -16,7 +16,13 @@ const KEEP_ON_SIGN_OUT = ['showcase:seen'];
 // Keys from before per-member storage. Removed once, on the first start of this
 // version, so a former single-user cache can't surface under anyone's profile.
 const LEGACY_RE = /^shelfit:(profile|stats|home|plan|discover|showcase|search|kodi-enabled|oc):/;
-const LEGACY_EXACT = new Set(['shelfit:kodi-enabled']);
+// The device-wide poster colour store is per member now (posterColour.js): its
+// URLs name every title a member's grids showed.
+const LEGACY_EXACT = new Set(['shelfit:kodi-enabled', 'shelfit:poster-hues']);
+const MEMBER_KEY_RE = /^shelfit:u\d+:/;
+// Which member this browser's push subscription was made for. Not a member-scoped
+// key on purpose: the login page clears those, and this must outlive it.
+const PUSH_OWNER_KEY = 'shelfit:push-owner';
 
 function readUidCookie() {
   try {
@@ -64,9 +70,41 @@ async function dropOfflineApiCache() {
   }
 }
 
+// Record (or, with null, forget) which member the push subscription belongs to.
+export function setPushOwner(uid) {
+  try {
+    if (uid) localStorage.setItem(PUSH_OWNER_KEY, String(uid));
+    else localStorage.removeItem(PUSH_OWNER_KEY);
+  } catch {
+    /* storage disabled */
+  }
+}
+
+// A push subscription made for another member stops: on a shared device their
+// notifications (titles, reminders, loans) must not keep arriving for whoever
+// signs in next, by a magic link or after their session ended. A subscription of
+// unknown owner (made before this was recorded) is taken as the current member's.
+async function dropForeignPush(uid, last) {
+  try {
+    if (!('serviceWorker' in navigator)) return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
+    if (!sub) return setPushOwner(null);
+    const owner = localStorage.getItem(PUSH_OWNER_KEY) || last;
+    if (!owner) return setPushOwner(uid);
+    if (owner === uid) return;
+    await sub.unsubscribe();
+    setPushOwner(null);
+  } catch {
+    /* unsupported or blocked: the server stops on its own once the endpoint is gone */
+  }
+}
+
 // Run once at startup, before anything reads the stores: drops pre-multi-user
 // keys, and when this browser now belongs to a different member than last time
-// (a session expired and someone else signed in), the offline API cache too.
+// (a session expired and someone else signed in, or a magic link was opened),
+// whatever the previous member left on it: their member-scoped keys, the offline
+// API cache, and a push subscription made for them.
 export function initUserScope() {
   // The one legacy flag worth keeping: "the feature tour was already shown". It
   // carries no personal data, and dropping it would replay the tour for the
@@ -89,8 +127,17 @@ export function initUserScope() {
   } catch {
     /* ignore */
   }
+  dropForeignPush(uid, last);
   if (last !== uid) {
     dropOfflineApiCache();
+    // Other members' keys. Kept: that they have seen the first-run tour (it is no
+    // personal data, see KEEP_ON_SIGN_OUT).
+    const mine = `shelfit:u${uid}:`;
+    removeKeys(
+      localStorage,
+      (k) => MEMBER_KEY_RE.test(k) && !k.startsWith(mine) && !KEEP_ON_SIGN_OUT.some((keep) => k.endsWith(`:${keep}`))
+    );
+    removeKeys(sessionStorage, (k) => MEMBER_KEY_RE.test(k) && !k.startsWith(mine));
     try {
       localStorage.setItem(LAST_UID_KEY, uid);
     } catch {

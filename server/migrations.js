@@ -1,6 +1,7 @@
 // Ordered schema migrations applied on top of the db.js baseline. See migrate.js
 // for the contract. Append only: never edit or reorder an entry that has shipped.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { PROFILE_DIR } from './config.js';
@@ -424,6 +425,22 @@ export const MIGRATIONS = [
           plays   INTEGER NOT NULL
         );
       `);
+    },
+  },
+  {
+    // Magic links are stored as a SHA-256 of their token, like sessions and
+    // invites, so a copy of the database (or of data/backups) holds no working
+    // sign-in URL. Existing links keep working: their stored token is hashed in
+    // place, and a visit is looked up by the hash of the token it carries.
+    version: 12,
+    name: 'magic links hashed',
+    up(db) {
+      db.exec('ALTER TABLE magic_links RENAME COLUMN token TO token_hash');
+      const rows = db.prepare('SELECT id, token_hash FROM magic_links').all();
+      const update = db.prepare('UPDATE magic_links SET token_hash = ? WHERE id = ?');
+      for (const row of rows) {
+        update.run(crypto.createHash('sha256').update(row.token_hash).digest('hex'), row.id);
+      }
     },
   },
 ];

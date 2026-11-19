@@ -97,7 +97,7 @@ function pageSkeleton() {
     el('div', { class: 'cp-head' }, [
       el('div', { class: 'poster-card cp-poster skeleton' }),
       el('div', { class: 'cp-head-text' }, [
-        el('h2', { class: 'cp-name' }, [skelText('72%')]),
+        el('h2', { class: 'cp-name', 'aria-hidden': 'true' }, [skelText('72%')]),
         el('div', { class: 'cp-years' }, [skelText('38%')]),
         el('div', { class: 'cp-owned' }, [skelText('54%')]),
         el('div', { class: 'cp-pips' }, [el('i'), el('i'), el('i')]),
@@ -158,7 +158,7 @@ function buildPage(d, onAdded) {
   if (d.overview) body.append(...collapsibleText(d.overview));
 
   // --- Films (release order) ---
-  body.append(el('div', { class: 'section-title', text: t('collection.films') }));
+  body.append(el('h3', { class: 'section-title', text: t('collection.films') }));
   const grid = el('div', { class: 'grid cp-grid' });
   for (const p of d.parts) {
     const card = poster(p.poster_url, p.title);

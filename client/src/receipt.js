@@ -35,7 +35,9 @@ const EXPORT_SCALE = 2; // export at 2160×3840 (2× the 1080×1920 design)
 // back to Courier New until it loads / if it fails. It's monospaced, so the layout
 // math below (CHAR_W advance, divider length, title truncation) stays aligned.
 const FONT = "'Fake Receipt', 'Courier New', 'Courier', ui-monospace, monospace";
-const RECEIPT_FONT_URL = '/font/Fake-Receipt.woff';
+// WOFF2 (Brotli inside, about 17% smaller); the WOFF stays as the fallback.
+const RECEIPT_FONT_URL = '/font/Fake-Receipt.woff2';
+const RECEIPT_FONT_FALLBACK = '/font/Fake-Receipt.woff';
 const LOGO_URL = '/icons/receipt-logo.png'; // dedicated receipt store logo
 
 // Load + register the custom font once, so BOTH the HTML preview (via CSS) and the
@@ -48,7 +50,10 @@ function ensureReceiptFont() {
     _receiptFontPromise = Promise.resolve();
     return _receiptFontPromise;
   }
-  const face = new FontFace('Fake Receipt', `url("${withBase(RECEIPT_FONT_URL)}")`);
+  const face = new FontFace(
+    'Fake Receipt',
+    `url("${withBase(RECEIPT_FONT_URL)}") format('woff2'), url("${withBase(RECEIPT_FONT_FALLBACK)}") format('woff')`
+  );
   _receiptFontPromise = face
     .load()
     .then((f) => {
@@ -665,7 +670,7 @@ export function openReceipt(month) {
       const token = ++loadToken;
       loading = true;
       saveBtn.disabled = true;
-      body.innerHTML = '';
+      body.replaceChildren();
       body.append(spinner());
       (key ? api.receipt(key) : take('receipt', () => api.receipt()))
         .then(async (r) => {
@@ -689,7 +694,7 @@ export function openReceipt(month) {
         })
         .catch(() => {
           if (token !== loadToken) return;
-          body.innerHTML = '';
+          body.replaceChildren();
           body.append(
             stateBlock({
               kind: 'error',
@@ -726,7 +731,7 @@ export function openReceipt(month) {
 
       // The background on show stays on top of the new one and fades away once that's ready.
       const previous = [...card.querySelectorAll('.rcpt-bg.is-painted')].pop();
-      card.innerHTML = '';
+      card.replaceChildren();
       // Background layer by type. Blur applies ONLY to the poster background.
       const myToken = ++renderToken;
       const bg = el('div', { class: 'rcpt-bg' });
@@ -921,7 +926,7 @@ export function openReceipt(month) {
     }
 
     function renderPicker() {
-      pickerArea.innerHTML = '';
+      pickerArea.replaceChildren();
       pickerArea.scrollTop = 0;
       // The posters and the slider fit exactly; only the longer lists scroll.
       pickerArea.classList.toggle('is-fitted', state.bgType === 'poster');
@@ -965,7 +970,7 @@ export function openReceipt(month) {
     }
 
     function build() {
-      body.innerHTML = '';
+      body.replaceChildren();
       renderCard();
       body.append(previewWrap, modeControl(), pickerArea);
       renderPicker();

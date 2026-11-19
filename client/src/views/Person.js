@@ -101,7 +101,7 @@ function openCredit(c) {
 // The viewer's status on any card: their rating, or "to watch".
 function statusBadge(c) {
   if (!c.inLib) return null;
-  if (c.inLib.rating) return el('div', { class: 'rating-badge person-badge', html: `★ ${c.inLib.rating}` });
+  if (c.inLib.rating) return el('div', { class: 'rating-badge person-badge', text: `★ ${c.inLib.rating}` });
   if (c.inLib.status === 'plan_to_watch') {
     return el('div', { class: 'person-badge person-badge--plan' }, [lucideIcon('calendar-plus', 'person-glyph')]);
   }
@@ -171,7 +171,7 @@ function personSkeleton() {
       el('div', { class: 'person-photo skeleton' }),
       el('div', { class: 'person-head-text' }, [
         el('div', { class: 'person-eyebrow' }, [skelText('74px')]),
-        el('h2', { class: 'person-name' }, [skelText('72%')]),
+        el('h2', { class: 'person-name', 'aria-hidden': 'true' }, [skelText('72%')]),
         el('div', { class: 'person-meta-row' }, [skelText('62%')]),
         el('div', { class: 'person-meta-row' }, [skelText('78%')]),
       ]),
@@ -182,7 +182,7 @@ function personSkeleton() {
     skelOverview(4),
     skelShowMore(),
     el('div', { class: 'person-career-head' }, [
-      el('div', { class: 'section-title', style: { flex: '1' } }, [skelText('72px')]),
+      el('div', { class: 'section-title', 'aria-hidden': 'true', style: { flex: '1' } }, [skelText('72px')]),
       el('div', { class: 'skeleton skel-pill', style: { width: '220px', height: '34px', flex: 'none' } }),
     ]),
     el('div', { class: 'hscroll person-timeline' }, [
@@ -213,7 +213,7 @@ export async function Person(container, params) {
       markDegraded();
       return;
     }
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(
       stateBlock({
         kind: 'error',
@@ -335,7 +335,7 @@ export async function Person(container, params) {
   }
 
   function paint() {
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(fileInput);
 
     // Versioned by the server (the file's change time), so the browser keeps it
@@ -424,7 +424,7 @@ export async function Person(container, params) {
         ]);
       const firstName = (person.name || '').split(' ')[0];
       container.append(
-        el('div', { class: 'section-title', text: t('person.youAnd', { name: firstName }) }),
+        el('h3', { class: 'section-title', text: t('person.youAnd', { name: firstName }) }),
         el('div', { class: 'stats-grid person-stats' }, [
           statCard('library-big', fmtNumber(inLib.length), t('person.statLibrary', { total: fmtNumber(acting.length) })),
           statCard('eye', fmtNumber(watched.length), t('person.statSeen')),
@@ -445,7 +445,7 @@ export async function Person(container, params) {
     // --- Biography (shared collapsible with the title detail page) ---
     if (person.biography) {
       container.append(
-        el('div', { class: 'section-title', text: t('person.biography') }),
+        el('h3', { class: 'section-title', text: t('person.biography') }),
         ...collapsibleText(person.biography)
       );
     }
@@ -470,7 +470,7 @@ export async function Person(container, params) {
         card.addEventListener('click', () => openCredit(c));
         rail.append(card);
       }
-      container.append(el('div', { class: 'section-title', text: t('person.knownFor') }), rail);
+      container.append(el('h3', { class: 'section-title', text: t('person.knownFor') }), rail);
     }
 
     // --- Career: a horizontal timeline, newest first, a year marker over each
@@ -521,7 +521,7 @@ export async function Person(container, params) {
       paintTimeline(false);
       container.append(
         el('div', { class: 'person-career-head' }, [
-          el('div', { class: 'section-title', text: t('person.career') }),
+          el('h3', { class: 'section-title', text: t('person.career') }),
           filter.el,
         ]),
         timeline

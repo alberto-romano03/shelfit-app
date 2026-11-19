@@ -12,6 +12,7 @@ import { BADGES_DIR, CLIENT_DIST, TMDB_API_KEY, PUBLIC_URL } from './config.js';
 import './db.js'; // opens DB, creates dirs, runs migrations on import
 import { initAuthPassword, registerAuth } from './auth.js';
 import { registerRateLimit } from './rateLimit.js';
+import { registerFetchMetadataGuard, registerSecurityHeaders, registerCspReport } from './security.js';
 
 import searchRoutes from './routes/search.js';
 import mediaRoutes from './routes/media.js';
@@ -70,6 +71,10 @@ export async function buildApp({ quiet = false } = {}) {
     // the two endpoints that legitimately accept larger payloads (library XML
     // import, profile-photo upload) raise it per-route via their own `bodyLimit`.
     bodyLimit: 512 * 1024,
+    // Fastify 4 treats `;` as the start of the query string by default, so
+    // `/api/x;y` would reach the `/api/x` handler. Nothing here uses `;` in a
+    // path; turn it off (the default from Fastify 5) so a path means one route.
+    useSemicolonDelimiter: false,
   });
 
   // --- CORS -----------------------------------------------------------------
@@ -82,10 +87,11 @@ export async function buildApp({ quiet = false } = {}) {
   const ALLOWED_ORIGINS = new Set(
     [
       PUBLIC_URL || null,
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost:5173', // Vite dev server
-      'http://127.0.0.1:5173',
+      // Local dev origins (incl. the Vite dev server), never in production: there
+      // any other dev server on this machine could make credentialed reads.
+      ...(process.env.NODE_ENV === 'production'
+        ? []
+        : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173', 'http://127.0.0.1:5173']),
     ].filter(Boolean)
   );
   await fastify.register(fastifyCors, {
@@ -109,6 +115,14 @@ export async function buildApp({ quiet = false } = {}) {
     reply.removeHeader('Server');
     reply.removeHeader('X-Powered-By');
   });
+
+  // --- Cross-site requests -------------------------------------------------
+  // Refuse calls from other sites before any other work (security.js).
+  registerFetchMetadataGuard(fastify);
+
+  // --- Security headers and CSP reports (security.js) -----------------------
+  registerSecurityHeaders(fastify);
+  registerCspReport(fastify);
 
   // --- Rate limiting --------------------------------------------------------
   // Per-IP request ceilings for /api/*, registered before the auth gate so floods
@@ -263,18 +277,27 @@ export async function buildApp({ quiet = false } = {}) {
       prefix: '/',
       index: ['index.html'],
       decorateReply: true,
+      // The build writes a Brotli copy next to each text file (vite.config.js):
+      // sent as is to browsers that accept br, with Vary: Accept-Encoding. The
+      // proxy leaves an already encoded response alone.
+      preCompressed: true,
     });
   }
 
   // SPA fallback: any non-API GET that isn't a real file returns index.html so
-  // History-API client routes (e.g. /series/5) work on reload and iOS PWA.
+  // History-API client routes (e.g. /series/5) work on reload and iOS PWA. A
+  // missing file (an old bundle hash, a mistyped icon) gets a real 404: answering
+  // it with index.html would put HTML in caches under a .js or .png name.
+  const ASSET_PATH = /^\/(static|icons|font)\/|\.(js|mjs|css|map|json|png|jpe?g|webp|avif|gif|svg|ico|woff2?|ttf)$/i;
   fastify.setNotFoundHandler((request, reply) => {
     const url = request.raw.url || '';
+    const pathname = url.split('?')[0];
     if (
       request.method === 'GET' &&
       !url.startsWith('/api/') &&
       !url.startsWith('/assets/') &&
-      !url.startsWith('/badges/')
+      !url.startsWith('/badges/') &&
+      !ASSET_PATH.test(pathname)
     ) {
       const indexFile = path.join(CLIENT_DIST, 'index.html');
       if (fs.existsSync(indexFile)) {

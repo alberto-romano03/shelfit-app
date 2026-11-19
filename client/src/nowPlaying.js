@@ -29,7 +29,8 @@ let currentWrap = null; // the .avatar-wrap element hosting the ring (or null)
 let autoCloseTimer = null; // dismisses an open toast after a short peek
 
 // The toast is a quick glance at what's playing — auto-dismiss it a few seconds
-// after it opens so it never lingers over the UI.
+// after it opens so it never lingers over the UI. Never while a pointer or the
+// focus is on it: someone reading it or reaching for a button keeps it open.
 const TOAST_AUTO_CLOSE_MS = 7000;
 
 // Header label: "Now playing", or "Paused" while Kodi is paused.
@@ -44,9 +45,13 @@ export function initNowPlaying(headerActionsEl) {
   indicator = el('button', {
     class: 'np-indicator',
     'aria-label': t('nowPlaying.indicatorAria'),
+    'aria-controls': 'np-toast',
+    'aria-expanded': 'false',
     onClick: (e) => {
       e.stopPropagation();
-      toggleToast();
+      // A click with no pointer behind it (keyboard, a screen reader) also moves
+      // the focus into the toast, so its buttons are the next thing reached.
+      toggleToast({ focus: e.detail === 0 });
     },
   });
   const glyph = el('span', { class: 'np-audio' });
@@ -66,27 +71,43 @@ export function initNowPlaying(headerActionsEl) {
   const text = el('div', { class: 'np-toast-text' }, [source, title, meta, chips]);
   const body = el('div', { class: 'np-toast-body' }, [text]);
   const acts = el('div', { class: 'np-act' });
-  toastEl = el('div', { class: 'np-toast', role: 'dialog', 'aria-label': t('nowPlaying.label') }, [
-    poster,
-    body,
-    acts,
-  ]);
+  // Close, for keyboards and screen readers (a finger taps outside instead): out
+  // of sight until it has the focus.
+  const close = el('button', {
+    class: 'np-close sr-only',
+    type: 'button',
+    text: t('common.close'),
+    onClick: () => closeToast(),
+  });
+  toastEl = el(
+    'div',
+    { class: 'np-toast', id: 'np-toast', role: 'dialog', 'aria-label': t('nowPlaying.label'), tabindex: '-1' },
+    [poster, body, acts, close]
+  );
   // Hidden, it is only see-through: inert keeps its buttons out of Tab and away
   // from screen readers until it opens.
   toastEl.inert = true;
   document.body.appendChild(toastEl);
-  els = { poster, source, sourceName, title, meta, chips, acts };
+  els = { poster, source, sourceName, title, meta, chips, acts, close };
 
-  // A finger or pointer on the toast holds it open (there is a button to reach
-  // now); leaving it starts the peek again.
+  // A finger, pointer or the focus on the toast holds it open (there is a button
+  // to reach now); leaving it starts the peek again.
   const hold = () => clearTimeout(autoCloseTimer);
   const release = () => {
     clearTimeout(autoCloseTimer);
-    if (toastOpen) autoCloseTimer = setTimeout(closeToast, TOAST_AUTO_CLOSE_MS);
+    if (toastOpen && !holding()) autoCloseTimer = setTimeout(autoClose, TOAST_AUTO_CLOSE_MS);
   };
   toastEl.addEventListener('pointerenter', hold);
   toastEl.addEventListener('pointerdown', hold);
-  toastEl.addEventListener('pointerleave', release);
+  toastEl.addEventListener('pointerleave', () => setTimeout(release));
+  toastEl.addEventListener('focusin', hold);
+  toastEl.addEventListener('focusout', (e) => {
+    if (!toastEl.contains(e.relatedTarget)) setTimeout(release);
+  });
+  // Esc closes it, like any dialog.
+  document.addEventListener('keydown', (e) => {
+    if (toastOpen && e.key === 'Escape') closeToast();
+  });
   // An Undo resets the row: rebuild it from the latest snapshot.
   toastEl.addEventListener('np-act-reset', () => {
     const np = getNowPlaying();
@@ -112,6 +133,7 @@ export function initNowPlaying(headerActionsEl) {
     indicator.setAttribute('aria-label', t('nowPlaying.indicatorAria'));
     indicator.querySelector('.np-indicator-label').textContent = indicatorLabel(getNowPlaying());
     toastEl.setAttribute('aria-label', t('nowPlaying.label'));
+    els.close.textContent = t('common.close');
     if (toastOpen) fillToast(getNowPlaying());
   });
   render(getNowPlaying());
@@ -207,7 +229,7 @@ function fillToast(np) {
 
   if (posterSrc !== els.poster._src) {
     els.poster._src = posterSrc;
-    els.poster.innerHTML = '';
+    els.poster.replaceChildren();
     if (posterSrc) {
       els.poster.classList.remove('skeleton');
       const img = cachedImg(posterSrc, { alt: '' });
@@ -259,11 +281,19 @@ function fillToast(np) {
 }
 
 // --- Open / close ---------------------------------------------------------
-function toggleToast() {
-  if (toastOpen) closeToast();
-  else openToast();
+function holding() {
+  return toastEl.matches(':hover') || toastEl.contains(document.activeElement);
 }
-function openToast() {
+// The timer's close: not from under someone using the toast.
+function autoClose() {
+  if (holding()) return;
+  closeToast();
+}
+function toggleToast({ focus = false } = {}) {
+  if (toastOpen) closeToast();
+  else openToast({ focus });
+}
+function openToast({ focus = false } = {}) {
   const np = getNowPlaying();
   if (!toastEl || !(np && np.active) || overlayOpen()) return; // idle / behind a modal → nothing
   fillToast(np);
@@ -275,14 +305,23 @@ function openToast() {
   toastEl.inert = false;
   requestAnimationFrame(() => toastEl.classList.add('show'));
   toastOpen = true;
+  if (indicator) indicator.setAttribute('aria-expanded', 'true');
+  if (focus) toastEl.focus({ preventScroll: true });
   // Auto-dismiss after a brief peek.
   clearTimeout(autoCloseTimer);
-  autoCloseTimer = setTimeout(closeToast, TOAST_AUTO_CLOSE_MS);
+  autoCloseTimer = setTimeout(autoClose, TOAST_AUTO_CLOSE_MS);
 }
 function closeToast() {
   if (!toastEl) return;
   clearTimeout(autoCloseTimer);
   autoCloseTimer = null;
+  if (indicator) indicator.setAttribute('aria-expanded', 'false');
+  // The focus was in the toast: back to the button that opens it, rather than
+  // lost with the toast (inert drops it to the page).
+  if (toastEl.contains(document.activeElement)) {
+    if (indicator && indicator.classList.contains('active')) indicator.focus({ preventScroll: true });
+    else document.activeElement.blur();
+  }
   toastEl.classList.add('dismissing');
   toastEl.classList.remove('show');
   toastEl.inert = true;

@@ -139,8 +139,9 @@ export const imageCache = {
   // Returns a usable image URL for `url`: the cached object URL if present,
   // otherwise fetches + caches it. On any failure (or when unsupported) resolves
   // to the original URL so the caller can still display the image.
-  // opts.preload: fetch at low (background) priority — used by the preloader so
-  // it yields to user-initiated loads. Omitted → normal (user) priority.
+  // opts.preload: fetch at low (background) priority, used by the preloader so
+  // it yields to user-initiated loads. opts.priority 'high': the image a page
+  // opens on (the Detail backdrop), fetched ahead of the rest. Omitted: normal.
   load(url, opts) {
     if (!url) return Promise.resolve(url);
     if (!SUPPORTED) return Promise.resolve(withBase(url));
@@ -166,7 +167,8 @@ export const imageCache = {
       try {
         // Background fetches also tell the browser they can wait (ignored
         // where Fetch Priority is not supported).
-        const res = await fetch(url, { signal: ac.signal, priority: low ? 'low' : 'auto' });
+        const priority = low ? 'low' : opts && opts.priority === 'high' ? 'high' : 'auto';
+        const res = await fetch(url, { signal: ac.signal, priority });
         if (!res.ok) return url;
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);

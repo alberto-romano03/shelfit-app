@@ -96,8 +96,10 @@ export function openNewListSheet({ type = 'movie', onCreated } = {}) {
         maxlength: String(LIST_NAME_MAX),
         autocomplete: 'off',
         'aria-label': t('lists.nameLabel'),
+        'aria-describedby': 'nl-count',
+        enterkeyhint: 'done',
       });
-      const counter = el('div', { class: 'nl-count', 'aria-live': 'polite' });
+      const counter = el('div', { class: 'nl-count', id: 'nl-count' });
       const previewSlot = el('div', { class: 'nl-preview' });
       const createBtn = el('button', { class: 'btn btn-primary', type: 'button' }, [
         lucideIcon('plus', 'btn-lucide'),
@@ -149,7 +151,7 @@ export function openNewListSheet({ type = 'movie', onCreated } = {}) {
       createBtn.addEventListener('click', submit);
       input.addEventListener('input', paint);
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') submit();
+        if (e.key === 'Enter' && !e.isComposing) submit();
       });
       paint();
       stopTypewriter = typewriterPlaceholder(input, t(NAME_IDEAS[Math.floor(Math.random() * NAME_IDEAS.length)]));

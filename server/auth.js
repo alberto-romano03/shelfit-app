@@ -14,6 +14,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import db from './db.js';
 import { PUBLIC_URL } from './config.js';
 import {
@@ -23,8 +24,9 @@ import {
   recordUse,
   revokeMagicLink,
   expiryMsFor,
+  deleteUserMagicLinks,
 } from './magicLinks.js';
-import { clientIp } from './security.js';
+import { clientIp, routePath, forwarded } from './security.js';
 import { logAccess, getRecentAccess, EVENTS } from './accessLog.js';
 import { getUser, getMaster, pickerUsers, isPickable, avatarFile, badgeFile, fileVersion } from './users.js';
 import { findInvite, clearInvites, pruneInvites } from './invites.js';
@@ -52,7 +54,13 @@ const SALT_BYTES = 32;
 export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
 
-const COOKIE = 'shelfit_session';
+// Served over https (PUBLIC_URL), the session cookie is always Secure and carries
+// the __Secure- prefix, which the browser only accepts with Secure set from an
+// https page. The older name is still read, and swapped for the new one on the
+// next request (see the gate), so nobody is signed out by the rename.
+const SECURE_COOKIES = /^https:\/\//i.test(PUBLIC_URL || '');
+const LEGACY_COOKIE = 'shelfit_session';
+const COOKIE = SECURE_COOKIES ? '__Secure-shelfit_session' : LEGACY_COOKIE;
 // Readable companion cookie holding only the signed-in user's id. It grants
 // nothing (the session cookie above is what authenticates); it tells the client,
 // synchronously at startup, whose on-device cache to read, so one member's cached
@@ -108,17 +116,38 @@ function scrypt(password, salt, params) {
   });
 }
 
+// The same, off the event loop, for request handlers: a hash at these parameters
+// takes hundreds of ms, and scryptSync would stall every other request meanwhile.
+// One hash at a time: each needs about 128 MB, and the queue keeps that bounded
+// however many sign-ins arrive at once.
+const scryptCb = promisify(crypto.scrypt);
+let scryptQueue = Promise.resolve();
+function scryptAsync(password, salt, params) {
+  const run = () =>
+    scryptCb(password, salt, KEYLEN, { N: params.N, r: params.r, p: params.p, maxmem: params.maxmem });
+  const result = scryptQueue.then(run, run);
+  scryptQueue = result.catch(() => {});
+  return result;
+}
+
+const formatHash = (salt, hash) =>
+  `s2:${SCRYPT.N}:${SCRYPT.r}:${SCRYPT.p}:${salt.toString('hex')}:${hash.toString('hex')}`;
+
 // A new stored value for `password` in the current self-describing format.
+// Synchronous for boot (APP_PASSWORD) and tests; handlers use hashPasswordAsync.
 export function hashPassword(password) {
   const salt = crypto.randomBytes(SALT_BYTES);
-  const hash = scrypt(password, salt, SCRYPT);
-  return `s2:${SCRYPT.N}:${SCRYPT.r}:${SCRYPT.p}:${salt.toString('hex')}:${hash.toString('hex')}`;
+  return formatHash(salt, scrypt(password, salt, SCRYPT));
+}
+export async function hashPasswordAsync(password) {
+  const salt = crypto.randomBytes(SALT_BYTES);
+  return formatHash(salt, await scryptAsync(password, salt, SCRYPT));
 }
 
 // Constant-time verification of a submitted password against a stored hash in
 // either the `s2:N:r:p:salt:hash` format (params read from the value) or the
 // legacy `salt:hash` format (verified with the original work factor).
-function verifyPassword(stored, password) {
+async function verifyPassword(stored, password) {
   if (!stored || typeof password !== 'string') return false;
   let salt;
   let expected;
@@ -139,7 +168,7 @@ function verifyPassword(stored, password) {
   }
   let actual;
   try {
-    actual = scrypt(password, salt, params);
+    actual = await scryptAsync(password, salt, params);
   } catch {
     return false;
   }
@@ -243,8 +272,16 @@ function createSession(userId, request) {
 }
 
 function sessionTokenFrom(request) {
-  const value = parseCookies(request.headers.cookie)[COOKIE];
+  const cookies = parseCookies(request.headers.cookie);
+  const value = cookies[COOKIE] || (SECURE_COOKIES ? cookies[LEGACY_COOKIE] : undefined);
   return value && TOKEN_RE.test(value) ? value : null;
+}
+
+// True when the session came in under the pre-__Secure- cookie name.
+function usesLegacyCookie(request) {
+  if (!SECURE_COOKIES) return false;
+  const cookies = parseCookies(request.headers.cookie);
+  return !cookies[COOKIE] && !!cookies[LEGACY_COOKIE];
 }
 
 // The account behind the request's session cookie ({ id, role }), or null.
@@ -264,11 +301,14 @@ function destroySession(request) {
   if (token) deleteSessionStmt.run(hashToken(token));
 }
 
-// Sign `userId` out everywhere: no existing token can match again.
+// Sign `userId` out everywhere: no existing token can match again, and their
+// magic links go too (a link is a standing login, so it must not outlive "sign
+// out everywhere", a password reset, or a disabled account).
 export function revokeAllSessions(userId) {
   db.transaction(() => {
     bumpGenerationStmt.run(userId);
     deleteUserSessionsStmt.run(userId);
+    deleteUserMagicLinks(userId);
   })();
 }
 
@@ -309,9 +349,14 @@ function parseCookies(header) {
 // Behind Caddy the app sees HTTP; the Secure flag must follow the *external*
 // scheme, which Caddy reports via X-Forwarded-Proto.
 function isHttps(request) {
-  return (request.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+  return forwarded(request, 'x-forwarded-proto') === 'https';
 }
-function buildSessionCookie(value, { maxAge, secure }) {
+// Secure whenever the app's public address is https, not only when the proxy
+// says so: a missing X-Forwarded-Proto must not drop the flag.
+function secureFor(request) {
+  return SECURE_COOKIES || isHttps(request);
+}
+function buildSessionCookie(value, { maxAge, secure, name = COOKIE }) {
   // Scope the cookie to the app's sub-path so it isn't sent to sibling apps
   // hosted under other prefixes on the same hostname.
   //
@@ -322,7 +367,7 @@ function buildSessionCookie(value, { maxAge, secure }) {
   // (this broke magic-link auto-login on Android/Chrome). Lax still sends it on
   // top-level GET navigations while withholding it from cross-site POST/fetch, so
   // state-changing requests stay CSRF-safe.
-  const parts = [`${COOKIE}=${value}`, `Path=${BASE}/`, 'HttpOnly', 'SameSite=Lax'];
+  const parts = [`${name}=${value}`, `Path=${BASE}/`, 'HttpOnly', 'SameSite=Lax'];
   if (maxAge != null) parts.push(`Max-Age=${maxAge}`);
   if (secure) parts.push('Secure');
   return parts.join('; ');
@@ -333,18 +378,24 @@ function buildUidCookie(value, { maxAge, secure }) {
   if (secure) parts.push('Secure');
   return parts.join('; ');
 }
+// Clears the pre-__Secure- cookie, when the new name is in use.
+function legacyCookieClear(secure) {
+  return SECURE_COOKIES ? [buildSessionCookie('', { maxAge: 0, secure, name: LEGACY_COOKIE })] : [];
+}
 function setSessionCookie(reply, request, token, userId) {
-  const secure = isHttps(request);
+  const secure = secureFor(request);
   reply.header('Set-Cookie', [
     buildSessionCookie(token, { maxAge: YEAR_SECONDS, secure }),
     buildUidCookie(String(userId), { maxAge: YEAR_SECONDS, secure }),
+    ...(usesLegacyCookie(request) ? legacyCookieClear(secure) : []),
   ]);
 }
 function clearSessionCookie(reply, request) {
-  const secure = isHttps(request);
+  const secure = secureFor(request);
   reply.header('Set-Cookie', [
     buildSessionCookie('', { maxAge: 0, secure }),
     buildUidCookie('', { maxAge: 0, secure }),
+    ...legacyCookieClear(secure),
   ]);
 }
 
@@ -475,42 +526,57 @@ function scriptJson(value) {
   return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
-// The logo is the same file as the favicon, linked rather than inlined: /icons/*
-// is public (see isPublic), so it loads without a session, and as a separate URL
-// it is downloaded once and browser-cached (Caddy sends a week's max-age) instead
-// of riding along, base64-inflated, in every no-store copy of this page.
-//
-// `invite` is null, { name } for a valid invite (the page opens on "choose your
-// password"), or { invalid: true } (the picker shows a notice instead).
-function loginPageHtml(profiles, invite = null) {
-  const logoTag = `<img class="logo" src="${BASE}/icons/shelf-iticon-browser.png" alt="" width="56" height="56">`;
+const escHtml = (v) =>
+  String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// The page a magic link opens: whose account it is and one button. Signing in
+// is the button's POST, so a chat app's link preview or an accidental open
+// signs nobody in. No script: the language comes from Accept-Language and the
+// theme from the system setting.
+function magicConfirmHtml(user, token, lang) {
+  const it = lang === 'it';
+  const f = avatarFile(user);
+  const b = badgeFile(user);
+  const initial = (Array.from(user.display_name || '?')[0] || '?').toUpperCase();
+  const avatar = f
+    ? `<img src="${BASE}/api/auth/profiles/${user.id}/avatar?v=${fileVersion(f)}" alt="">`
+    : escHtml(initial);
+  const badge = b
+    ? `<span class="badge"><img src="${BASE}/api/auth/profiles/${user.id}/badge?v=${fileVersion(b)}" alt=""></span>`
+    : '';
+  const name = escHtml(user.display_name);
   return `<!doctype html>
-<html lang="en">
+<html lang="${it ? 'it' : 'en'}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#0a0a0a">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="shelfit">
-<link rel="apple-touch-icon" sizes="180x180" href="${BASE}/icons/apple-touch-icon.png">
-<link rel="icon" type="image/png" href="${BASE}/icons/shelf-iticon-browser.png">
-<link rel="manifest" href="${BASE}/manifest.json">
-<title data-it="Accedi · shelfit" data-en="Sign in · shelfit">Sign in · shelfit</title>
-<script>
-  // Theme, before first paint: the app's stored choice (theme.js, 'shelfit-theme').
-  // 'system' or nothing leaves the attribute off and the media query decides.
-  (function(){
-    var root=document.documentElement,t=null;
-    try{t=localStorage.getItem('shelfit-theme');}catch(e){}
-    if(t==='light'||t==='dark')root.setAttribute('data-theme',t);
-    var light=t==='light'||(t!=='dark'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches);
-    var meta=document.querySelector('meta[name="theme-color"]');
-    if(meta)meta.setAttribute('content',light?'#f5f5f5':'#0a0a0a');
-  })();
-</script>
+<meta name="referrer" content="no-referrer">
+<link rel="icon" type="image/png" href="${BASE}/icons/shelf-iticon-224.png">
+<title>${it ? 'Accedi' : 'Sign in'} · shelfit</title>
 <style>
-  :root{
+${AUTH_PAGE_CSS}</style>
+</head>
+<body>
+  <main class="card">
+    <img class="logo" src="${BASE}/icons/shelf-iticon-224.png" alt="" width="56" height="56">
+    <h1>shelf<span>it</span></h1>
+    <div class="who">
+      <span class="tile-media"><span class="avatar">${avatar}</span>${badge}</span>
+      <span class="name">${name}</span>
+    </div>
+    <p class="sub">${it ? `Entra in shelfit come ${name} su questo dispositivo.` : `Sign in to shelfit as ${name} on this device.`}</p>
+    <form method="post" action="${BASE}/api/auth/magic/${token}">
+      <button class="primary" type="submit">${it ? 'Entra' : 'Sign in'}</button>
+    </form>
+    <p class="sub note">${it ? "Non te l'aspettavi? Chiudi questa pagina." : "Didn't expect this? Just close this page."}</p>
+  </main>
+</body>
+</html>`;
+}
+
+// Styles shared by the sign-in pages (login, magic link confirm).
+const AUTH_PAGE_CSS = `  :root{
     --bg:#0a0a0a;--surface:#1a1a1a;--surface-elevated:#2a2a2a;
     --text-primary:#fff;--text-secondary:#999;--accent:#e5a00d;
     --danger:#e5484d;--border:rgba(255,255,255,.08);--shadow:rgba(0,0,0,.5);
@@ -580,6 +646,7 @@ function loginPageHtml(profiles, invite = null) {
   .who .badge{width:38px;height:38px}
   .who .name{font-size:20px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sub{color:var(--text-secondary);font-size:14px;margin:0 0 20px}
+  .sub.note{margin:24px 0 0}
   form{display:flex;flex-direction:column;gap:12px;max-width:320px;margin:0 auto}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
   /* The app's text field: 12px radius, focus as a border swap + outside ring so
@@ -614,7 +681,33 @@ function loginPageHtml(profiles, invite = null) {
   .error{color:var(--danger);font-size:14px;min-height:18px;margin-top:4px}
   .notice{color:var(--danger);font-size:14px;margin:-8px 0 20px}
   .notice[hidden]{display:none}
-</style>
+`;
+
+// The logo is the same file as the favicon, linked rather than inlined: /icons/*
+// is public (see isPublic), so it loads without a session, and as a separate URL
+// it is downloaded once and browser-cached (Caddy sends a week's max-age) instead
+// of riding along, base64-inflated, in every no-store copy of this page.
+//
+// `invite` is null, { name } for a valid invite (the page opens on "choose your
+// password"), or { invalid: true } (the picker shows a notice instead).
+function loginPageHtml(profiles, invite = null) {
+  const logoTag = `<img class="logo" src="${BASE}/icons/shelf-iticon-224.png" alt="" width="56" height="56">`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="shelfit">
+<link rel="apple-touch-icon" sizes="180x180" href="${BASE}/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="${BASE}/icons/shelf-iticon-224.png">
+<link rel="manifest" href="${BASE}/manifest.json">
+<title data-it="Accedi · shelfit" data-en="Sign in · shelfit">Sign in · shelfit</title>
+<script src="${BASE}/boot/login-theme.js"></script>
+<style>
+${AUTH_PAGE_CSS}</style>
 </head>
 <body>
   <main class="card">
@@ -678,187 +771,8 @@ function loginPageHtml(profiles, invite = null) {
       </form>
     </section>
   </main>
-<script>
-  (function(){
-    var BASE='${BASE}';
-    var PROFILES=${scriptJson(profiles)};
-    var INVITE=${scriptJson(invite)};
-    // Language: the app's stored choice, else the browser's. Both languages ship
-    // in data attributes; fill every translatable node from its own.
-    var lang='en';
-    try{lang=localStorage.getItem('shelfit:lang');}catch(e){}
-    if(lang!=='it'&&lang!=='en')lang=(navigator.language||'').slice(0,2).toLowerCase()==='it'?'it':'en';
-    document.documentElement.setAttribute('lang',lang);
-    var nodes=document.querySelectorAll('[data-'+lang+']');
-    for(var i=0;i<nodes.length;i++)nodes[i].textContent=nodes[i].getAttribute('data-'+lang);
-    var phs=document.querySelectorAll('[data-'+lang+'-placeholder]');
-    for(var k=0;k<phs.length;k++)phs[k].setAttribute('placeholder',phs[k].getAttribute('data-'+lang+'-placeholder'));
-
-    // Nobody is signed in on this browser now (a session that expired, was ended
-    // from another device, or was replaced by another member's sign-in), so it
-    // keeps nobody's personal data: every member's device cache and the offline
-    // API copies go, as on an explicit sign-out (client/src/userScope.js).
-    // Device preferences (language, theme) are not member-scoped and stay.
-    try{
-      var MEMBER_KEY=/^shelfit:u[0-9]+:/;
-      [localStorage,sessionStorage].forEach(function(st){
-        // Collect first: key order may change as keys are removed.
-        var doomed=[];
-        for(var j=0;j<st.length;j++){var key=st.key(j);if(key&&MEMBER_KEY.test(key))doomed.push(key);}
-        doomed.forEach(function(key){st.removeItem(key);});
-      });
-      localStorage.removeItem('shelfit:last-uid');
-      if(window.caches)caches.keys().then(function(names){
-        names.forEach(function(n){if(n.indexOf('shelfit-data-')===0)caches.delete(n);});
-      });
-    }catch(e){}
-
-    var picker=document.getElementById('picker'),signin=document.getElementById('signin'),
-        list=document.getElementById('profiles'),who=document.getElementById('who'),
-        f=document.getElementById('f'),pw=document.getElementById('pw'),uname=document.getElementById('uname'),
-        btn=document.getElementById('btn'),back=document.getElementById('back'),err=document.getElementById('err');
-    var selected=null;
-    function msg(key){return err.getAttribute('data-'+lang+'-'+key)||'';}
-
-    // An avatar circle: the chosen image, else the name's first letter, with the
-    // member's badge on its corner when they have one. Names are only ever set
-    // as text, never as HTML.
-    function avatar(p){
-      var wrap=document.createElement('span');
-      wrap.className='tile-media';
-      wrap.setAttribute('aria-hidden','true');
-      var el=document.createElement('span');
-      el.className='avatar';
-      function initial(){el.textContent=(Array.from(p.name||'?')[0]||'?').toUpperCase();}
-      if(p.avatar){
-        var img=document.createElement('img');
-        img.alt='';img.decoding='async';
-        img.onerror=function(){img.remove();initial();};
-        img.src=BASE+p.avatar;
-        el.appendChild(img);
-      }else initial();
-      wrap.appendChild(el);
-      if(p.badge){
-        var badge=document.createElement('span');
-        badge.className='badge';
-        var bimg=document.createElement('img');
-        bimg.alt='';bimg.decoding='async';
-        bimg.onerror=function(){badge.remove();};
-        bimg.src=BASE+p.badge;
-        badge.appendChild(bimg);
-        wrap.appendChild(badge);
-      }
-      return wrap;
-    }
-    function nameEl(p){
-      var n=document.createElement('span');
-      n.className='name';n.textContent=p.name;
-      return n;
-    }
-
-    function showPicker(){
-      selected=null;err.textContent='';
-      signin.hidden=true;picker.hidden=false;
-      var first=list.querySelector('button');
-      if(first)first.focus();
-    }
-    function choose(p){
-      selected=p;err.textContent='';pw.value='';
-      who.textContent='';who.appendChild(avatar(p));who.appendChild(nameEl(p));
-      uname.value=p.name; // lets password managers keep one entry per member
-      back.hidden=PROFILES.length<2;
-      picker.hidden=true;signin.hidden=false;
-      pw.focus();
-    }
-
-    PROFILES.forEach(function(p){
-      var li=document.createElement('li');
-      var b=document.createElement('button');
-      b.type='button';b.className='profile';
-      b.appendChild(avatar(p));b.appendChild(nameEl(p));
-      b.addEventListener('click',function(){choose(p);});
-      li.appendChild(b);list.appendChild(li);
-    });
-    back.addEventListener('click',showPicker);
-    document.addEventListener('keydown',function(ev){
-      if(ev.key==='Escape'&&!signin.hidden&&PROFILES.length>1)showPicker();
-    });
-
-    // An invite link: read the token, then drop it from the address bar so it
-    // doesn't linger in history. A valid one opens "choose your password".
-    var inviteToken=null;
-    if(INVITE){
-      try{
-        inviteToken=new URLSearchParams(window.location.search).get('invite');
-        history.replaceState(null,'',BASE+'/login');
-      }catch(e){}
-    }
-    if(INVITE&&!INVITE.invalid&&inviteToken){
-      var inviteView=document.getElementById('invite'),fi=document.getElementById('fi'),
-          ipw=document.getElementById('ipw'),ipw2=document.getElementById('ipw2'),
-          ibtn=document.getElementById('ibtn'),ierr=document.getElementById('ierr');
-      var imsg=function(key){return ierr.getAttribute('data-'+lang+'-'+key)||'';};
-      var iwho=document.getElementById('iwho');
-      iwho.appendChild(avatar({name:INVITE.name}));iwho.appendChild(nameEl({name:INVITE.name}));
-      document.getElementById('iuname').value=INVITE.name;
-      inviteView.hidden=false;
-      ipw.focus();
-      fi.addEventListener('submit',function(ev){
-        ev.preventDefault();
-        ierr.textContent='';
-        if(ipw.value.length<8){ierr.textContent=imsg('short');ipw.focus();return;}
-        if(ipw.value!==ipw2.value){ierr.textContent=imsg('mismatch');ipw2.focus();ipw2.select();return;}
-        ibtn.disabled=true;
-        fetch(BASE+'/api/auth/invite',{
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({token:inviteToken,password:ipw.value})
-        }).then(function(r){
-          if(r.ok){window.location.replace(BASE+'/');return;}
-          ibtn.disabled=false;
-          ierr.textContent = r.status===410 ? imsg('invalid') : r.status===429 ? imsg('limit') : imsg('short');
-        }).catch(function(){
-          ibtn.disabled=false;ierr.textContent=imsg('network');
-        });
-      });
-      return; // the picker stays hidden while choosing a password
-    }
-    if(INVITE&&INVITE.invalid)document.getElementById('notice').hidden=false;
-
-    if(PROFILES.length===1&&!(INVITE&&INVITE.invalid))choose(PROFILES[0]);else showPicker();
-
-    // Generic message when arriving from an invalid/expired magic link: never
-    // says why (expired vs unknown vs revoked vs rate-limited).
-    try{
-      if(/[?&]error=/.test(window.location.search)){
-        // A single profile is already on its password step; with several, the
-        // link could have been anyone's, so the picker says it instead.
-        if(signin.hidden){
-          var nt=document.getElementById('notice');
-          nt.textContent=nt.getAttribute('data-'+lang+'-magic')||'';
-          nt.hidden=false;
-        }else err.textContent=msg('magic');
-        history.replaceState(null,'',BASE+'/login');
-      }
-    }catch(e){}
-
-    f.addEventListener('submit',function(ev){
-      ev.preventDefault();
-      if(!selected)return;
-      err.textContent='';btn.disabled=true;
-      fetch(BASE+'/api/auth/login',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({user_id:selected.id,password:pw.value})
-      }).then(function(r){
-        if(r.ok){window.location.replace(BASE+'/');return;}
-        btn.disabled=false;
-        err.textContent = r.status===429 ? msg('limit') : msg('wrong');
-        pw.focus();pw.select();
-      }).catch(function(){
-        btn.disabled=false;err.textContent=msg('network');
-      });
-    });
-  })();
-</script>
+<script type="application/json" id="login-data">${scriptJson({ base: BASE, profiles, invite })}</script>
+<script src="${BASE}/boot/login.js"></script>
 </body>
 </html>`;
 }
@@ -932,6 +846,17 @@ export function registerAuth(fastify, { configured }) {
     ) {
       return true;
     }
+    // The boot scripts (index.html's and the login page's, files rather than
+    // inline for the Content-Security-Policy): the login page needs its own
+    // without a session, and none holds user data.
+    if (request.method === 'GET' && /^\/boot\/[a-z-]+\.js$/.test(p)) return true;
+    // Where browsers report Content-Security-Policy violations, the login page
+    // included.
+    if (request.method === 'POST' && p === '/api/csp-report') return true;
+    // The built JS/CSS (content-hashed, no user data, like the icons). Public so
+    // the service worker can precache a new build even while signed out, instead
+    // of receiving the login page under a .js name. One flat file name only.
+    if (request.method === 'GET' && /^\/static\/[A-Za-z0-9][\w.-]*$/.test(p)) return true;
     // The picker's avatars, shown before anyone has signed in.
     if (request.method === 'GET' && /^\/api\/auth\/profiles\/\d+\/(avatar|badge)$/.test(p)) return true;
     if (request.method === 'POST' && p === '/api/auth/login') return true;
@@ -941,7 +866,7 @@ export function registerAuth(fastify, { configured }) {
     // reachable without a session. Only the token URL is public; the management
     // routes (list/create/revoke) stay behind the gate.
     if (
-      request.method === 'GET' &&
+      (request.method === 'GET' || request.method === 'POST') &&
       /^\/api\/auth\/magic\/[a-f0-9]{64}$/.test(p)
     ) {
       return true;
@@ -958,7 +883,7 @@ export function registerAuth(fastify, { configured }) {
       // The device cache is keyed by the uid hint (client/src/userScope.js), so
       // state it here too or nothing would be cached on the device.
       if (master && parseCookies(request.headers.cookie)[UID_COOKIE] !== String(master.id)) {
-        reply.header('Set-Cookie', buildUidCookie(String(master.id), { maxAge: YEAR_SECONDS, secure: isHttps(request) }));
+        reply.header('Set-Cookie', buildUidCookie(String(master.id), { maxAge: YEAR_SECONDS, secure: secureFor(request) }));
       }
       return;
     }
@@ -970,9 +895,20 @@ export function registerAuth(fastify, { configured }) {
       // Sessions from before the hint cookie existed, or a hint left behind by
       // another member: (re)state whose session this is.
       if (parseCookies(request.headers.cookie)[UID_COOKIE] !== String(user.id)) {
-        reply.header('Set-Cookie', buildUidCookie(String(user.id), { maxAge: YEAR_SECONDS, secure: isHttps(request) }));
+        reply.header('Set-Cookie', buildUidCookie(String(user.id), { maxAge: YEAR_SECONDS, secure: secureFor(request) }));
       }
-      if (user.role !== 'master' && isMasterOnly(request.method, p)) {
+      // A session still under the old cookie name: carry it over to __Secure-.
+      if (usesLegacyCookie(request)) {
+        reply.header('Set-Cookie', [
+          buildSessionCookie(sessionTokenFrom(request), { maxAge: YEAR_SECONDS, secure: true }),
+          ...legacyCookieClear(true),
+        ]);
+      }
+      // Judged on the route the router matched, not on the URL as typed (see
+      // routePath). HEAD runs the GET handler, so it is held to the GET rules.
+      const matched = routePath(request);
+      const method = request.method === 'HEAD' ? 'GET' : request.method;
+      if (user.role !== 'master' && matched !== null && isMasterOnly(method, matched)) {
         reply.code(403).send({ error: 'forbidden' });
         return reply;
       }
@@ -983,7 +919,7 @@ export function registerAuth(fastify, { configured }) {
     // disabled): drop the uid hint so the next start doesn't open that member's
     // device cache.
     if (parseCookies(request.headers.cookie)[UID_COOKIE]) {
-      reply.header('Set-Cookie', buildUidCookie('', { maxAge: 0, secure: isHttps(request) }));
+      reply.header('Set-Cookie', buildUidCookie('', { maxAge: 0, secure: secureFor(request) }));
     }
     if (p.startsWith('/api/') || p.startsWith('/assets/') || p.startsWith('/badges/')) {
       reply.code(401).send({ error: 'unauthorized' });
@@ -1005,7 +941,9 @@ export function registerAuth(fastify, { configured }) {
       const found = findInvite(token);
       invite = found ? { name: found.display_name } : { invalid: true };
     }
-    reply
+    // Returned: an async handler that only calls send() can be answered twice
+    // once the async onSend hooks run (security headers).
+    return reply
       .header('Content-Type', 'text/html; charset=utf-8')
       .header('Cache-Control', 'no-store')
       .header('Referrer-Policy', 'no-referrer') // keep an invite token out of any Referer
@@ -1035,11 +973,21 @@ export function registerAuth(fastify, { configured }) {
       return { error: 'password_length' };
     }
     clearMagicFailures(ip);
-    db.transaction(() => {
-      setPasswordStmt.run(hashPassword(password), invite.user_id);
+    const passwordHash = await hashPasswordAsync(password);
+    // Hashing yields the event loop, so a second request with the same token may
+    // have used it meanwhile: re-check inside the transaction (single use).
+    const used = db.transaction(() => {
+      const still = findInvite(body.token);
+      if (!still || still.user_id !== invite.user_id) return false;
+      setPasswordStmt.run(passwordHash, invite.user_id);
       clearInvites(invite.user_id);
       setLastLoginStmt.run(Date.now(), invite.user_id);
+      return true;
     })();
+    if (!used) {
+      reply.code(410);
+      return { error: 'invite_invalid' };
+    }
     logAccess(EVENTS.INVITE, request, true, invite.user_id);
     setSessionCookie(reply, request, createSession(invite.user_id, request), invite.user_id);
     return { ok: true };
@@ -1135,7 +1083,7 @@ export function registerAuth(fastify, { configured }) {
       reply.code(429);
       return { error: 'Too many attempts. Try again later.' };
     }
-    if (!user || user.disabled || !verifyPassword(user.password_hash, body.password)) {
+    if (!user || user.disabled || !(await verifyPassword(user.password_hash, body.password))) {
       recordFailure(ip);
       recordGlobalFailure();
       if (user) recordUserFailure(user.id);
@@ -1148,7 +1096,7 @@ export function registerAuth(fastify, { configured }) {
     clearFailures(ip);
     clearGlobalFailures();
     userAttempts.delete(user.id);
-    if (needsRehash(user.password_hash)) setPasswordStmt.run(hashPassword(body.password), user.id);
+    if (needsRehash(user.password_hash)) setPasswordStmt.run(await hashPasswordAsync(body.password), user.id);
     setLastLoginStmt.run(Date.now(), user.id);
     const token = createSession(user.id, request);
     logAccess(EVENTS.LOGIN, request, true, user.id);
@@ -1179,36 +1127,60 @@ export function registerAuth(fastify, { configured }) {
   });
 
   // --- Magic links ---------------------------------------------------------
-  // GET /api/auth/magic/:token: the passwordless login itself. Public (see
-  // isPublic), rate limited per IP, and redirects (never returns JSON) so a
-  // real browser navigation lands on the app or the login page.
-  fastify.get('/api/auth/magic/:token', async (request, reply) => {
+  // GET /api/auth/magic/:token opens the confirm page (magicConfirmHtml); its
+  // button POSTs to the same URL, which signs in. Both are public (see
+  // isPublic) and rate limited per IP on failures, and any failure redirects to
+  // a generic login error: never a reason.
+  function redeemCheck(request, reply) {
     const ip = clientIp(request);
-    // Redirect (302) to a generic login error on ANY failure: never reveal why.
     const fail = (userId = null) => {
       logAccess(EVENTS.MAGIC_LINK, request, false, userId); // fire-and-forget audit entry
-      return reply.redirect(`${BASE}/login?error=magic`);
+      reply.redirect(`${BASE}/login?error=magic`, 303);
+      return null;
     };
-
     if (isMagicRateLimited(ip)) return fail();
-
-    const token = request.params && request.params.token;
-    const match = redeemToken(token); // timing-safe; null when invalid/expired
+    const match = redeemToken(request.params && request.params.token); // null when invalid/expired
     if (!match) {
       recordMagicFailure(ip); // only failures count toward the brute-force limit
       return fail();
     }
     const user = getUser(match.user_id);
     if (!user || user.disabled) return fail(match.user_id);
-    clearMagicFailures(ip);
-    recordUse(match.id);
-    logAccess(EVENTS.MAGIC_LINK, request, true, user.id);
+    return { match, user, ip };
+  }
 
-    // A session IDENTICAL to a password login for the link's account (same
-    // lifetime, same cookie): no reduced permissions.
-    setLastLoginStmt.run(Date.now(), user.id);
-    setSessionCookie(reply, request, createSession(user.id, request), user.id);
-    return reply.redirect(`${BASE}/`);
+  fastify.get('/api/auth/magic/:token', async (request, reply) => {
+    const ok = redeemCheck(request, reply);
+    if (!ok) return reply;
+    const lang = /^it\b/i.test(String(request.headers['accept-language'] || '')) ? 'it' : 'en';
+    reply
+      .header('Content-Type', 'text/html; charset=utf-8')
+      .header('Cache-Control', 'no-store')
+      .header('Referrer-Policy', 'no-referrer');
+    return magicConfirmHtml(ok.user, request.params.token, lang);
+  });
+
+  // The confirm button. A plain form post (no script on the page), so this one
+  // route accepts an urlencoded body; it is registered in its own scope so no
+  // other route does (they all stay JSON only).
+  fastify.register(async (scope) => {
+    scope.addContentTypeParser(
+      'application/x-www-form-urlencoded',
+      { parseAs: 'string', bodyLimit: 1024 },
+      (_req, _body, done) => done(null, {})
+    );
+    scope.post('/api/auth/magic/:token', async (request, reply) => {
+      const ok = redeemCheck(request, reply);
+      if (!ok) return reply;
+      clearMagicFailures(ok.ip);
+      recordUse(ok.match.id);
+      logAccess(EVENTS.MAGIC_LINK, request, true, ok.user.id);
+      // A session IDENTICAL to a password login for the link's account (same
+      // lifetime, same cookie): no reduced permissions.
+      setLastLoginStmt.run(Date.now(), ok.user.id);
+      setSessionCookie(reply, request, createSession(ok.user.id, request), ok.user.id);
+      return reply.redirect(`${BASE}/`, 303);
+    });
   });
 
   // GET /api/auth/magic: the caller's active links (never the token value).
@@ -1258,11 +1230,8 @@ export function registerAuth(fastify, { configured }) {
 export function publicAppUrl(request, appPath) {
   let origin = PUBLIC_URL;
   if (!origin) {
-    const proto = (request.headers['x-forwarded-proto'] || '').split(',')[0].trim() ||
-      (request.headers[':scheme']) || 'https';
-    const host = (request.headers['x-forwarded-host'] || request.headers.host || '')
-      .split(',')[0]
-      .trim();
+    const proto = forwarded(request, 'x-forwarded-proto') || 'https';
+    const host = forwarded(request, 'x-forwarded-host') || String(request.headers.host || '').split(',')[0].trim();
     origin = host ? `${proto}://${host}` : '';
   }
   return `${origin}${BASE}${appPath}`;

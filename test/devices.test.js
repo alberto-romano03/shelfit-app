@@ -8,7 +8,7 @@ import { startApp, client, addUser, TEST_PASSWORD } from './helpers/harness.js';
 
 const cookies = (res) => [].concat(res.headers['set-cookie'] || []);
 const cookieNamed = (res, name) => cookies(res).find((c) => c.startsWith(`${name}=`));
-const sub = (id) => ({ endpoint: `https://push.example.com/${id}`, keys: { p256dh: `p-${id}`, auth: `a-${id}` } });
+const sub = (id) => ({ endpoint: `https://fcm.googleapis.com/fcm/send/${id}`, keys: { p256dh: `p-${id}`, auth: `a-${id}` } });
 
 async function signIn(app, userId, password) {
   const res = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { user_id: userId, password } });

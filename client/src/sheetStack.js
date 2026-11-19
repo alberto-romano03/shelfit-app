@@ -16,6 +16,9 @@ let page = null;
 
 const here = () => location.pathname + location.search + location.hash;
 
+// Whether any sheet is on screen (nothing should reload the page under it).
+export const anySheetOpen = () => open.length > 0;
+
 // Call once a sheet is on screen. Returns what to call when it starts to close.
 export function trackSheet(close) {
   if (!open.length) {

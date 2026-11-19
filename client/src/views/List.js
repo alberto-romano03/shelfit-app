@@ -82,7 +82,7 @@ function statusFlag(icon, label, mod = '') {
 
 function buildCell(it) {
   const card = poster(it.poster_url, it.title);
-  if (it.rating) card.append(el('div', { class: 'rating-badge', html: `★ ${it.rating}` }));
+  if (it.rating) card.append(el('div', { class: 'rating-badge', text: `★ ${it.rating}` }));
   const flags = [];
   if (it.owned) flags.push(statusFlag('disc', t('lists.ownedOnDisc')));
   if (it.watched_in_cinema) flags.push(statusFlag('ticket', t('lists.watchedInCinema'), 'list-flag--cine'));
@@ -228,7 +228,7 @@ export default async function List(container, params) {
     summary.replaceChildren(...stats);
     const content = items.length
       ? [
-          el('div', { class: 'section-title', text: isMovie ? t('nav.movies') : t('nav.series') }),
+          el('h3', { class: 'section-title', text: isMovie ? t('nav.movies') : t('nav.series') }),
           el('div', { class: 'grid' }, items.map(buildCell)),
         ]
       : [stateBlock({ icon: 'library-big', title: t('lists.empty'), detail: t('lists.emptyDetail') })];
@@ -268,7 +268,7 @@ export default async function List(container, params) {
         }
       });
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.isComposing) {
           e.preventDefault();
           save.click();
         }

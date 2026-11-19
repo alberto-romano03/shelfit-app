@@ -247,7 +247,7 @@ export default async function Search(container) {
   // `badge` off for a card that shows the score in its own text, so the same
   // number is never printed twice on one card.
   function posterOf(item, { badge = true } = {}) {
-    const card = poster(item.thumb_url, item.title);
+    const card = poster(item.thumb_url, ''); // the name is printed right under it
     const mark = el('div', { class: 'ai-mark', html: icons.check });
     const score =
       badge && item.rating
@@ -447,7 +447,7 @@ export default async function Search(container) {
 
     function fill(key) {
       const sec = byKey.get(key);
-      rail.innerHTML = '';
+      rail.replaceChildren();
       for (const it of (sec && sec.items) || []) rail.append(cell(it));
       rail.scrollLeft = 0;
     }
@@ -623,7 +623,7 @@ export default async function Search(container) {
   }
 
   function exploreSkeleton() {
-    exploreEl.innerHTML = '';
+    exploreEl.replaceChildren();
     // The chips come from storage, so they paint now rather than shimmering.
     recentEl = null;
     paintRecent();
@@ -632,7 +632,7 @@ export default async function Search(container) {
 
   function renderExplore(data) {
     const sections = (data && data.sections) || [];
-    exploreEl.innerHTML = '';
+    exploreEl.replaceChildren();
     recentEl = null;
     paintRecent();
     if (data && data.capped && !sections.length) {
@@ -728,7 +728,7 @@ export default async function Search(container) {
         markDegraded(); // server unreachable; keep the skeleton rows, recovery re-renders
         return;
       }
-      exploreEl.innerHTML = '';
+      exploreEl.replaceChildren();
       exploreEl.append(
         stateBlock({
           kind: 'error',
@@ -749,7 +749,8 @@ export default async function Search(container) {
     const paint = (on) => {
       btn.classList.toggle('on', on);
       btn.innerHTML = on ? icons.check : icons.plus;
-      btn.setAttribute('aria-label', on ? t('search.inLibrary') : t('search.quickAdd'));
+      // With the title: every row's button would otherwise have the same name.
+      btn.setAttribute('aria-label', `${on ? t('search.inLibrary') : t('search.quickAdd')}: ${r.title || ''}`);
     };
     paint(!!r.already_added);
     paintsLibrary(btn, r, paint);
@@ -789,7 +790,7 @@ export default async function Search(container) {
       ]),
       r.year ? el('span', { text: r.year }) : null,
     ]);
-    const thumb = poster(r.thumb_url, r.title);
+    const thumb = poster(r.thumb_url, ''); // the row prints the title beside it
     thumb.classList.add('ht-thumb');
     const row = el('div', { class: 'ht', role: 'button', tabindex: '0' }, [
       thumb,
@@ -834,7 +835,7 @@ export default async function Search(container) {
 
   function showSkeleton() {
     countEl.textContent = '';
-    resultsEl.innerHTML = '';
+    resultsEl.replaceChildren();
     resultsEl.append(resultsBar, hitSkeleton(7));
   }
 
@@ -874,7 +875,7 @@ export default async function Search(container) {
       frag.append(grid);
     }
     crossfadeSwap(() => {
-      resultsEl.innerHTML = '';
+      resultsEl.replaceChildren();
       resultsEl.append(frag);
     });
   }
@@ -929,7 +930,7 @@ export default async function Search(container) {
         showSkeleton();
         return;
       }
-      resultsEl.innerHTML = '';
+      resultsEl.replaceChildren();
       resultsEl.append(
         stateBlock({
           kind: 'error',
@@ -942,7 +943,7 @@ export default async function Search(container) {
   }
 
   function showBudgetReached() {
-    resultsEl.innerHTML = '';
+    resultsEl.replaceChildren();
     resultsEl.append(
       stateBlock({
         icon: 'wallet',
@@ -973,7 +974,7 @@ export default async function Search(container) {
     timer = setTimeout(run, 400);
   });
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.isComposing) {
       clearTimeout(timer);
       run();
     } else if (e.key === 'Escape' && input.value) {

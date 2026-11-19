@@ -563,7 +563,10 @@ function retryWithoutBlob(img, url) {
   return true;
 }
 
-export function lazyLoad(img, url) {
+// `priority: 'high'` is for the one image a page is about (the Detail poster):
+// loaded at once and ahead of the rest, never lazily. Everything else waits until
+// it is near the screen.
+export function lazyLoad(img, url, { priority } = {}) {
   if (!url) return;
   url = withBase(url); // server emits root-absolute paths; serve under /base
   const cached = imageCache.get(url);
@@ -572,7 +575,12 @@ export function lazyLoad(img, url) {
     img.src = cached;
     return;
   }
-  img.loading = 'lazy';
+  if (priority === 'high') {
+    img.loading = 'eager';
+    img.fetchPriority = 'high';
+  } else {
+    img.loading = 'lazy';
+  }
   img.decoding = 'async';
   img.src = url;
 }
@@ -702,7 +710,7 @@ export function mountPoster(container, url, alt, opts = {}) {
         img.src = withBase(url);
       });
   } else {
-    lazyLoad(img, url);
+    lazyLoad(img, url, { priority: opts.priority });
   }
   // Cache hit may have set src synchronously.
   if (img.complete && img.naturalWidth > 0) reveal();
@@ -823,7 +831,7 @@ export function skelText(width = '100%') {
 }
 
 export function skelTitle(width = '40%') {
-  return el('div', { class: 'section-title' }, [skelText(width)]);
+  return el('div', { class: 'section-title', 'aria-hidden': 'true' }, [skelText(width)]);
 }
 
 const OVERVIEW_WIDTHS = ['100%', '96%', '98%', '93%', '97%', '88%'];
@@ -920,10 +928,10 @@ export function imgFallback(url, title, className) {
 // Set a node's background-image, routed through the in-memory cache so the blob
 // is reused on subsequent renders. Sets the bg only once the image is ready
 // (avoids a flash), matching the previous preload behaviour.
-export function setBg(node, url) {
+export function setBg(node, url, opts) {
   if (!url) return;
   imageCache
-    .load(url)
+    .load(url, opts)
     .then((resolved) => {
       node.style.backgroundImage = `url("${resolved || url}")`;
     })
@@ -977,6 +985,16 @@ export function epLabel(season, episode) {
   return `S${pad2(season)} E${pad2(episode)}`;
 }
 
+// A field that blocked a form (left empty): marked invalid for screen readers and
+// focused, so the message (a toast) is tied to a place; the mark clears as soon
+// as it is edited.
+export function markInvalid(field) {
+  if (!field) return;
+  field.setAttribute('aria-invalid', 'true');
+  field.addEventListener('input', () => field.removeAttribute('aria-invalid'), { once: true });
+  field.focus();
+}
+
 // --- Toast ----------------------------------------------------------------
 // A transient pill at the bottom of the screen: one glyph, one line of text.
 //
@@ -985,20 +1003,87 @@ export function epLabel(season, episode) {
 //   toast('Enter a name')          — a notice; also the default, so every older
 //                                    one-argument call still reads correctly.
 //
-// Two behaviours worth knowing:
+// Behaviours worth knowing:
 //   • It leaves the way it arrived. The node is removed on animationend (with a
 //     timer as the backstop) instead of disappearing in a single frame.
 //   • A second toast while one is showing swaps the glyph and text IN PLACE
 //     behind a 90ms crossfade, rather than replacing the element — consecutive
 //     messages read as one pill changing its mind.
+//   • Every toast lives in one named region that exists from start-up, and is
+//     announced to screen readers (ariaNotify, else a live region that is always
+//     there: one inserted already filled is often not read).
+//   • The countdown pauses while a pointer or the focus is on the toast, so it
+//     never leaves under someone reading it or about to press its button.
 const TOAST_ICONS = { ok: 'circle-check', bad: 'circle-x', info: 'info' };
 const TOAST_HOLD_MS = 2200;
+const TOAST_HOLD_BAD_MS = 5000; // an error says what to do next: it needs reading
 const TOAST_SWAP_MS = 90; // must match the .toast-ico/.toast-msg transition
 const TOAST_EXIT_MS = 400; // backstop > --dur-medium, in case animationend is missed
+const TOAST_STACK_GAP = 10;
 
 let toastNode = null;
-let toastHoldTimer = null;
+let toastHold = null;
 let toastSwapTimer = null;
+let toastRegion = null;
+let toastLive = null;
+
+// The notifications region and its live line. Called at start-up (main.js) so both
+// are in the page before the first message; toast() also creates them if not.
+export function initToasts() {
+  if (toastRegion) return toastRegion;
+  toastRegion = el('div', { class: 'toast-region', role: 'region', 'aria-label': t('toast.region') });
+  toastLive = el('div', { class: 'sr-only', 'aria-live': 'polite', 'aria-atomic': 'true' });
+  toastRegion.append(toastLive);
+  document.body.append(toastRegion);
+  return toastRegion;
+}
+export function relabelToasts() {
+  if (toastRegion) toastRegion.setAttribute('aria-label', t('toast.region'));
+}
+
+function announce(text) {
+  if (typeof document.ariaNotify === 'function') {
+    document.ariaNotify(text);
+    return;
+  }
+  initToasts();
+  // Emptied first, so the same message twice in a row is read twice.
+  toastLive.textContent = '';
+  setTimeout(() => {
+    toastLive.textContent = text;
+  }, 60);
+}
+
+// A countdown that stands still while a pointer or the focus is on `node`.
+function holdFor(node, ms, onDone, onPause) {
+  let left = ms;
+  let started = Date.now();
+  let timer = setTimeout(onDone, left);
+  let paused = false;
+  const pause = () => {
+    if (paused) return;
+    paused = true;
+    clearTimeout(timer);
+    left -= Date.now() - started;
+    if (onPause) onPause(true);
+  };
+  const resume = () => {
+    if (!paused || node.matches(':hover') || node.contains(document.activeElement)) return;
+    paused = false;
+    started = Date.now();
+    timer = setTimeout(onDone, Math.max(left, 1200));
+    if (onPause) onPause(false);
+  };
+  node.addEventListener('pointerenter', pause);
+  node.addEventListener('focusin', pause);
+  node.addEventListener('pointerleave', () => setTimeout(resume));
+  node.addEventListener('focusout', () => setTimeout(resume));
+  return {
+    clear() {
+      clearTimeout(timer);
+    },
+  };
+}
 
 function toastKindClass(kind) {
   return `toast toast--${TOAST_ICONS[kind] ? kind : 'info'}`;
@@ -1027,10 +1112,23 @@ function dismissToast(node) {
   setTimeout(done, TOAST_EXIT_MS);
 }
 
+// While an Undo is on screen a plain toast sits just past it (above it at the
+// bottom, below it at the top while a dialog is open) instead of taking its place.
+function stackPastUndo(node) {
+  const undo = activeUndo && activeUndo.node;
+  if (!undo || !undo.isConnected) {
+    node.style.translate = '';
+    return;
+  }
+  const atTop = getComputedStyle(node).bottom === 'auto';
+  const shift = undo.offsetHeight + TOAST_STACK_GAP;
+  node.style.translate = `0 ${atTop ? shift : -shift}px`;
+}
+
 export function toast(msg, kind = 'info') {
-  finishUndo();
-  clearTimeout(toastHoldTimer);
+  if (toastHold) toastHold.clear();
   clearTimeout(toastSwapTimer);
+  initToasts();
 
   if (toastNode && !toastNode.dataset.leaving) {
     // Already on screen — recolour now (the ink transitions on its own) and
@@ -1047,58 +1145,68 @@ export function toast(msg, kind = 'info') {
     }, TOAST_SWAP_MS);
   } else {
     if (toastNode) dismissToast(toastNode);
-    toastNode = el('div', { class: toastKindClass(kind), role: 'status' }, [
+    toastNode = el('div', { class: toastKindClass(kind) }, [
       lucideIcon(toastIconName(kind), 'toast-ico'),
       el('span', { class: 'toast-msg', text: msg }),
     ]);
-    document.body.append(toastNode);
+    toastRegion.append(toastNode);
   }
+  stackPastUndo(toastNode);
+  announce(msg);
 
   const shown = toastNode;
-  toastHoldTimer = setTimeout(() => dismissToast(shown), TOAST_HOLD_MS);
+  toastHold = holdFor(shown, kind === 'bad' ? TOAST_HOLD_BAD_MS : TOAST_HOLD_MS, () => dismissToast(shown));
 }
 
-// The toast with a way back, for serious actions (see undoable.js). It holds longer, and
-// a thin line shows how long is left. There is one toast slot, so anything that takes it
-// ends this one's window, the same as the time running out.
-const UNDO_HOLD_MS = 6000;
+// The toast with a way back, for serious actions (see undoable.js). It holds
+// longer, and a thin line shows how long is left. Another message does not end it
+// (it shows past it); only a newer Undo, Undo itself, or the time running out do.
+const UNDO_HOLD_MS = 10000;
 let activeUndo = null;
 function finishUndo() {
   if (activeUndo) activeUndo.finish();
 }
 export function undoToast({ msg, onUndo, onExpire }) {
   finishUndo();
-  clearTimeout(toastHoldTimer);
+  if (toastHold) toastHold.clear();
   clearTimeout(toastSwapTimer);
   if (toastNode) dismissToast(toastNode);
+  initToasts();
   const undoBtn = el('button', { class: 'toast-undo', type: 'button', text: t('toast.undo') });
-  const node = el('div', { class: `${toastKindClass('ok')} toast--undo`, role: 'status' }, [
+  const drain = el('i', { class: 'toast-drain', style: { animationDuration: `${UNDO_HOLD_MS}ms` } });
+  const node = el('div', { class: `${toastKindClass('ok')} toast--undo` }, [
     lucideIcon(toastIconName('ok'), 'toast-ico'),
     el('span', { class: 'toast-msg', text: msg }),
     undoBtn,
-    el('i', { class: 'toast-drain', style: { animationDuration: `${UNDO_HOLD_MS}ms` } }),
+    drain,
   ]);
-  let timer = 0;
+  let hold = null;
+  // A message shown past this one moves back to the usual place once it is gone.
+  const settle = () => {
+    activeUndo = null;
+    if (hold) hold.clear();
+    dismissToast(node);
+    if (toastNode && !toastNode.dataset.leaving) toastNode.style.translate = '';
+  };
   const entry = {
+    node,
     finish() {
       if (activeUndo !== entry) return;
-      activeUndo = null;
-      clearTimeout(timer);
-      dismissToast(node);
+      settle();
       if (onExpire) onExpire();
     },
   };
   undoBtn.addEventListener('click', () => {
     if (activeUndo !== entry) return;
-    activeUndo = null;
-    clearTimeout(timer);
-    dismissToast(node);
+    settle();
     if (onUndo) onUndo();
   });
   activeUndo = entry;
-  toastNode = node;
-  document.body.append(node);
-  timer = setTimeout(entry.finish, UNDO_HOLD_MS);
+  toastRegion.append(node);
+  announce(`${msg}. ${t('toast.actionsAvailable')}`);
+  hold = holdFor(node, UNDO_HOLD_MS, entry.finish, (paused) => {
+    drain.style.animationPlayState = paused ? 'paused' : '';
+  });
   return entry;
 }
 
@@ -1302,10 +1410,16 @@ export function segmentedControl({
   );
   root.style.setProperty('--seg-count', String(options.length || 1));
 
+  // One Tab stop for the whole group, on the chosen option (the first when none
+  // is chosen), like any radio group; the arrow keys move within it.
   function paint() {
     root.style.setProperty('--seg-i', String(Math.max(0, active)));
     root.classList.toggle('seg--none', active < 0);
-    buttons.forEach((b, i) => b.setAttribute('aria-checked', String(i === active)));
+    const stop = Math.max(0, active);
+    buttons.forEach((b, i) => {
+      b.setAttribute('aria-checked', String(i === active));
+      b.tabIndex = i === stop ? 0 : -1;
+    });
   }
   function pick(i, notify) {
     if (i < 0 || i >= options.length || i === active) return;
@@ -1314,12 +1428,22 @@ export function segmentedControl({
     if (notify && onChange) onChange(options[active][0]);
   }
   buttons.forEach((b, i) => b.addEventListener('click', () => pick(i, true)));
-  // Arrow keys move the selection, as a radio group should.
+  // Arrow keys move the selection, as a radio group should (Right/Down forward,
+  // Left/Up back, Home and End to the ends).
   root.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const last = options.length - 1;
+    const from = Math.max(0, active);
+    const next = {
+      ArrowRight: from + 1,
+      ArrowDown: from + 1,
+      ArrowLeft: from - 1,
+      ArrowUp: from - 1,
+      Home: 0,
+      End: last,
+    }[e.key];
+    if (next === undefined) return;
     e.preventDefault();
-    const next = active + (e.key === 'ArrowRight' ? 1 : -1);
-    if (next < 0 || next >= options.length) return;
+    if (next < 0 || next > last) return;
     pick(next, true);
     buttons[next].focus();
   });
@@ -1783,7 +1907,7 @@ export function openWatchCountModal({ title, count: startCount = 1, min = 0, con
 
     // Optional date picker under the stepper (movie rewatch date).
     const dateInput = showDate
-      ? el('input', { class: 'text-field', type: 'date', value: dateValue || localTodayISO() })
+      ? el('input', { class: 'text-field', type: 'date', value: dateValue || localTodayISO(), 'aria-label': t('ui.date') })
       : null;
 
     const confirmBtn = el('button', { class: 'btn btn-primary' }, [
@@ -1969,15 +2093,15 @@ export function stateArt(name) {
 // to the bottom of what it scrolls in (the tab bar for a page, the edge for a sheet), less
 // whatever comes after it, and centres itself in that. A sheet sized by its content has no
 // room to spare, so nothing changes there.
-function fitState(node) {
-  if (!node.isConnected || node.closest('.gc-empty, .rom-stage')) return; // those centre in CSS
+// Measures one state for fitStates() below, after every state's own height was
+// reset: reads only (no style writes), so measuring several costs one layout.
+// Returns what to set, or null when there is no room to spare.
+function measureState(node) {
   let host = node.parentElement;
   while (host && host !== document.body && !/auto|scroll/.test(getComputedStyle(host).overflowY)) {
     host = host.parentElement;
   }
   // Its entrance animation may still be holding it a few pixels low.
-  node.style.minHeight = '';
-  node.style.marginBottom = '';
   const lifted = new DOMMatrixReadOnly(getComputedStyle(node).transform).m42;
   const top = node.getBoundingClientRect().top - lifted;
   let room;
@@ -1990,13 +2114,28 @@ function fitState(node) {
     room = window.innerHeight - (nav ? nav.getBoundingClientRect().height : 0) - top;
   }
   for (let next = node.nextElementSibling; next; next = next.nextElementSibling) room -= next.offsetHeight;
-  if (room <= node.offsetHeight + 1) return; // no room to spare
+  if (room <= node.offsetHeight + 1) return null; // no room to spare
   // Over the host's bottom padding too, so the middle is the middle of what you see. Only
   // here: a host sized by its content would grow to match, every time.
-  node.style.minHeight = `${room + hostPad}px`;
-  if (hostPad) node.style.marginBottom = `${-hostPad}px`;
+  return { node, minHeight: room + hostPad, hostPad };
 }
-const fitStates = () => document.querySelectorAll('.empty--page, .empty--section, .cine-empty').forEach(fitState);
+// All the states on screen in three passes (reset, measure, set) instead of a
+// reset-measure-set per state, which forced a fresh layout for each one.
+const fitStates = () => {
+  const nodes = [...document.querySelectorAll('.empty--page, .empty--section, .cine-empty')].filter(
+    (n) => n.isConnected && !n.closest('.gc-empty, .rom-stage') // those centre in CSS
+  );
+  for (const n of nodes) {
+    n.style.minHeight = '';
+    n.style.marginBottom = '';
+  }
+  const plans = nodes.map(measureState);
+  for (const plan of plans) {
+    if (!plan) continue;
+    plan.node.style.minHeight = `${plan.minHeight}px`;
+    if (plan.hostPad) plan.node.style.marginBottom = `${-plan.hostPad}px`;
+  }
+};
 let stateWatch = null;
 // Measured before the first paint, so a state never appears and then moves.
 export function watchState(node) {

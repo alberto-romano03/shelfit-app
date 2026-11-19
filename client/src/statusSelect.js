@@ -71,9 +71,19 @@ export function buildStatusBento({ selected = null, onSelect } = {}) {
       [lucideIcon(s.icon, 'status-ico'), el('span', { class: 'status-cell-label', text: STATUS_LABELS[s.key] })]
     );
     cell.style.setProperty('--sc', STATUS_COLORS[s.key]); // per-status colour cue
+    cell.setAttribute('aria-pressed', String(selected === s.key));
     cell.addEventListener('click', () => onSelect && onSelect(s.key, cell));
     grid.append(cell);
   });
+  // Which status is chosen is said, not only drawn: callers move `.selected`
+  // around themselves, so the pressed state follows that class.
+  new MutationObserver((records) => {
+    for (const r of records) {
+      if (r.target.classList.contains('status-cell')) {
+        r.target.setAttribute('aria-pressed', String(r.target.classList.contains('selected')));
+      }
+    }
+  }).observe(grid, { subtree: true, attributes: true, attributeFilter: ['class'] });
   return grid;
 }
 
@@ -84,7 +94,7 @@ export function createStatusSelect({ status, onSelect, title, suffix } = {}) {
   const btn = el('button', { class: 'status-select' });
 
   function render() {
-    btn.innerHTML = '';
+    btn.replaceChildren();
     // Leading glyph = the current status's icon, tinted in that status's colour
     // (via --sc). Unset → no icon, neutral pill.
     const iconName = STATUS_ICON[current];

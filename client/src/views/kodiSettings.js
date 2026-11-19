@@ -23,6 +23,7 @@ import {
   settingsRow,
   lucideIcon,
   selectPill,
+  markInvalid,
 } from '../ui.js';
 import { t } from '../i18n.js';
 
@@ -141,7 +142,7 @@ export function buildKodiSettings(api) {
   // --- Rendering ----------------------------------------------------------
   function renderConfig(cfg) {
     enableRow.setChecked(!!cfg.enabled);
-    listWrap.innerHTML = '';
+    listWrap.replaceChildren();
     if (!cfg.instances.length) {
       listWrap.append(
         el('div', { class: 'muted usage-desc', text: t('kodiSettings.empty') })
@@ -190,7 +191,7 @@ export function buildKodiSettings(api) {
     const status = el('div', { class: 'kodi-inst-status' });
     function setStatus(state) {
       status.className = 'kodi-inst-status is-' + state; // testing | online | offline
-      status.innerHTML = '';
+      status.replaceChildren();
       if (state === 'testing') {
         status.append(el('span', { class: 'kodi-status-label', text: t('kodiSettings.testing') }));
         return;
@@ -248,13 +249,15 @@ export function buildKodiSettings(api) {
   function openInstanceForm(inst) {
     const editing = !!inst;
     openModal((modal, close) => {
-      const nameIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.namePlaceholder'), value: editing ? inst.name : '' });
-      const hostIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.hostPlaceholder'), value: editing ? inst.host : '' });
-      const portIn = el('input', { class: 'text-field', type: 'number', placeholder: t('kodiSettings.port'), value: editing ? String(inst.port) : '8080' });
-      const userIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.username'), value: editing ? inst.username : '' });
+      const plain = { autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false' };
+      const nameIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.namePlaceholder'), value: editing ? inst.name : '', 'aria-label': t('kodiSettings.name') });
+      const hostIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.hostPlaceholder'), value: editing ? inst.host : '', 'aria-label': t('kodiSettings.host'), inputmode: 'url', ...plain });
+      const portIn = el('input', { class: 'text-field', type: 'number', inputmode: 'numeric', placeholder: t('kodiSettings.port'), value: editing ? String(inst.port) : '8080', 'aria-label': t('kodiSettings.port') });
+      const userIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.username'), value: editing ? inst.username : '', 'aria-label': t('kodiSettings.username'), autocomplete: 'off', ...plain });
       const passIn = el('input', {
         class: 'text-field',
         type: 'password',
+        'aria-label': t('kodiSettings.password'),
         placeholder: editing && inst.has_password ? t('kodiSettings.passwordUnchanged') : t('kodiSettings.password'),
         autocomplete: 'new-password',
       });
@@ -264,14 +267,15 @@ export function buildKodiSettings(api) {
       const pickerGrid = el('div', { class: 'kodi-icon-picker' }, [skelLine({ width: '60%' })]);
 
       function renderPicker(icons) {
-        pickerGrid.innerHTML = '';
+        pickerGrid.replaceChildren();
         // "None" option first.
         const none = el('button', {
           class: 'kodi-icon-option kodi-icon-none' + (selectedIcon ? '' : ' selected'),
           type: 'button',
           title: t('kodiSettings.noIcon'),
-          text: '∅',
-        });
+          'aria-label': t('kodiSettings.noIcon'),
+          'aria-pressed': String(!selectedIcon),
+        }, [el('span', { 'aria-hidden': 'true', text: '∅' })]);
         none.addEventListener('click', () => {
           selectedIcon = null;
           syncPicker();
@@ -285,12 +289,16 @@ export function buildKodiSettings(api) {
           return;
         }
         for (const ic of icons) {
+          // Named after the file, without its extension ("living-room").
+          const name = ic.file.replace(/\.svg$/i, '');
           const opt = el('button', {
             class: 'kodi-icon-option' + (selectedIcon === ic.file ? ' selected' : ''),
             type: 'button',
-            title: ic.file,
+            title: name,
+            'aria-label': name,
+            'aria-pressed': String(selectedIcon === ic.file),
             'data-file': ic.file,
-          }, [el('img', { src: withBase(ic.url), alt: ic.file })]);
+          }, [el('img', { src: withBase(ic.url), alt: '' })]);
           opt.addEventListener('click', () => {
             selectedIcon = ic.file;
             syncPicker();
@@ -303,6 +311,7 @@ export function buildKodiSettings(api) {
           const file = b.getAttribute('data-file');
           const isSel = b.classList.contains('kodi-icon-none') ? !selectedIcon : file === selectedIcon;
           b.classList.toggle('selected', isSel);
+          b.setAttribute('aria-pressed', String(isSel));
         });
       }
       loadIcons().then(renderPicker);
@@ -380,6 +389,7 @@ export function buildKodiSettings(api) {
       saveBtn.addEventListener('click', async () => {
         const b = formBody();
         if (!b.name || !b.host) {
+          markInvalid(!b.name ? nameIn : hostIn);
           toast(t('kodiSettings.nameHostRequired'));
           return;
         }
@@ -459,7 +469,7 @@ export function buildKodiSettings(api) {
     Promise.all([api.kodiConfig(), membersReady])
       .then(([cfg]) => renderConfig(cfg))
       .catch(() => {
-        listWrap.innerHTML = '';
+        listWrap.replaceChildren();
         listWrap.append(
           stateBlock({
             kind: 'error',

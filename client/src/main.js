@@ -5,7 +5,7 @@ import './styles.css';
 import { initTheme } from './theme.js';
 import { initI18n, t, onLangChange } from './i18n.js';
 import { initRouter, navigate, start } from './router.js';
-import { el, icons, playOnce } from './ui.js';
+import { el, icons, playOnce, initToasts, relabelToasts } from './ui.js';
 import { startNetworkMonitor, wasDegraded, clearDegraded } from './network.js';
 import { initKodi } from './kodi.js';
 import { initNowPlaying, dismissNowPlaying } from './nowPlaying.js';
@@ -22,11 +22,6 @@ import Movies from './views/Movies.js';
 import Upcoming from './views/Upcoming.js';
 import Search, { setPendingSearch } from './views/Search.js';
 import Detail from './views/Detail.js';
-import Person from './views/Person.js';
-import Preview from './views/Preview.js';
-import Collection from './views/Collection.js';
-import Season from './views/Season.js';
-import Settings from './views/Settings.js';
 import ListView from './views/List.js';
 import Lists from './views/Lists.js';
 import { resetGridSection } from './views/grid.js';
@@ -34,6 +29,7 @@ import { resetUpcoming, rebuildUpcoming } from './views/Upcoming.js';
 import { preloader } from './preloader.js';
 import { markBootSettled } from './warmup.js';
 import { getExplore } from './offlineCache.js';
+import { watchForUpdates } from './swUpdate.js';
 
 initTheme();
 // iOS Safari pinch-zooms whatever the viewport meta says: its own gesture events
@@ -57,7 +53,7 @@ let previousPath = null;
 // cover.)
 const brandLogo = el('img', {
   class: 'brand-logo',
-  src: withBase('/icons/shelf-iticon-browser.png'),
+  src: withBase('/icons/shelf-iticon-224.png'),
   alt: '',
   width: '28',
   height: '28',
@@ -174,6 +170,22 @@ app.append(header, tabbar);
 // --- Router ---------------------------------------------------------------
 const GRID_PATHS = new Set(['/movies', '/series']);
 const TAB_PATHS = TABS.map((tab) => tab.path);
+// A page whose code loads on first use (see the routes below).
+function lazyView(load) {
+  let mod = null;
+  const view = async (page, params) => {
+    mod = mod || (await load());
+    return mod.default(page, params);
+  };
+  view.prefetch = () => load().then((m) => (mod = m)).catch(() => {});
+  return view;
+}
+const Settings = lazyView(() => import('./views/Settings.js'));
+const Person = lazyView(() => import('./views/Person.js'));
+const Collection = lazyView(() => import('./views/Collection.js'));
+const Season = lazyView(() => import('./views/Season.js'));
+const Preview = lazyView(() => import('./views/Preview.js'));
+
 initRouter({
   // Tabs sit side by side, so they shift along the bar's order. Everything else is deeper or
   // back up. Movies <-> Series keeps the status bar still while its chip glides to the other
@@ -188,6 +200,26 @@ initRouter({
     if (nav === 'pop' || b >= 0) return { kind: 'pop' }; // back, or up to a tab (a deleted list)
     return { kind: 'push' };
   },
+  // The browser tab / screen reader name of each page.
+  pageTitle: (path, page) => {
+    const fixed = {
+      '/': 'nav.home',
+      '/series': 'nav.series',
+      '/movies': 'nav.movies',
+      '/upcoming': 'nav.upcoming',
+      '/search': 'common.search',
+      '/settings': 'common.settings',
+      '/lists': 'home.myLists',
+    }[path];
+    if (fixed) return t(fixed);
+    // A title, person, collection, list or season page: the name it shows.
+    const h = page.querySelector('h2');
+    return h && !h.closest('[aria-hidden="true"]') ? h.textContent.trim() : '';
+  },
+  // Pages opened less often load with their own code on first use (their code
+  // is not parsed at every start), and are fetched in idle time after start-up
+  // so the first open stays instant. The service worker precaches every chunk,
+  // so they open offline too.
   routes: [
     { path: '/', view: Home },
     { path: '/series', view: Series },
@@ -272,6 +304,9 @@ function bootFromShare() {
   return false;
 }
 
+// The notifications region is in the page before anything can raise a toast.
+initToasts();
+
 if (!bootFromShare()) start();
 
 // --- Language switch: relabel the chrome and re-render the current page -----
@@ -279,6 +314,7 @@ onLangChange(() => {
   tabButtons.forEach((btn) => (btn._label.textContent = t(btn._key)));
   settingsBtn.setAttribute('aria-label', t('common.settings'));
   searchBtn.setAttribute('aria-label', t('common.search'));
+  relabelToasts();
   // What's Next keeps its rendered page between visits and would come back in
   // the old language: rebuild it. (The grids keep only data; labels are drawn
   // at mount.)
@@ -377,11 +413,19 @@ if (navigator.storage && typeof navigator.storage.persist === 'function') {
   navigator.storage.persist().catch(() => {});
 }
 
+// --- Prefetch the pages that load on demand, once the start is over ----------
+{
+  const prefetchAll = () => [Settings, Person, Collection, Season, Preview].forEach((v) => v.prefetch());
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(prefetchAll, { timeout: 8000 });
+  else setTimeout(prefetchAll, 3000);
+}
+
 // --- Service worker -------------------------------------------------------
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register(withBase('/sw.js'), { scope: withBase('/') })
+      .then(watchForUpdates)
       .catch(() => {});
   });
 }

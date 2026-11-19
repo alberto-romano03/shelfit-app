@@ -440,11 +440,20 @@ function decompressFromUTF16(compressed) {
 }
 
 // --- Generic dataset store ------------------------------------------------
-// Stores `data` under `key` with the current time, compressing only when the
-// serialized payload is large. Returns true on a successful write.
-export function ocSet(key, data, { compress = true } = {}) {
-  const prefix = ocPrefix();
-  if (!prefix) return false;
+// Decoding a stored dataset (LZ-decompress + JSON.parse of the whole thing) is
+// the expensive part, and a loop over titles used to repeat it once per title.
+// So each dataset is decoded at most once and kept in memory (`memo`, keyed by
+// the full storage key, so per member), and every write updates that copy too.
+// Another tab writing the same storage drops the copies (storage event).
+const memo = new Map(); // full key -> { data, savedAt }
+// Writes waiting for idle time (ocSetSoon), per full key: the last one wins.
+const pending = new Map(); // full key -> { key, data, opts }
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', () => memo.clear());
+}
+
+function writeNow(prefix, key, data, { compress = true } = {}) {
   try {
     const json = JSON.stringify(data);
     let payload = json;
@@ -461,14 +470,58 @@ export function ocSet(key, data, { compress = true } = {}) {
     localStorage.setItem(prefix + key + ':m', JSON.stringify({ t: Date.now(), c: compressed }));
     return true;
   } catch {
-    return false; // quota / disabled — best-effort
+    return false; // quota / disabled: best-effort
   }
+}
+
+// Stores `data` under `key` with the current time, compressing only when the
+// serialized payload is large. Returns true on a successful write.
+export function ocSet(key, data, opts = {}) {
+  const prefix = ocPrefix();
+  if (!prefix) return false;
+  pending.delete(prefix + key);
+  memo.set(prefix + key, { data, savedAt: Date.now() });
+  return writeNow(prefix, key, data, opts);
+}
+
+// The same, but the write (serialise + compress, which can take a large part of
+// a frame on a phone) waits for idle time, so a page can paint first. Reads see
+// the new data at once. Pending writes go out when the app is put away.
+let flushTimer = 0;
+function flushPending() {
+  flushTimer = 0;
+  for (const [full, w] of pending) {
+    pending.delete(full);
+    writeNow(full.slice(0, full.length - w.key.length), w.key, w.data, w.opts);
+  }
+}
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = typeof requestIdleCallback === 'function'
+    ? requestIdleCallback(flushPending, { timeout: 3000 })
+    : setTimeout(flushPending, 500);
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && pending.size) flushPending();
+  });
+  window.addEventListener('pagehide', () => pending.size && flushPending());
+}
+export function ocSetSoon(key, data, opts = {}) {
+  const prefix = ocPrefix();
+  if (!prefix) return false;
+  memo.set(prefix + key, { data, savedAt: Date.now() });
+  pending.set(prefix + key, { key, data, opts });
+  scheduleFlush();
+  return true;
 }
 
 // Returns { data, savedAt } or null when absent/unreadable.
 export function ocGet(key) {
   const prefix = ocPrefix();
   if (!prefix) return null;
+  const hit = memo.get(prefix + key);
+  if (hit) return hit;
   try {
     const metaRaw = localStorage.getItem(prefix + key + ':m');
     if (metaRaw === null) return null;
@@ -477,7 +530,9 @@ export function ocGet(key) {
     if (payload === null) return null;
     const json = meta && meta.c ? decompressFromUTF16(payload) : payload;
     if (json == null) return null;
-    return { data: JSON.parse(json), savedAt: meta && meta.t ? meta.t : null };
+    const value = { data: JSON.parse(json), savedAt: meta && meta.t ? meta.t : null };
+    memo.set(prefix + key, value);
+    return value;
   } catch {
     return null;
   }
@@ -486,6 +541,8 @@ export function ocGet(key) {
 export function ocRemove(key) {
   const prefix = ocPrefix();
   if (!prefix) return;
+  memo.delete(prefix + key);
+  pending.delete(prefix + key);
   try {
     localStorage.removeItem(prefix + key);
     localStorage.removeItem(prefix + key + ':m');
@@ -551,9 +608,9 @@ export function savePlanDetail(d) {
   if (!d || d.id == null) return;
   const entry = trimPlanDetail(d);
   const cur = ocGet(OC.planDetails);
-  const map = (cur && cur.data) || {};
+  const map = { ...((cur && cur.data) || {}) };
   map[String(entry.id)] = entry;
-  ocSet(OC.planDetails, map);
+  ocSetSoon(OC.planDetails, map);
 }
 
 // Read one planned title's cached detail: { data, savedAt } | null.
@@ -577,7 +634,7 @@ export function prunePlanDetails(keepIds) {
     if (keep.has(k)) next[k] = cur.data[k];
     else changed = true;
   }
-  if (changed) ocSet(OC.planDetails, next);
+  if (changed) ocSetSoon(OC.planDetails, next);
 }
 
 // --- Plan-to-Watch grid list (durable, per type) --------------------------
@@ -598,7 +655,7 @@ export function savePlanTitles(titles) {
 // Store the "watch next" cards verbatim (small; each already carries only the
 // fields the card renders — series/episode, progress, thumbnail path).
 export function saveUpNext(watchNext) {
-  ocSet(OC.upNext, Array.isArray(watchNext) ? watchNext : []);
+  ocSetSoon(OC.upNext, Array.isArray(watchNext) ? watchNext : []);
 }
 export function getUpNext() {
   return ocGet(OC.upNext); // { data:[…], savedAt } | null
@@ -611,7 +668,7 @@ export function getUpNext() {
 // copy stays correct as the day passes. Kept slim by storing only the three arrays
 // the view consumes (each already carries just the fields the cards render).
 export function saveUpcoming(data) {
-  ocSet(OC.upcoming, {
+  ocSetSoon(OC.upcoming, {
     horizon: (data && data.horizon) || [],
     watch_next: (data && data.watch_next) || [],
     upcoming: (data && data.upcoming) || [],

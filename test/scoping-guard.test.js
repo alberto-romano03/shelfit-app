@@ -52,7 +52,36 @@ const ALLOWED = {
   ],
 };
 
-// Every string and template literal in a JS source, comments skipped.
+// A `/` starts a regex literal (not a division) when the code before it can't end
+// an expression: an operator or opening bracket, or a keyword like `return`.
+function startsRegex(src, i) {
+  let k = i - 1;
+  while (k >= 0 && /\s/.test(src[k])) k -= 1;
+  if (k < 0) return true;
+  if ('(,=:[!&|?{};+-*%<>~^'.includes(src[k])) return true;
+  const word = /([A-Za-z_$][\w$]*)$/.exec(src.slice(Math.max(0, k - 10), k + 1));
+  return !!word && ['return', 'typeof', 'case', 'in', 'of', 'delete', 'void', 'throw', 'new'].includes(word[1]);
+}
+
+// Index just past a regex literal starting at `i` (the opening `/`).
+function skipRegex(src, i) {
+  let j = i + 1;
+  let inClass = false;
+  while (j < src.length && src[j] !== '\n') {
+    const c = src[j];
+    if (c === '\\') j += 2;
+    else {
+      if (c === '[') inClass = true;
+      else if (c === ']') inClass = false;
+      else if (c === '/' && !inClass) return j + 1;
+      j += 1;
+    }
+  }
+  return j;
+}
+
+// Every string and template literal in a JS source, comments and regex literals
+// skipped (a quote inside a regex like /name="([^"]*)"/ must not open a string).
 function literals(src) {
   const out = [];
   let i = 0;
@@ -67,6 +96,10 @@ function literals(src) {
       i = src.indexOf('*/', i + 2);
       if (i < 0) break;
       i += 2;
+      continue;
+    }
+    if (c === '/' && startsRegex(src, i)) {
+      i = skipRegex(src, i);
       continue;
     }
     if (c === "'" || c === '"' || c === '`') {
@@ -121,6 +154,9 @@ describe('per-member scoping guard', () => {
     assert.equal(violation('INSERT INTO progress (item_id, season, episode) VALUES (?, ?, ?)'), null);
     assert.equal(violation('SELECT p.* FROM progress p JOIN items i ON i.id = p.item_id WHERE i.user_id = ?'), null);
     assert.equal(violation('SELECT value FROM settings WHERE key = ?'), null);
+    // Quotes inside a regex literal don't open a string; a division isn't a regex.
+    assert.deepEqual(literals('const r = /name="([^"]*)"/g; const n = a / b; const q = \'SELECT 1\';'), ['SELECT 1']);
+    assert.deepEqual(literals("return /[/'\"]/.test(s) ? 'x' : 'y';"), ['x', 'y']);
   });
 
   it('binds every library query to a member', () => {

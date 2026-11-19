@@ -14,66 +14,26 @@
          at a stable non-hashed path. iOS Safari "Add to Home Screen" reads only
          this tag — not the manifest — so it must come first and be flat/opaque. -->
     <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%icons/apple-touch-icon.png" />
-    <link rel="icon" type="image/png" href="%BASE_URL%icons/shelf-iticon-browser.png" />
+    <link rel="icon" type="image/png" href="%BASE_URL%icons/shelf-iticon-224.png" />
     <link rel="manifest" href="%BASE_URL%manifest.json" />
     <title>shelfit</title>
 
-    <!-- Console silence (default; must be the FIRST script so it covers every
-         later one). For privacy/security shelfit emits nothing to the browser
-         console: every console method is replaced with a no-op unless debug
-         logging is explicitly opted into — localStorage 'shelfit:debug' = '1', or
-         a '?debug=1' URL param — which restores the real console for that session.
-         This silences ALL script-originated output (shelfit's own and anything it
-         loads). NOTE: browser-native diagnostics — failed network requests, CSP
-         reports, service-worker registration errors — are emitted by the browser
-         itself and cannot be suppressed from JavaScript. -->
-    <script>
-      (function () {
-        try {
-          var dbg = false;
-          try { dbg = localStorage.getItem('shelfit:debug') === '1'; } catch (e) {}
-          try { if (/[?&]debug=1(?:&|$)/.test(location.search)) dbg = true; } catch (e) {}
-          if (dbg || typeof console === 'undefined' || !console) return;
-          var noop = function () {};
-          var methods = [
-            'log', 'info', 'warn', 'error', 'debug', 'trace', 'dir', 'dirxml',
-            'table', 'group', 'groupCollapsed', 'groupEnd', 'count', 'countReset',
-            'time', 'timeEnd', 'timeLog', 'assert', 'profile', 'profileEnd', 'clear',
-          ];
-          for (var i = 0; i < methods.length; i++) {
-            try { console[methods[i]] = noop; } catch (e) {}
-          }
-        } catch (e) {}
-      })();
-    </script>
-
-    <!-- Language, stamped before first paint. A first-paint hint only: i18n.js
-         checks it against the languages it has. -->
-    <script>
-      try {
-        var lang = localStorage.getItem('shelfit:lang');
-        if (!/^[a-z]{2}$/.test(lang || '')) lang = (navigator.language || 'en').slice(0, 2).toLowerCase();
-        document.documentElement.setAttribute('lang', lang);
-      } catch (e) {}
-    </script>
-    <!-- Resume detection (must run BEFORE the splash paints). If this browsing
-         session has already shown the splash once, this load is a RESUME, not a
-         cold start — iOS standalone PWAs relaunch/reload the app when returning
-         from an external Safari link, which would otherwise replay the splash.
-         Marking <html> now lets the CSS below suppress the splash on the very
-         first frame (no flash). sessionStorage is cleared when the PWA is fully
-         terminated, so a genuine cold start has no flag and plays the splash. -->
-    <script>
-      try {
-        if (sessionStorage.getItem('shelfit:seen-splash')) {
-          document.documentElement.classList.add('app-resume', 'app-revealed');
-        }
-      } catch (e) {}
-    </script>
+    <!-- Before the first paint, in this order (boot/head.js): the console is
+         silenced unless debug is on (localStorage 'shelfit:debug' = '1' or
+         '?debug=1'); the language is stamped on <html>; and a session that
+         already showed the splash is marked as a resume, so the CSS below hides
+         the splash on the first frame. A file, not inline, so the Content-
+         Security-Policy allows only the app's own scripts. Must stay the FIRST
+         script so the silence covers every later one. -->
+    <script src="%BASE_URL%boot/head.js"></script>
 
     <!-- Splash: inlined so it paints on the first frame, before the JS bundle
          loads. The app boots (and Home starts caching) behind it. -->
     <style>
+      /* In the lowest cascade layer, like the app's own reset (styles.css): the
+         app stylesheet loads after this and keeps winning where both set the
+         same thing (the page background), as it did before the layers. */
+      @layer reset {
       /* Single source of truth for the splash colour, shared by the splash and
          the anti-flash overlay below so they can never drift apart. */
       :root {
@@ -172,7 +132,7 @@
         margin-top: 22px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
           Helvetica, Arial, sans-serif;
-        font-size: 30px;
+        font-size: 1.875rem;
         font-weight: 800;
         letter-spacing: -0.5px;
         color: #ffffff;
@@ -246,6 +206,7 @@
           transform: none;
         }
       }
+      }
     </style>
   </head>
   <body>
@@ -254,8 +215,11 @@
         <div class="splash-clip">
           <img
             class="splash-logo"
-            src="%BASE_URL%icons/shelf-iticon-browser.png"
-            alt="shelfit"
+            src="%BASE_URL%icons/shelf-iticon-448.png"
+            width="148"
+            height="148"
+            fetchpriority="high"
+            alt=""
           />
         </div>
         <div class="splash-slot"></div>
@@ -267,55 +231,7 @@
          splash; hidden once the splash has left so the navbar never flashes. -->
     <div id="app-flash"></div>
 
-    <script>
-      // Dismiss the splash when the suck animation ends (with a safety fallback).
-      // Runs independently of the app bundle so it never blocks or waits on it —
-      // image preloading runs in the background and does NOT hold the splash.
-      (function () {
-        // Resume: the splash is already hidden via CSS — nothing to animate or
-        // dismiss, so skip straight past it (the app paints directly behind).
-        if (document.documentElement.classList.contains('app-resume')) return;
-        var s = document.getElementById('splash');
-        // No splash element to wait on (it was already torn down) — release the
-        // app immediately rather than leaving it gated forever.
-        if (!s) {
-          document.documentElement.classList.add('app-revealed');
-          return;
-        }
-        var done = false;
-        // Fade + remove the anti-flash overlay only after the splash has fully
-        // left, so the transition goes splash → solid colour → ready app with no
-        // navbar flash in between. The app bundle has already mounted behind it.
-        function clearFlash() {
-          var f = document.getElementById('app-flash');
-          if (!f) return;
-          f.classList.add('flash-hide');
-          setTimeout(function () {
-            if (f.parentNode) f.parentNode.removeChild(f);
-          }, 260);
-        }
-        function hide() {
-          if (done) return;
-          done = true;
-          // Reveal the app UNDER the still-opaque anti-flash overlay, so it is
-          // painted and settled by the time that overlay fades.
-          document.documentElement.classList.add('app-revealed');
-          s.classList.add('splash-hide');
-          setTimeout(function () {
-            if (s.parentNode) s.parentNode.removeChild(s);
-            clearFlash();
-          }, 280);
-        }
-        var reduce =
-          window.matchMedia &&
-          window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        var logo = s.querySelector('.splash-logo');
-        if (!reduce && logo) {
-          logo.addEventListener('animationend', hide);
-        }
-        setTimeout(hide, reduce ? 500 : 1500);
-      })();
-    </script>
+    <script src="%BASE_URL%boot/splash.js"></script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

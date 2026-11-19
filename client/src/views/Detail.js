@@ -53,6 +53,7 @@ import {
   epLabel,
   pressable,
   skelLine,
+  markInvalid,
 } from '../ui.js';
 
 // Who this member can suggest a title to (see openSuggestSheet). Fetched when a
@@ -102,7 +103,7 @@ function dateOnly(v) {
 // toasted), or return normally to close it.
 function openDateModal({ title, label, value, confirmLabel = t('detail.confirm'), onConfirm }) {
   openModal((modal, close) => {
-    const input = el('input', { class: 'text-field', type: 'date', value: value || localTodayISO() });
+    const input = el('input', { class: 'text-field', type: 'date', value: value || localTodayISO(), 'aria-label': label || title });
     const confirm = el('button', { class: 'btn btn-primary' }, [
       lucideIcon('check', 'btn-lucide'),
       el('span', { text: confirmLabel }),
@@ -427,7 +428,7 @@ function buildBento(d, meta) {
   // Liner Notes are always fully expanded (no collapse).
   const header = el('div', { class: 'bento-header' }, [
     el('span', { class: 'bento-title' }, [
-      el('span', { class: 'section-title', text: t('detail.linerNotes') }),
+      el('span', { class: 'section-title', role: 'heading', 'aria-level': '3', text: t('detail.linerNotes') }),
     ]),
   ]);
   const bodyWrap = el('div', { class: 'bento-body' }, [grid]);
@@ -442,7 +443,7 @@ function buildOfflineBento(d, meta) {
   if (!st) return null;
   const header = el('div', { class: 'bento-header' }, [
     el('span', { class: 'bento-title' }, [
-      el('span', { class: 'section-title', text: t('detail.linerNotes') }),
+      el('span', { class: 'section-title', role: 'heading', 'aria-level': '3', text: t('detail.linerNotes') }),
     ]),
   ]);
   const grid = applyBentoPalette(
@@ -496,7 +497,7 @@ function detailSkeleton() {
       // into the hero) instead of overflowing DOWN into the description below.
       el('div', { class: 'detail-poster-wrap' }, [el('div', { class: 'detail-poster skeleton' })]),
       el('div', { class: 'detail-titles', style: { flex: '1' } }, [
-        el('h2', {}, [skelText('78%')]),
+        el('h2', { 'aria-hidden': 'true' }, [skelText('78%')]),
         el('div', { class: 'detail-meta' }, [
           el('div', { class: 'meta-row' }, [skelText('34%')]),
           el('div', { class: 'meta-row' }, [skelText('48%')]),
@@ -507,7 +508,7 @@ function detailSkeleton() {
     el('div', {}, [
       skelOverview(4),
       skelShowMore(),
-      el('div', { class: 'section-title remote-title' }, [skelText('34%')]),
+      el('div', { class: 'section-title remote-title', 'aria-hidden': 'true' }, [skelText('34%')]),
       row([skelPill(47)]),
       ...rest,
     ])
@@ -660,7 +661,8 @@ export default async function Detail(container, params) {
 
   // --- Hero + back ---
   const hero = el('div', { class: 'detail-hero' });
-  setBg(hero, d.backdrop_url);
+  // The page's first big image: ahead of everything else (posters below, preloads).
+  setBg(hero, d.backdrop_url, { priority: 'high' });
   const backBtn = el('button', {
     class: 'icon-btn icon-btn--overlay',
     html: icons.back,
@@ -686,7 +688,7 @@ export default async function Detail(container, params) {
 
   // --- Poster + titles --- (shimmer skeleton until the poster decodes; stays on
   // error / offline rather than showing a broken image)
-  const posterBox = mountPoster(el('div', { class: 'detail-poster' }), d.poster_url, d.title_it);
+  const posterBox = mountPoster(el('div', { class: 'detail-poster' }), d.poster_url, d.title_it, { priority: 'high' });
 
   // Physical-ownership CD: layered BENEATH the poster (poster always on top) and
   // revealed when owned. A real Fanart disc is used when cached; otherwise the
@@ -949,7 +951,7 @@ export default async function Detail(container, params) {
       d.favorite = s.favorite;
     },
   });
-  const ratingTitle = el('div', { class: 'section-title', text: t('common.rating') });
+  const ratingTitle = el('h3', { class: 'section-title', text: t('common.rating') });
   const ratingWrap = ratingControls.element;
 
   // --- Movie watch-date + rewatch keys (completed movies only) ---
@@ -960,7 +962,7 @@ export default async function Detail(container, params) {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 12 18z"/><path d="M22 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 22 18z"/></svg>';
   const rewatchWrap = el('div', { class: 'detail-actions-row rewatch-keys' });
   function renderRewatch() {
-    rewatchWrap.innerHTML = '';
+    rewatchWrap.replaceChildren();
     if (d.type !== 'movie' || d.status !== 'completed') {
       rewatchWrap.style.display = 'none';
       return;
@@ -1053,7 +1055,7 @@ export default async function Detail(container, params) {
 
   // --- Notes (always the last editable field) ---
   const notePlaceholder = t(NOTE_PLACEHOLDERS[Math.floor(Math.random() * NOTE_PLACEHOLDERS.length)]);
-  const notes = el('textarea', { class: 'notes' });
+  const notes = el('textarea', { class: 'notes', 'aria-label': t('detail.notes') });
   notes.value = d.notes || '';
   // Type the diary-opener placeholder out letter by letter once it scrolls into
   // view — a small "someone's writing" flourish. Stops on cleanup / first keypress.
@@ -1164,7 +1166,7 @@ export default async function Detail(container, params) {
   // has one too: the status button full-width, above the Kodi/Owned row.
   if (isMovie) {
     body.append(
-      el('div', { class: 'section-title remote-title', text: t('detail.remote') }),
+      el('h3', { class: 'section-title remote-title', text: t('detail.remote') }),
       actionsRow,
       rewatchWrap,
       cinemaRow,
@@ -1174,7 +1176,7 @@ export default async function Detail(container, params) {
     );
   } else {
     body.append(
-      el('div', { class: 'section-title', text: t('detail.remote') }),
+      el('h3', { class: 'section-title', text: t('detail.remote') }),
       statusBtn,
       actionsRow,
       kodiFeedback,
@@ -1199,7 +1201,7 @@ export default async function Detail(container, params) {
         unfinished.find((s) => marked != null && s.season_number > marked) ||
         unfinished[0] ||
         null;
-    body.append(el('div', { class: 'section-title', text: t('detail.progress') }), progressSection(p, onSeason, avgRuntime(meta && meta.episode_run_time)));
+    body.append(el('h3', { class: 'section-title', text: t('detail.progress') }), progressSection(p, onSeason, avgRuntime(meta && meta.episode_run_time)));
     // Mark all watched marks only episodes already out. A season still airing
     // with every one of those watched has nothing to mark: no button (the server
     // sends aired_left; null when it can't tell, and the button stays). One tap
@@ -1259,7 +1261,7 @@ export default async function Detail(container, params) {
       item.append(header);
       seasonsWrap.append(item);
     }
-    body.append(el('div', { class: 'section-title', text: t('common.seasons') }), seasonsWrap);
+    body.append(el('h3', { class: 'section-title', text: t('common.seasons') }), seasonsWrap);
   }
 
   // Collapsible "Details" bento — below the description/sections, above notes.
@@ -1309,7 +1311,7 @@ export default async function Detail(container, params) {
   // Crossfade the skeleton out and the real content in (built while the skeleton
   // was still showing, so it's ready in the DOM before the skeleton disappears).
   crossfadeSwap(() => {
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(hero, head, body);
   });
 
@@ -1411,7 +1413,7 @@ export async function renderCollectionSection(api, body, anchor, btc, d) {
     row.append(cell);
   }
 
-  body.insertBefore(el('div', { class: 'section-title', text: t('detail.moreFromCollection') }), anchor);
+  body.insertBefore(el('h3', { class: 'section-title', text: t('detail.moreFromCollection') }), anchor);
   body.insertBefore(row, anchor);
   return true;
 }
@@ -1518,6 +1520,11 @@ export async function openPosterMenu(item) {
       paintRating();
 
       let open = null; // the tile whose panel is showing
+      // Each tile opens a panel: it says whether its panel is open.
+      const sayOpen = () => {
+        for (const tile of [statusTile, rateTile]) tile.setAttribute('aria-expanded', String(tile.classList.contains('is-open')));
+      };
+      sayOpen();
       function showPanel(which, build) {
         statusTile.classList.toggle('is-open', which === statusTile);
         rateTile.classList.toggle('is-open', which === rateTile);
@@ -1525,9 +1532,11 @@ export async function openPosterMenu(item) {
           open = null;
           statusTile.classList.remove('is-open');
           rateTile.classList.remove('is-open');
+          sayOpen();
           panel.style.height = '0px';
           return;
         }
+        sayOpen();
         open = which;
         panelIn.replaceChildren(build());
         panel.style.height = `${panelIn.offsetHeight}px`;
@@ -1631,8 +1640,10 @@ function openSuggestSheet(d) {
       rows: '2',
       maxlength: String(LEND_MESSAGE_MAX),
       'aria-label': t('lend.messageLabel'),
+      'aria-describedby': 'lend-message-count',
+      enterkeyhint: 'done',
     });
-    const counter = el('div', { class: 'lend-message-count', 'aria-live': 'polite' });
+    const counter = el('div', { class: 'lend-message-count', id: 'lend-message-count' });
     const count = () => {
       const n = [...message.value].length;
       counter.textContent = `${n}/${LEND_MESSAGE_MAX}`;
@@ -1766,7 +1777,7 @@ function openAddToListSheet(d) {
       try {
         data = await api.lists(`?type=${d.type}&tmdbId=${d.tmdb_id}`);
       } catch {
-        listWrap.innerHTML = '';
+        listWrap.replaceChildren();
         listWrap.append(
           stateBlock({
             kind: 'error',
@@ -1777,7 +1788,7 @@ function openAddToListSheet(d) {
         );
         return;
       }
-      listWrap.innerHTML = '';
+      listWrap.replaceChildren();
       const lists = data.lists || [];
       if (!lists.length) {
         listWrap.append(el('div', { class: 'muted', text: t('detail.noLists') }));
@@ -1808,7 +1819,7 @@ function openAddToListSheet(d) {
     }
 
     // "New list" shortcut
-    const nameInput = el('input', { class: 'text-field', placeholder: t('detail.newListName'), maxlength: '40' });
+    const nameInput = el('input', { class: 'text-field', placeholder: t('detail.newListName'), maxlength: '40', 'aria-label': t('detail.newList') });
     const createBtn = el('button', { class: 'btn btn-primary' }, [
       lucideIcon('plus', 'btn-lucide'),
       el('span', { text: t('detail.createAndAdd') }),
@@ -1816,6 +1827,7 @@ function openAddToListSheet(d) {
     createBtn.addEventListener('click', async () => {
       const name = nameInput.value.trim();
       if (!name) {
+        markInvalid(nameInput);
         toast(t('detail.enterName'));
         return;
       }

@@ -276,6 +276,7 @@ const it = {
   'grid.collNoneOpen': 'Tutte le saghe sono complete.',
   'grid.collNoneDone': 'Ancora nessuna saga completa.',
   'grid.unrated': 'Senza voto',
+  'grid.holdHint': 'Tieni premuto per le azioni rapide',
   'grid.empty': 'Scaffale ancora vuoto',
   'grid.emptyDetail': 'Cerca un titolo e finisce qui.',
   'grid.emptyDetailShows': 'Cerca una serie e finisce qui.',
@@ -534,6 +535,8 @@ const it = {
   'ticket.removed': 'Biglietto rimosso',
   'toast.undo': 'Annulla',
   'toast.undone': 'Annullato',
+  'toast.region': 'Notifiche',
+  'toast.actionsAvailable': 'Azioni disponibili',
   'ticket.empty': 'Ancora nessun biglietto: segna un film come visto al cinema per aggiungerlo qui.',
   'ticket.loadError': 'Impossibile caricare i tuoi biglietti.',
 
@@ -573,6 +576,8 @@ const it = {
   'season.notOutYet': 'Non è ancora uscito: esce il {date}',
   'season.noteSaved': 'Nota salvata',
   'season.watchedToggle': 'Visto',
+  'season.watchedFor': 'Visto: {ep}',
+  'season.timesWatched': '{n} visioni',
   'season.noteSavedWatched': 'Nota salvata, episodio segnato come visto',
   'season.noteDeleted': 'Nota eliminata',
   'season.confirm': 'Conferma',
@@ -972,7 +977,7 @@ const it = {
   'settings.account.logoutAll': 'Esci da tutti i dispositivi',
   'settings.account.logoutAllSub': 'Chiude ogni sessione ovunque, compresa questa.',
   'settings.account.logoutAllTitle': 'Uscire ovunque?',
-  'settings.account.logoutAllBody': 'Tutti i dispositivi vengono disconnessi, compreso questo, e dovrai accedere di nuovo su ciascuno. Non si può annullare.',
+  'settings.account.logoutAllBody': 'Tutti i dispositivi vengono disconnessi, compreso questo, e i tuoi link magici smettono di funzionare. Dovrai accedere di nuovo su ciascuno. Non si può annullare.',
   'settings.account.logoutAllConfirm': 'Esci da tutti',
   'settings.account.title': 'Account',
   'settings.access.login': 'Accesso con password',
@@ -1009,7 +1014,6 @@ const it = {
   'magic.expiry.days7': '7 giorni',
   'magic.expiry.days30': '30 giorni',
   'magic.expiry.days90': '90 giorni',
-  'magic.expiry.year1': '1 anno',
   'magic.generateNew': 'Genera nuovo link',
   'magic.generateNewSub': 'L\'URL viene mostrato una volta sola.',
   'magic.title': 'Link magici',
@@ -1087,7 +1091,7 @@ const it = {
   'devices.unknown': 'Dispositivo sconosciuto',
   'devices.thisDevice': 'Questo dispositivo',
   'devices.lastActive': 'Ultima attività il {date}',
-  'magic.readyNote': 'Copialo ora: per sicurezza non verrà più mostrato. Aprilo su un dispositivo per farlo accedere. Chiunque abbia questo link può aprire l\'app, quindi tienilo privato.',
+  'magic.readyNote': 'Copialo ora: per sicurezza non verrà più mostrato. Aprilo su un dispositivo e tocca Entra per farlo accedere. Chiunque abbia questo link può aprire l\'app, quindi tienilo privato.',
   'kodiSettings.enable': 'Attiva integrazione Kodi',
   'kodiSettings.enableSub': 'Riproduci i titoli su Kodi e porta la sua libreria in shelfit.',
   'kodiSettings.failed': 'Non riuscito',
@@ -1434,6 +1438,7 @@ const en = {
   'grid.collNoneOpen': 'Every collection here is complete.',
   'grid.collNoneDone': 'No complete collections yet.',
   'grid.unrated': 'Unrated',
+  'grid.holdHint': 'Hold for quick actions',
   'grid.empty': 'Nothing on this shelf yet',
   'grid.emptyDetail': 'Search for a film and it lands here.',
   'grid.emptyDetailShows': 'Search for a series and it lands here.',
@@ -1692,6 +1697,8 @@ const en = {
   'ticket.removed': 'Ticket removed',
   'toast.undo': 'Undo',
   'toast.undone': 'Undone',
+  'toast.region': 'Notifications',
+  'toast.actionsAvailable': 'Actions available',
   'ticket.empty': 'No tickets yet: mark a movie as watched in cinema to add it here.',
   'ticket.loadError': 'Couldn’t load your tickets.',
 
@@ -1731,6 +1738,8 @@ const en = {
   'season.notOutYet': 'Not out yet: it comes out on {date}',
   'season.noteSaved': 'Note saved',
   'season.watchedToggle': 'Watched',
+  'season.watchedFor': 'Watched: {ep}',
+  'season.timesWatched': 'watched {n} times',
   'season.noteSavedWatched': 'Note saved, episode marked watched',
   'season.noteDeleted': 'Note deleted',
   'season.confirm': 'Confirm',
@@ -2130,7 +2139,7 @@ const en = {
   'settings.account.logoutAll': 'Sign out all devices',
   'settings.account.logoutAllSub': 'Ends every session everywhere, including this one.',
   'settings.account.logoutAllTitle': 'Sign out everywhere?',
-  'settings.account.logoutAllBody': 'Every device is signed out, including this one, and you will log in again on each. This cannot be undone.',
+  'settings.account.logoutAllBody': 'Every device is signed out, including this one, and your magic links stop working. You will log in again on each. This cannot be undone.',
   'settings.account.logoutAllConfirm': 'Sign out all',
   'settings.account.title': 'Account',
   'settings.access.login': 'Password login',
@@ -2167,7 +2176,6 @@ const en = {
   'magic.expiry.days7': '7 days',
   'magic.expiry.days30': '30 days',
   'magic.expiry.days90': '90 days',
-  'magic.expiry.year1': '1 year',
   'magic.generateNew': 'Generate new link',
   'magic.generateNewSub': 'The URL is shown once and never again.',
   'magic.title': 'Magic Links',
@@ -2245,7 +2253,7 @@ const en = {
   'devices.unknown': 'Unknown device',
   'devices.thisDevice': 'This device',
   'devices.lastActive': 'Last active {date}',
-  'magic.readyNote': 'Copy it now: for security it won’t be shown again. Open it on any device to sign that device in. Anyone with this link can open the app, so keep it private.',
+  'magic.readyNote': 'Copy it now: for security it won’t be shown again. Open it on any device and tap Sign in to sign that device in. Anyone with this link can open the app, so keep it private.',
   'kodiSettings.enable': 'Enable Kodi integration',
   'kodiSettings.enableSub': 'Play titles on Kodi and pull its library into shelfit.',
   'kodiSettings.failed': 'Failed',
@@ -2409,8 +2417,12 @@ export function locale(enTag) {
   return lang === 'it' ? LOCALES.it : enTag;
 }
 
-// No grouping: a count reads "1000" in both languages, as it always has.
+// No grouping: a count reads "1000" in both languages, as it always has. One
+// formatter per language, made once (t() formats a number on every call with n).
+const numberFormats = {};
 export function fmtNumber(n) {
   if (n == null || !Number.isFinite(Number(n))) return '';
-  return new Intl.NumberFormat(LOCALES[lang] || LOCALES.en, { maximumFractionDigits: 2, useGrouping: false }).format(Number(n));
+  const tag = LOCALES[lang] || LOCALES.en;
+  const nf = numberFormats[tag] || (numberFormats[tag] = new Intl.NumberFormat(tag, { maximumFractionDigits: 2, useGrouping: false }));
+  return nf.format(Number(n));
 }

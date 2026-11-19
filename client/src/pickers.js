@@ -32,6 +32,7 @@ export function openTitlePicker({ type, title, onPick }) {
       class: 'search-input',
       type: 'search',
       placeholder: type === 'movie' ? t('pickers.searchFilms') : t('pickers.searchSeries'),
+      'aria-label': type === 'movie' ? t('pickers.searchFilms') : t('pickers.searchSeries'),
     });
     const list = el('div', { class: 'picker-list' });
     modal.append(
@@ -52,7 +53,7 @@ export function openTitlePicker({ type, title, onPick }) {
     const render = (q) => {
       const needle = q.trim().toLowerCase();
       const rows = (needle ? all.filter((r) => (r.title || '').toLowerCase().includes(needle)) : all).slice(0, 60);
-      list.innerHTML = '';
+      list.replaceChildren();
       if (!rows.length) {
         list.append(
           stateBlock({
@@ -104,7 +105,7 @@ export function openTitlePicker({ type, title, onPick }) {
         render(input.value);
       })
       .catch(() => {
-        list.innerHTML = '';
+        list.replaceChildren();
         list.append(
           stateBlock({
             kind: 'error',
@@ -127,6 +128,7 @@ export function openPersonPicker({ onPick }) {
       class: 'search-input',
       type: 'search',
       placeholder: t('pickers.searchPeople'),
+      'aria-label': t('pickers.searchPeople'),
     });
     const list = el('div', { class: 'picker-list' });
     modal.append(
@@ -149,7 +151,7 @@ export function openPersonPicker({ onPick }) {
     const run = async (q) => {
       const mine = ++seq;
       if (!q.trim()) {
-        list.innerHTML = '';
+        list.replaceChildren();
         list.append(
           stateBlock({
             tier: 'section',
@@ -159,12 +161,12 @@ export function openPersonPicker({ onPick }) {
         );
         return;
       }
-      list.innerHTML = '';
+      list.replaceChildren();
       list.append(spinner());
       try {
         const res = await api.get(`/api/persons/search?q=${encodeURIComponent(q.trim())}`);
         if (mine !== seq) return; // a newer keystroke won
-        list.innerHTML = '';
+        list.replaceChildren();
         const rows = res.results || [];
         if (!rows.length) {
           list.append(
@@ -188,7 +190,7 @@ export function openPersonPicker({ onPick }) {
         }
       } catch {
         if (mine !== seq) return;
-        list.innerHTML = '';
+        list.replaceChildren();
         list.append(
           stateBlock({
             kind: 'error',

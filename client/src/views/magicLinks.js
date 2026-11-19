@@ -27,7 +27,6 @@ const expiryChips = () => [
   ['7d', t('magic.expiry.days7')],
   ['30d', t('magic.expiry.days30')],
   ['90d', t('magic.expiry.days90')],
-  ['1y', t('magic.expiry.year1')],
 ];
 
 export function buildMagicLinks(api) {
@@ -60,7 +59,7 @@ export function buildMagicLinks(api) {
     try {
       data = await api.magicLinks();
     } catch {
-      listWrap.innerHTML = '';
+      listWrap.replaceChildren();
       listWrap.append(
         stateBlock({
           kind: 'error',
@@ -72,7 +71,7 @@ export function buildMagicLinks(api) {
       return;
     }
     const links = (data && data.links) || [];
-    listWrap.innerHTML = '';
+    listWrap.replaceChildren();
     if (!links.length) {
       listWrap.append(el('div', { class: 'muted usage-desc', text: t('magic.empty') }));
       return;
@@ -125,7 +124,7 @@ export function buildMagicLinks(api) {
   let expiry = '30d';
   function openForm() {
     genBtn.style.display = 'none';
-    formWrap.innerHTML = '';
+    formWrap.replaceChildren();
     expiry = '30d';
 
     const labelInput = el('input', {
@@ -133,6 +132,7 @@ export function buildMagicLinks(api) {
       type: 'text',
       maxlength: '60',
       placeholder: t('magic.labelPlaceholder'),
+      'aria-label': t('magic.label'),
     });
 
     // Expiry: a single choice, so the app's segmented control, as wide as the field above.
@@ -178,7 +178,7 @@ export function buildMagicLinks(api) {
   }
 
   function closeForm() {
-    formWrap.innerHTML = '';
+    formWrap.replaceChildren();
     genBtn.style.display = '';
   }
 
@@ -186,7 +186,7 @@ export function buildMagicLinks(api) {
   // device in and drops it straight into the app; the server never returns the
   // token again, so it is shown once in a copyable field.
   function showResult(link) {
-    formWrap.innerHTML = '';
+    formWrap.replaceChildren();
 
     const urlField = el('input', {
       class: 'text-field magic-url',

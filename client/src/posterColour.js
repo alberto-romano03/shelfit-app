@@ -4,8 +4,14 @@
 // what they had.
 
 import { imageCache } from './imageCache.js';
+import { userPrefix } from './userScope.js';
 
-const KEY = 'shelfit:poster-hues';
+// Per member: the URLs name every title their grids showed. Without a member
+// (signed out) nothing is kept on the device, only in memory.
+const key = () => {
+  const prefix = userPrefix();
+  return prefix ? `${prefix}poster-hues` : null;
+};
 const MAX_SAVED = 800;
 const NO_HUE = -1;
 
@@ -13,7 +19,8 @@ let saved = null;
 function store() {
   if (saved) return saved;
   try {
-    saved = JSON.parse(localStorage.getItem(KEY)) || {};
+    const k = key();
+    saved = (k && JSON.parse(localStorage.getItem(k))) || {};
   } catch {
     saved = {};
   }
@@ -24,7 +31,8 @@ function save() {
   clearTimeout(saveTimer);
   saveTimer = 0;
   try {
-    localStorage.setItem(KEY, JSON.stringify(store()));
+    const k = key();
+    if (k) localStorage.setItem(k, JSON.stringify(store()));
   } catch {
     /* full or blocked: it just gets worked out again next time */
   }

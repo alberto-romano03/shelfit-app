@@ -17,9 +17,7 @@ function httpMessage(status) {
   return status >= 500 ? t('api.serverError') : t('api.httpError', { status });
 }
 function unreachable(cause) {
-  const err = new Error(t('api.unreachable'));
-  err.cause = cause;
-  return err;
+  return new Error(t('api.unreachable'), { cause });
 }
 
 // True for fetch aborts (navigation teardown) — callers ignore these silently.

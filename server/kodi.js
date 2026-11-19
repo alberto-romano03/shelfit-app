@@ -164,6 +164,21 @@ const activateTx = db.transaction((id) => {
   setActiveStmt.run(id);
 });
 
+// A Kodi address is a host name or an IPv4 address and nothing else: it is put
+// into http://<host>:<port>/jsonrpc with the stored credentials, so a value
+// carrying a path, a user part (user@) or a query could aim those elsewhere.
+const HOST_LABEL = '[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
+const HOST_RE = new RegExp(`^${HOST_LABEL}(?:\\.${HOST_LABEL})*$`);
+export function validKodiHost(host) {
+  return typeof host === 'string' && host.length <= 253 && HOST_RE.test(host);
+}
+// A TCP port, or absent (8080 then).
+export function validKodiPort(port) {
+  if (port === undefined || port === null || port === '') return true;
+  const n = Number(port);
+  return Number.isInteger(n) && n >= 1 && n <= 65535;
+}
+
 export function createInstance({ name, host, port, username, password, icon, sync_user_id }) {
   const hadActive = !!getActiveInstance();
   const info = createStmt.run(
@@ -745,7 +760,10 @@ export async function nowPlayingPoster() {
   try {
     const res = await fetch(imgUrl, { headers, signal: ac.signal });
     if (!res.ok) return null;
-    const contentType = res.headers.get('content-type') || 'image/jpeg';
+    // Served from the shelfit origin: only ever as an image, whatever Kodi says
+    // (a text/html answer would otherwise be a page on this origin).
+    const type = (res.headers.get('content-type') || '').split(';')[0].trim();
+    const contentType = /^image\/(jpeg|png|webp|gif|avif)$/i.test(type) ? type : 'image/jpeg';
     const buffer = Buffer.from(await res.arrayBuffer());
     return { contentType, buffer };
   } catch {

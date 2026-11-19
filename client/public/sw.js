@@ -1,8 +1,8 @@
 // shelfIt service worker — instant cache-first shell + graceful offline.
 //   • App shell (HTML) + /static/* bundles + logo: CACHE-FIRST. At install we
-//     pre-cache the shell, the logo, AND the hashed JS/CSS the current
-//     index.html references, so the app + loading screen render fully offline
-//     with zero network wait — no blank/unstyled page.
+//     pre-cache the shell, the logo, AND every hashed JS/CSS file of this build
+//     (PRECACHE, written in by the build), so the app + loading screen render
+//     fully offline with zero network wait, no blank/unstyled page.
 //   • GET /api/profile, /api/stats & /api/plan-to-watch: network-first, cached
 //     into shelfit-data-v1. The profile fetch also warms its avatar/cover/badge
 //     images; the plan-to-watch fetch warms its poster images. Together these
@@ -21,7 +21,15 @@
 
 const BASE = '/shelfit';
 
-const CACHE = 'shelfit-shell-v225'; // bumped: no ring on the current season segment
+// Stamped by the build (client/vite.config.js, shelfitServiceWorker): BUILD_ID
+// is a hash of the built files, PRECACHE lists every /static/* file. A deploy
+// that changes anything therefore changes this script's bytes, which is what
+// makes the browser install the new worker, and gets a fresh shell cache. No
+// manual version bump. In `vite dev` the placeholders stay as they are.
+const BUILD_ID = '__SHELFIT_BUILD_ID__';
+const PRECACHE = [] /* __SHELFIT_PRECACHE__ */;
+
+const CACHE = `shelfit-shell-${BUILD_ID}`;
 // Offline copies of API responses. Bumped to v3 to drop the copies made before
 // accounts existed; the client also deletes every shelfit-data-* cache whenever
 // the member on this device changes (userScope.js), since entries are keyed by
@@ -35,22 +43,36 @@ const SHELL = [
   `${BASE}/`,
   `${BASE}/index.html`,
   `${BASE}/manifest.json`,
+  `${BASE}/boot/head.js`,
+  `${BASE}/boot/splash.js`,
   `${BASE}/icons/apple-touch-icon.png`,
-  `${BASE}/icons/shelf-iticon-browser.png`,
+  `${BASE}/icons/shelf-iticon-224.png`,
+  `${BASE}/icons/shelf-iticon-448.png`,
   `${BASE}/icons/icon-192.png`,
   `${BASE}/icons/icon-512.png`,
 ];
 
-// Pull the hashed /static/* bundle + stylesheet out of an index.html string and
-// make sure each is in the shell cache. Keeps the cached index.html and the
-// bundle it references in lockstep, so offline boots never hit a missing asset.
-async function precacheStaticFromHtml(cache, html) {
+const SHELL_KEY = `${BASE}/index.html`;
+
+// Only real content goes into the shell cache. A redirect (signed out, the server
+// answers with a 302 to the login page), an error, or the wrong kind of body (the
+// server's SPA fallback answers an unknown URL with index.html) would otherwise be
+// stored and served from cache: the login page as the app, or HTML under a .js
+// name. `html` says which kind the key needs: the shell is HTML, nothing else is.
+function cacheable(res, html) {
+  if (!res || !res.ok || res.redirected || res.type !== 'basic') return false;
+  const isHtml = (res.headers.get('content-type') || '').includes('text/html');
+  return html ? isHtml : !isHtml;
+}
+
+// Fetch `url` fresh and store it if it is cacheable. `redirect: 'error'` makes a
+// 302 fail outright instead of being followed. Best effort.
+async function cacheFresh(cache, url, html) {
   try {
-    const re = new RegExp('(?:src|href)="(' + BASE + '/static/[^"]+)"', 'g');
-    const urls = [...html.matchAll(re)].map((m) => m[1]);
-    await Promise.all(urls.map((u) => cache.match(u).then((hit) => (hit ? null : cache.add(u).catch(() => {})))));
+    const res = await fetchWithTimeout(new Request(url, { cache: 'no-store', redirect: 'error' }), REVALIDATE_TIMEOUT_MS);
+    if (cacheable(res, html)) await cache.put(url, res);
   } catch {
-    /* ignore parse/network issues — on-demand caching still covers these */
+    /* offline or refused: on-demand caching still covers it */
   }
 }
 
@@ -58,28 +80,24 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE);
-      await cache.addAll(SHELL).catch(() => {});
-      try {
-        const res = await fetch(`${BASE}/index.html`, { cache: 'no-store' });
-        if (res.ok) {
-          const html = await res.clone().text();
-          await cache.put(`${BASE}/index.html`, res.clone());
-          await precacheStaticFromHtml(cache, html);
-        }
-      } catch {
-        /* offline at install → SHELL is still cached */
-      }
+      await Promise.all([
+        cacheFresh(cache, SHELL_KEY, true),
+        ...SHELL.filter((u) => u !== SHELL_KEY && u !== `${BASE}/`).map((u) => cacheFresh(cache, u, false)),
+        ...PRECACHE.map((u) => cacheFresh(cache, u, false)),
+      ]);
     })()
   );
   self.skipWaiting();
 });
 
+// Drop this app's caches from older builds. Only `shelfit-` ones: other apps
+// share this origin (same host, other path prefixes) and keep their own caches.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((k) => !KEEP.includes(k)).map((k) => caches.delete(k)))
+        Promise.all(keys.filter((k) => k.startsWith('shelfit-') && !KEEP.includes(k)).map((k) => caches.delete(k)))
       )
       .then(() => self.clients.claim())
   );
@@ -248,42 +266,50 @@ async function imageWithOfflineFallback(request) {
   }
 }
 
-// Cache-first (stale-while-revalidate). Serve the cached copy instantly and
-// refresh it in the background so a redeploy lands on the next load.
-async function cacheFirst(request, key) {
+// Navigations: the cached shell, instantly, refreshed in the background from
+// /index.html itself. Never from the navigation's own response: that may be an
+// image or JSON opened in a tab, or the login page after a redirect, and storing
+// it as the shell would break the next launch. On a cache miss the navigation
+// goes to the network as is (the server may redirect it to the login page, which
+// the browser follows), and is kept as the shell only if it is the HTML app.
+async function shellFirst(event) {
+  const { request } = event;
   const cache = await caches.open(CACHE);
-  const cached = await cache.match(key || request);
-  // Content-hashed bundles (/static/*) are immutable for a given URL — serve them
-  // purely from cache and skip the background revalidation that would otherwise
-  // re-download an unchanged bundle on every load. (index.html and unhashed
-  // assets like icons/manifest still revalidate so redeploys land.)
-  if (cached && new URL(request.url).pathname.startsWith(`${BASE}/static/`)) {
+  const cached = await cache.match(SHELL_KEY);
+  if (cached) {
+    event.waitUntil(cacheFresh(cache, SHELL_KEY, true));
     return cached;
   }
+  try {
+    const res = await fetchWithTimeout(request, REVALIDATE_TIMEOUT_MS);
+    if (cacheable(res, true)) await cache.put(SHELL_KEY, res.clone());
+    return res;
+  } catch {
+    return new Response('', { status: 504 });
+  }
+}
+
+// Shell assets (/static/*, icons, manifest): cache-first. Content-hashed bundles
+// (/static/*) never change for a given URL, so a hit is served as is; unhashed
+// assets are refreshed in the background so a redeploy lands on the next load.
+async function cacheFirst(event) {
+  const { request } = event;
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(request);
+  if (cached && new URL(request.url).pathname.startsWith(`${BASE}/static/`)) return cached;
   // Timed out so a stalled host can't leave a background revalidation (or a
-  // cache-miss navigation's only fetch) hanging forever. The cached shell is
-  // still returned instantly below whenever it exists.
+  // cache miss's only fetch) hanging forever.
   const network = fetchWithTimeout(request, REVALIDATE_TIMEOUT_MS)
     .then(async (res) => {
-      if (res && res.ok) {
-        await cache.put(key || request, res.clone());
-        // When the shell HTML changes, keep its referenced bundle cached too.
-        if (key === `${BASE}/index.html`) {
-          const html = await res.clone().text();
-          precacheStaticFromHtml(cache, html);
-        }
-      }
+      if (cacheable(res, false)) await cache.put(request, res.clone());
       return res;
     })
     .catch(() => null);
-  if (cached) return cached; // instant; network revalidates in the background
-  const net = await network;
-  if (net) return net;
-  if (request.mode === 'navigate') {
-    // Guarantee a valid Response even if the shell was evicted mid-session.
-    return (await cache.match(`${BASE}/index.html`)) || new Response('', { status: 504 });
+  if (cached) {
+    event.waitUntil(network);
+    return cached; // instant; network revalidates in the background
   }
-  return new Response('', { status: 504 });
+  return (await network) || new Response('', { status: 504 });
 }
 
 self.addEventListener('fetch', (event) => {
@@ -319,9 +345,18 @@ self.addEventListener('fetch', (event) => {
     return; // bypass the SW → native network navigation
   }
 
+  // A navigation straight to an API, image or badge URL (opened in a tab) is not
+  // an app route: let the browser load it, never the shell.
+  if (
+    request.mode === 'navigate' &&
+    ['/api/', '/assets/', '/badges/'].some((p) => url.pathname.startsWith(BASE + p))
+  ) {
+    return;
+  }
+
   // Navigations (any SPA route) → the single cached shell, instantly.
   if (request.mode === 'navigate') {
-    event.respondWith(cacheFirst(request, `${BASE}/index.html`));
+    event.respondWith(shellFirst(event));
     return;
   }
 
@@ -360,7 +395,7 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname === `${BASE}/sw.js`) return;
 
   // Shell assets (/static/* bundles, /icons/*, /manifest.json, …) → cache-first.
-  event.respondWith(cacheFirst(request));
+  event.respondWith(cacheFirst(event));
 });
 
 // --- Push notifications ----------------------------------------------------

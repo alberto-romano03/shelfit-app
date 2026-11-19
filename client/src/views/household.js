@@ -21,6 +21,7 @@ import {
   openModal,
   lucideIcon,
   copyWithFeedback,
+  markInvalid,
 } from '../ui.js';
 import { t } from '../i18n.js';
 
@@ -43,13 +44,13 @@ export function buildHousehold(api) {
     try {
       data = await api.householdMembers();
     } catch {
-      listWrap.innerHTML = '';
+      listWrap.replaceChildren();
       listWrap.append(
         stateBlock({ kind: 'error', tier: 'inline', title: t('household.loadError'), action: { onClick: refresh } })
       );
       return;
     }
-    listWrap.innerHTML = '';
+    listWrap.replaceChildren();
     for (const m of (data && data.members) || []) listWrap.append(memberRow(m));
   }
 
@@ -160,7 +161,7 @@ export function buildHousehold(api) {
 
   function renameMember(m) {
     openModal((modal, close) => {
-      const input = el('input', { class: 'text-field', type: 'text', maxlength: '40', value: m.display_name });
+      const input = el('input', { class: 'text-field', type: 'text', maxlength: '40', value: m.display_name, 'aria-label': t('household.name') });
       const save = el('button', { class: 'btn btn-primary' }, [
         lucideIcon('check', 'btn-lucide'),
         el('span', { text: t('common.save') }),
@@ -169,7 +170,7 @@ export function buildHousehold(api) {
         if (save.disabled) return; // Enter again while saving
         const name = input.value.trim();
         if (!name) {
-          input.focus();
+          markInvalid(input);
           return;
         }
         save.disabled = true;
@@ -184,7 +185,7 @@ export function buildHousehold(api) {
       };
       save.addEventListener('click', submit);
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') submit();
+        if (e.key === 'Enter' && !e.isComposing) submit();
       });
       modal.append(
         el('h3', { text: t('household.renameTitle') }),
@@ -272,12 +273,13 @@ export function buildHousehold(api) {
   // --- Add a member ----------------------------------------------------------
   function openForm() {
     addRow.el.style.display = 'none';
-    formWrap.innerHTML = '';
+    formWrap.replaceChildren();
     const input = el('input', {
       class: 'text-field',
       type: 'text',
       maxlength: '40',
       placeholder: t('household.namePlaceholder'),
+      'aria-label': t('household.name'),
     });
     const create = el('button', { class: 'btn btn-primary' }, [
       lucideIcon('plus', 'btn-lucide'),
@@ -290,7 +292,7 @@ export function buildHousehold(api) {
       if (sending) return;
       const name = input.value.trim();
       if (!name) {
-        input.focus();
+        markInvalid(input);
         return;
       }
       sending = true;
@@ -307,7 +309,7 @@ export function buildHousehold(api) {
     };
     create.addEventListener('click', submit);
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') submit();
+      if (e.key === 'Enter' && !e.isComposing) submit();
     });
     formWrap.append(
       el('div', { class: 'magic-form' }, [
@@ -326,14 +328,14 @@ export function buildHousehold(api) {
   }
 
   function closeForm() {
-    formWrap.innerHTML = '';
+    formWrap.replaceChildren();
     addRow.el.style.display = '';
   }
 
   // The one-and-only reveal of an invite link (new member or password reset).
   function showInvite(res) {
     addRow.el.style.display = 'none';
-    formWrap.innerHTML = '';
+    formWrap.replaceChildren();
     const name = res.member ? res.member.display_name : '';
     const urlField = el('input', { class: 'text-field magic-url', type: 'text', readonly: 'readonly', value: res.invite_url });
     urlField.addEventListener('focus', () => urlField.select());

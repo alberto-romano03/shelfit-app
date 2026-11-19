@@ -240,6 +240,8 @@ export async function sendPush(subscription, payloadObj, logger) {
         Authorization: `vapid t=${jwt}, k=${vapid.publicKey}`,
       },
       body,
+      // A push service answers directly; a redirect is never followed.
+      redirect: 'manual',
       signal: AbortSignal.timeout(10000),
     });
     return res.status;

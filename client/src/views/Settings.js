@@ -145,7 +145,7 @@ export default async function Settings(container) {
 
   function renderCacheResults(wrap, data) {
     wrap.className = 'cache-results';
-    wrap.innerHTML = '';
+    wrap.replaceChildren();
     const row = (label, value, cls) =>
       el('div', { class: 'settings-row' + (cls ? ' ' + cls : '') }, [
         el('span', { text: label }),
@@ -248,6 +248,7 @@ export default async function Settings(container) {
       min: '0',
       step: '100',
       placeholder: t('settings.usage.customLimit'),
+      'aria-label': t('settings.usage.customLimit'),
     });
     if (limited && !CAP_PRESETS.some(([, v]) => v === u.cap)) capInput.value = String(u.cap);
     capInput.addEventListener('change', () =>
@@ -389,7 +390,7 @@ export default async function Settings(container) {
       fileInput.value = ''; // allow re-selecting the same file later
       if (!file) return;
       importSummary.style.display = 'none';
-      importSummary.innerHTML = '';
+      importSummary.replaceChildren();
       importStatusLine.style.display = '';
       importStatusLine.textContent = t('settings.backup.reading');
       importRow.busy(true);
@@ -403,7 +404,7 @@ export default async function Settings(container) {
       } catch (err) {
         importStatusLine.style.display = 'none';
         importSummary.style.display = '';
-        importSummary.innerHTML = '';
+        importSummary.replaceChildren();
         importSummary.append(
           el('div', { class: 'backup-error', text: err.message || t('settings.backup.importFailed') })
         );
@@ -526,7 +527,7 @@ export default async function Settings(container) {
   }
   function renderImportFiles(wrap, files) {
     wrap.className = 'import-results';
-    wrap.innerHTML = '';
+    wrap.replaceChildren();
     if (!files.actions.found && !files.episodes.found) {
       wrap.append(el('div', { class: 'muted', text: t('settings.tvtime.folderEmpty') }));
       return;
@@ -918,7 +919,7 @@ export default async function Settings(container) {
     body.append(
       el('div', {
         class: 'muted',
-        style: { marginBottom: '8px', fontSize: '12.5px' },
+        style: { marginBottom: '8px', fontSize: '0.78125rem' },
         text: t('settings.access.hashNote'),
       })
     );
@@ -934,7 +935,7 @@ export default async function Settings(container) {
       .then((d) => {
         // Show only the 5 most recent attempts (server returns newest-first).
         const entries = ((d && d.entries) || []).slice(0, 5);
-        list.innerHTML = '';
+        list.replaceChildren();
         if (!entries.length) {
           list.append(el('div', { class: 'muted', text: t('settings.access.empty') }));
           return;
@@ -950,10 +951,10 @@ export default async function Settings(container) {
             el('div', { class: 'settings-row' }, [
               el('div', {}, [
                 el('span', { text: (EVENT_LABELS[e.event] || e.event) + (e.user ? ` · ${e.user}` : '') }),
-                el('span', { class: 'muted', style: { marginLeft: '8px', fontSize: '12px' }, text: when }),
+                el('span', { class: 'muted', style: { marginLeft: '8px', fontSize: '0.75rem' }, text: when }),
               ]),
               el('span', {
-                style: { fontSize: '12px', color: e.success ? 'var(--text-secondary)' : 'var(--danger)' },
+                style: { fontSize: '0.75rem', color: e.success ? 'var(--text-secondary)' : 'var(--danger)' },
                 text: e.success ? t('settings.access.success') : t('settings.access.failed'),
               }),
             ])
@@ -962,7 +963,7 @@ export default async function Settings(container) {
       })
       .catch((err) => {
         if (isAbortError(err)) return;
-        list.innerHTML = '';
+        list.replaceChildren();
         list.append(el('div', { class: 'muted', text: t('settings.access.loadError') }));
       });
   }
@@ -1099,7 +1100,7 @@ export default async function Settings(container) {
 
   // Render the result of a library import into `wrap`.
   function renderImportSummary(wrap, res) {
-    wrap.innerHTML = '';
+    wrap.replaceChildren();
     const stat = (label, n) =>
       el('div', { class: 'backup-stat' }, [
         el('span', { class: 'backup-stat-num', text: String(n) }),
@@ -1261,7 +1262,7 @@ async function showLog(source) {
   openModal((modal, close) => {
     modal.append(
       el('h3', { text: t('settings.tvtime.notFound') }),
-      el('pre', { style: { whiteSpace: 'pre-wrap', fontSize: '13px', color: 'var(--text-secondary)', maxHeight: '50vh', overflow: 'auto' }, text: log || t('settings.tvtime.logNone') }),
+      el('pre', { style: { whiteSpace: 'pre-wrap', fontSize: '0.8125rem', color: 'var(--text-secondary)', maxHeight: '50vh', overflow: 'auto' }, text: log || t('settings.tvtime.logNone') }),
       el('div', { class: 'modal-actions' }, [el('button', { class: 'btn btn-secondary', onClick: close }, [
       lucideIcon('x', 'btn-lucide'),
       el('span', { text: t('common.close') }),

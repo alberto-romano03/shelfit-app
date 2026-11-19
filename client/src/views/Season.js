@@ -566,11 +566,16 @@ export default async function Season(container, params) {
       check.classList.remove('check-draw');
       check.classList.toggle('done', !!ep.watched);
       check.setAttribute('aria-pressed', ep.watched ? 'true' : 'false');
+      // Every tick names its own episode (and how often it was watched, which
+      // only the ×N badge shows), not one "Watched" repeated down the list.
+      const which = `${epLabel(data.season_number, ep.episode_number)}${ep.name ? ` ${ep.name}` : ''}`;
+      const times = ep.watched && ep.watch_count > 1 ? `, ${t('season.timesWatched', { n: ep.watch_count })}` : '';
+      check.setAttribute('aria-label', `${t('season.watchedFor', { ep: which })}${times}`);
       if (upcoming) check.setAttribute('aria-disabled', 'true');
       else check.removeAttribute('aria-disabled');
       if (ep.watched && ep.watch_count > 1) check.innerHTML = `<span class="check-count">×${ep.watch_count}</span>`;
       else if (ep.watched) check.innerHTML = icons.check;
-      else check.innerHTML = '';
+      else check.replaceChildren();
       // No still yet (an episode not out, or one TMDB has no image for): the
       // test card's colour bars, faded, in its place.
       thumb.classList.toggle('no-still', !ep.still_url);
@@ -975,7 +980,7 @@ export default async function Season(container, params) {
   // race the append. Running it here guarantees the scroller is connected and laid
   // out (getBoundingClientRect forces sync layout) before we size and render.
   crossfadeSwap(() => {
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(seasonView);
     // Turn #app into a flex column so the scroller fills down to the navbar (see
     // body.season-active rules); must be on before setupVirtual measures heights.

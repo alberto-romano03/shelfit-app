@@ -367,34 +367,93 @@ export function buildExportXml(userId) {
 }
 
 // ======================= IMPORT =======================
+// The file is scanned with indexOf, never with lazy regexes like
+// /<movie ...>([\s\S]*?)<\/movie>/g: on a file full of opening tags that never
+// close, such a regex rescans to the end of the text from every opening tag, which
+// is quadratic and froze the server for minutes on one crafted 10 MB upload. Every
+// helper below moves forward only, so parsing is linear in the file size.
+
+const isSpace = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r';
+
+// The raw text between the first <name> and the next </name>, or null.
+function rawTag(block, name) {
+  if (typeof block !== 'string') return null;
+  const open = `<${name}>`;
+  const start = block.indexOf(open);
+  if (start < 0) return null;
+  const end = block.indexOf(`</${name}>`, start + open.length);
+  return end < 0 ? null : block.slice(start + open.length, end);
+}
 function tagText(block, name) {
-  const m = block.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`));
-  return m ? unescXml(m[1].trim()) : '';
+  const raw = rawTag(block, name);
+  return raw === null ? '' : unescXml(raw.trim());
 }
+// The value of name="..." in a tag's attribute text ('' when absent).
 function attrOf(tagStr, name) {
-  const m = tagStr.match(new RegExp(`${name}="([^"]*)"`));
-  return m ? unescXml(m[1]) : '';
-}
-function parseListNames(block) {
-  const wrap = block.match(/<lists>([\s\S]*?)<\/lists>/);
-  if (!wrap) return [];
-  const names = [];
-  const re = /<list>([\s\S]*?)<\/list>/g;
-  let m;
-  while ((m = re.exec(wrap[1]))) {
-    const n = unescXml(m[1].trim());
-    if (n) names.push(n);
+  const key = `${name}="`;
+  let i = 0;
+  while ((i = tagStr.indexOf(key, i)) !== -1) {
+    if (i === 0 || isSpace(tagStr[i - 1])) {
+      const end = tagStr.indexOf('"', i + key.length);
+      return end < 0 ? '' : unescXml(tagStr.slice(i + key.length, end));
+    }
+    i += 1;
   }
+  return '';
+}
+// Calls fn(attrs, body) for each <tag ...>body</tag> in text, in order. attrs is
+// the text between the tag name and '>' (it starts with whitespace when the tag
+// has attributes); body is null for a self-closing <tag .../>. Stops at the first
+// opening tag that is never closed: no later one can be closed either.
+function eachElement(text, tag, fn) {
+  if (typeof text !== 'string') return;
+  const open = `<${tag}`;
+  const close = `</${tag}>`;
+  let i = 0;
+  for (;;) {
+    const start = text.indexOf(open, i);
+    if (start < 0) return;
+    const at = start + open.length;
+    const c = text[at];
+    if (c !== '>' && c !== '/' && !isSpace(c)) {
+      i = at; // a longer name (<lists> while looking for <list>)
+      continue;
+    }
+    const gt = text.indexOf('>', at);
+    if (gt < 0) return;
+    const head = text.slice(at, gt);
+    if (head.endsWith('/')) {
+      fn(head.slice(0, -1), null);
+      i = gt + 1;
+      continue;
+    }
+    const end = text.indexOf(close, gt + 1);
+    if (end < 0) return;
+    fn(head, text.slice(gt + 1, end));
+    i = end + close.length;
+  }
+}
+const hasAttrs = (head) => head.length > 0 && isSpace(head[0]);
+
+function parseListNames(block) {
+  const names = [];
+  eachElement(rawTag(block, 'lists'), 'list', (head, body) => {
+    if (head !== '' || body === null) return;
+    const n = unescXml(body.trim());
+    if (n) names.push(n);
+  });
   return names;
 }
 
+// The only attribute of <movie tmdb_id="..."> / <show tmdb_id="...">.
+const TMDB_HEAD = /^\s+tmdb_id="([^"]+)"\s*$/;
+
 function parseEntries(libraryContent) {
   const entries = [];
-  const movieRe = /<movie\s+tmdb_id="([^"]+)"\s*>([\s\S]*?)<\/movie>/g;
-  let m;
-  while ((m = movieRe.exec(libraryContent))) {
-    const tmdbId = m[1];
-    const b = m[2];
+  eachElement(libraryContent, 'movie', (head, b) => {
+    const idM = b === null ? null : TMDB_HEAD.exec(head);
+    if (!idM) return;
+    const tmdbId = idM[1];
     entries.push({
       type: 'movie',
       tmdb_id: tmdbId,
@@ -415,21 +474,19 @@ function parseEntries(libraryContent) {
       rewatches: parseRewatchDates(b),
       lists: parseListNames(b),
     });
-  }
-  const showRe = /<show\s+tmdb_id="([^"]+)"\s*>([\s\S]*?)<\/show>/g;
-  while ((m = showRe.exec(libraryContent))) {
-    const tmdbId = m[1];
-    const b = m[2];
+  });
+  eachElement(libraryContent, 'show', (head, b) => {
+    const idM = b === null ? null : TMDB_HEAD.exec(head);
+    if (!idM) return;
+    const tmdbId = idM[1];
     const episodes = [];
     const stops = [];
-    const seasonRe = /<season\s+number="(\d+)"\s*>([\s\S]*?)<\/season>/g;
-    let sm;
-    while ((sm = seasonRe.exec(b))) {
-      const season = parseInt(sm[1], 10);
-      const epRe = /<episode\s+([^>]*?)\/>/g;
-      let em;
-      while ((em = epRe.exec(sm[2]))) {
-        const a = em[1];
+    eachElement(b, 'season', (seasonHead, seasonBody) => {
+      const numM = seasonBody === null ? null : /^\s+number="(\d+)"\s*$/.exec(seasonHead);
+      if (!numM) return;
+      const season = parseInt(numM[1], 10);
+      eachElement(seasonBody, 'episode', (a, epBody) => {
+        if (epBody !== null || !hasAttrs(a)) return;
         const stop = parseMinute(attrOf(a, 'stopped_at'));
         const unwatched = attrOf(a, 'watched') === 'false';
         const epNum = parseInt(attrOf(a, 'number'), 10);
@@ -437,7 +494,7 @@ function parseEntries(libraryContent) {
           const plays = parseInt(attrOf(a, 'play_count'), 10) || 1;
           stops.push({ season, episode: epNum, minute: stop, unwatched, play_count: plays });
         }
-        if (unwatched) continue; // otherwise only watched episodes carry state
+        if (unwatched) return; // otherwise only watched episodes carry state
         episodes.push({
           season,
           episode: parseInt(attrOf(a, 'number'), 10),
@@ -446,8 +503,8 @@ function parseEntries(libraryContent) {
           watch_date: stampOrNull(attrOf(a, 'watched_at')) || attrOf(a, 'watch_date'),
           notes: attrOf(a, 'notes'),
         });
-      }
-    }
+      });
+    });
     entries.push({
       type: 'show',
       tmdb_id: tmdbId,
@@ -463,39 +520,38 @@ function parseEntries(libraryContent) {
       stops,
       lists: parseListNames(b),
     });
-  }
+  });
   return entries;
 }
 
 // v4 <custom_lists>: [{ name, type, created_at, items: [{ tmdb_id, added_at }] }].
 function parseCustomLists(libraryContent) {
-  const wrap = libraryContent.match(/<custom_lists>([\s\S]*?)<\/custom_lists>/);
-  if (!wrap) return [];
   const out = [];
-  const re = /<list\s+([^>]*?)(\/>|>([\s\S]*?)<\/list>)/g;
-  let m;
-  while ((m = re.exec(wrap[1]))) {
-    const name = attrOf(m[1], 'name').trim();
-    const type = attrOf(m[1], 'type');
-    if (!name || (type !== 'movie' && type !== 'show')) continue;
+  eachElement(rawTag(libraryContent, 'custom_lists'), 'list', (head, body) => {
+    if (!hasAttrs(head)) return;
+    const name = attrOf(head, 'name').trim();
+    const type = attrOf(head, 'type');
+    if (!name || (type !== 'movie' && type !== 'show')) return;
     const items = [];
-    const itemRe = /<item\s+([^>]*?)\/>/g;
-    let im;
-    while ((im = itemRe.exec(m[3] || ''))) {
-      const tmdbId = attrOf(im[1], 'tmdb_id');
-      if (/^\d+$/.test(tmdbId)) items.push({ tmdb_id: tmdbId, added_at: msOrNull(attrOf(im[1], 'added_at')) });
-    }
-    out.push({ name, type, created_at: msOrNull(attrOf(m[1], 'created_at')), items });
-  }
+    eachElement(body, 'item', (a, itemBody) => {
+      if (itemBody !== null || !hasAttrs(a)) return;
+      const tmdbId = attrOf(a, 'tmdb_id');
+      if (/^\d+$/.test(tmdbId)) items.push({ tmdb_id: tmdbId, added_at: msOrNull(attrOf(a, 'added_at')) });
+    });
+    out.push({ name, type, created_at: msOrNull(attrOf(head, 'created_at')), items });
+  });
   return out;
 }
 
 // v4 <wall movie="…" show="…" person="…"/> → TMDB ids (or null).
 function parseWall(libraryContent) {
-  const m = libraryContent.match(/<wall\s+([^>]*?)\/>/);
-  if (!m) return null;
+  let attrs = null;
+  eachElement(libraryContent, 'wall', (head, body) => {
+    if (attrs === null && body === null && hasAttrs(head)) attrs = head;
+  });
+  if (attrs === null) return null;
   const id = (name) => {
-    const v = attrOf(m[1], name);
+    const v = attrOf(attrs, name);
     return /^\d+$/.test(v) ? v : null;
   };
   return { movie: id('movie'), show: id('show'), person: id('person') };
@@ -515,15 +571,12 @@ function parseRating(v) {
 // Dated rewatch events from a movie block's <rewatches> — only well-formed
 // 'YYYY-MM-DD' dates are kept.
 function parseRewatchDates(block) {
-  const wrap = block.match(/<rewatches>([\s\S]*?)<\/rewatches>/);
-  if (!wrap) return [];
   const out = [];
-  const re = /<rewatch\s+([^>]*?)\/>/g;
-  let m;
-  while ((m = re.exec(wrap[1]))) {
-    const d = attrOf(m[1], 'date');
+  eachElement(rawTag(block, 'rewatches'), 'rewatch', (a, body) => {
+    if (body !== null || !hasAttrs(a)) return;
+    const d = attrOf(a, 'date');
     if (/^\d{4}-\d{2}-\d{2}$/.test(d)) out.push(d);
-  }
+  });
   return out;
 }
 
@@ -561,9 +614,8 @@ export function validateImport(xml) {
   if (!/<shelfit_library[\s>]/.test(xml) || !xml.includes('</shelfit_library>')) {
     return { ok: false, error: 'Not a shelfIt library file (missing <shelfit_library> root).' };
   }
-  const metaM = xml.match(/<meta>([\s\S]*?)<\/meta>/);
-  if (!metaM) return { ok: false, error: 'The file is malformed (missing <meta> block).' };
-  const meta = metaM[1];
+  const meta = rawTag(xml, 'meta');
+  if (meta === null) return { ok: false, error: 'The file is malformed (missing <meta> block).' };
 
   const version = parseInt(tagText(meta, 'version'), 10);
   if (!SUPPORTED_VERSIONS.has(version)) {

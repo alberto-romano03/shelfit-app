@@ -174,6 +174,9 @@ function createCell(onItemClick, onItemHold) {
     if (currentItem && onItemClick) onItemClick(currentItem);
   });
   if (onItemHold) {
+    // The quick menu behind a long press, said to screen readers (the keyboard
+    // reaches it with the context-menu key or Shift+F10, below).
+    node.setAttribute('aria-description', t('grid.holdHint'));
     longPress(node, () => {
       if (currentItem) onItemHold(currentItem);
     });
@@ -189,15 +192,18 @@ function createCell(onItemClick, onItemHold) {
     currentItem = item;
     retryHandler = null;
     node.dataset.itemId = item.id;
-    // A title: a button named after it (the poster image alone says nothing).
+    // A title: a button named after it (the poster image alone says nothing),
+    // with its rating, which the badge only shows.
     node.setAttribute('role', 'button');
-    node.setAttribute('aria-label', item.title_it || item.title_orig || item.title || '');
+    const name = item.title_it || item.title_orig || item.title || '';
+    const stars = item.rating ? (item.rating === 1 ? t('rating.starOne') : t('rating.stars', { n: item.rating })) : '';
+    node.setAttribute('aria-label', stars ? `${name}, ${stars}` : name);
     node.removeAttribute('aria-hidden');
     node.classList.remove('is-skel', 'is-retry', 'poster-tile', 'tile-wait');
     noArt.hidden = true;
     if (item.rating) {
       badge.style.display = '';
-      badge.innerHTML = `★ ${item.rating}`;
+      badge.textContent = `★ ${item.rating}`;
     } else {
       badge.style.display = 'none';
     }
@@ -280,9 +286,39 @@ function createCell(onItemClick, onItemHold) {
   return cell;
 }
 
+// A section of the grid (a letter, a year, a rating): a heading, so a screen
+// reader can jump between them.
 function createDivider() {
   const label = el('span', { class: 'grid-divider-label' });
-  return el('div', { class: 'gc-divider' }, [label]);
+  return el('div', { class: 'gc-divider', role: 'heading', 'aria-level': '2' }, [label]);
+}
+
+// Recycled cells are moved around by their top/left only, so after some scrolling
+// their order in the page no longer matches what is on screen, and a screen reader
+// (which reads in page order) jumps around. Put the nodes on screen back in the
+// order they are drawn. moveBefore() keeps focus on a moved node; where it is
+// missing, insertBefore() drops it, so it is given back.
+const moveNode = typeof Element.prototype.moveBefore === 'function'
+  ? (parent, node, ref) => parent.moveBefore(node, ref)
+  : (parent, node, ref) => parent.insertBefore(node, ref);
+
+function orderLikeScreen(spacer, nodes) {
+  const focused = document.activeElement;
+  const hadFocus = focused && spacer.contains(focused);
+  let cursor = spacer.firstElementChild;
+  let moved = false;
+  for (const node of nodes) {
+    while (cursor && cursor !== node && cursor.style.display === 'none') cursor = cursor.nextElementSibling;
+    if (cursor === node) {
+      cursor = cursor.nextElementSibling;
+      continue;
+    }
+    moveNode(spacer, node, cursor);
+    moved = true;
+  }
+  if (moved && hadFocus && document.activeElement !== focused && focused.isConnected) {
+    focused.focus({ preventScroll: true });
+  }
 }
 
 // One virtual poster grid bound to a section (movie/show). grid.js inserts
@@ -573,6 +609,23 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
       }
     }
 
+    // Page order = screen order: rows top to bottom, a row left to right, a
+    // section's heading before its titles.
+    const onScreen = [];
+    for (let ri = rStart; ri < rEnd; ri++) {
+      const row = rows[ri];
+      if (row.kind === 'div') {
+        const node = activeDivs.get(ri);
+        if (node) onScreen.push(node);
+        continue;
+      }
+      for (let c = 0; c < row.count; c++) {
+        const cell = activeCells.get(row.startItem + c);
+        if (cell) onScreen.push(cell.node);
+      }
+    }
+    orderLikeScreen(spacer, onScreen);
+
     ensurePages(minItem, maxItem);
     scrollMem.set(filterKey, scrollTop);
     roving.sync();
@@ -650,7 +703,7 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
   function showEmpty(on, msg) {
     emptyNode.style.display = on ? '' : 'none';
     if (on) {
-      emptyNode.innerHTML = '';
+      emptyNode.replaceChildren();
       emptyNode.append(
         msg && typeof msg === 'object'
           ? stateBlock(msg)

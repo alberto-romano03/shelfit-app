@@ -170,7 +170,7 @@ export default async function Preview(container, params) {
   body.append(anchor);
 
   crossfadeSwap(() => {
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(hero, head, body);
   });
 

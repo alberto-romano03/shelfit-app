@@ -215,7 +215,7 @@ describe('two members on one instance', () => {
   });
 
   it('keeps the push subscription with the member who enabled it', async () => {
-    const sub = { endpoint: 'https://push.example.com/abc', keys: { p256dh: 'p', auth: 'a' } };
+    const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p', auth: 'a' } };
     assert.equal((await a.post('/api/push/subscribe', { subscription: sub })).status, 200);
     assert.equal((await a.get('/api/push/config')).json.subscribed, true);
     assert.equal((await b.get('/api/push/config')).json.subscribed, false);

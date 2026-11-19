@@ -188,8 +188,17 @@ describe('v1 migration of a single-user database', () => {
   });
 
   it('redeems an existing magic link as the master', async () => {
-    const res = await h.app.inject({ method: 'GET', url: `/api/auth/magic/${MAGIC_TOKEN}` });
-    assert.equal(res.statusCode, 302);
+    // Stored as a hash since migration 12; the old link still opens.
+    const stored = h.db.prepare('SELECT token_hash FROM magic_links').get().token_hash;
+    assert.equal(stored, crypto.createHash('sha256').update(MAGIC_TOKEN).digest('hex'));
+    assert.equal((await h.app.inject({ method: 'GET', url: `/api/auth/magic/${MAGIC_TOKEN}` })).statusCode, 200);
+    const res = await h.app.inject({
+      method: 'POST',
+      url: `/api/auth/magic/${MAGIC_TOKEN}`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'same-origin' },
+      payload: '',
+    });
+    assert.equal(res.statusCode, 303);
     assert.equal(res.headers.location, '/shelfit/');
     const linkCookie = [].concat(res.headers['set-cookie'])[0].split(';')[0];
     const status = (await client(h.app, linkCookie).get('/api/auth/status')).json;
