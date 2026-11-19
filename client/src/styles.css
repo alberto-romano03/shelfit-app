@@ -1,3 +1,14 @@
+/* ============================= Cascade layers =============================
+   Three layers, lowest first. Between layers the order decides, not specificity:
+     reset   element defaults (box sizing, margins, inherited fonts, no scrollbars)
+     tokens  the theme and design variables (colours, motion, radii)
+     app     everything else, in this file's order, as before
+   So a component rule never has to out-specify a reset to win, and styles added
+   later outside these layers (a page's own <style>, an injected rule) win over
+   all three. Contents are not indented, to keep the file's history readable. */
+@layer reset, tokens, app;
+
+@layer tokens {
 /* ============================= Theme tokens ============================= */
 /* The browser's own parts (caret, autofill, checkboxes, the date and select
    pickers) follow the theme from the root, not only where a control was patched. */
@@ -13,40 +24,40 @@
   }
 }
 :root {
-  --bg: #0a0a0a;
-  --surface: #1a1a1a;
-  --surface-elevated: #2a2a2a;
-  --text-primary: #ffffff;
-  --text-secondary: #999999;
-  --accent: #e5a00d;
-  --stars: #e5a00d;
-  --success: #4caf50;
+  --bg: light-dark(#f5f5f5, #0a0a0a);
+  --surface: light-dark(#ffffff, #1a1a1a);
+  --surface-elevated: light-dark(#eeeeee, #2a2a2a);
+  --text-primary: light-dark(#111111, #ffffff);
+  --text-secondary: light-dark(#666666, #999999);
+  --accent: light-dark(#c8890a, #e5a00d);
+  --stars: light-dark(#c8890a, #e5a00d);
+  --success: light-dark(#3d9140, #4caf50);
   /* Green as text (tags, results, an added state): deeper in the light theme. */
-  --success-ink: #4caf50;
+  --success-ink: light-dark(#2e7d4a, #4caf50);
   /* The shadow a page casts as it slides over the one below. */
-  --slide-shadow: rgba(0, 0, 0, 0.45);
-  --stop-ink: #7ed99a; /* Stopped at: the Watching status green */
+  --slide-shadow: light-dark(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.45));
+  --stop-ink: light-dark(#2e7d4a, #7ed99a); /* Stopped at: the Watching status green */
   /* Text in the accent: the accent itself on dark; on light, a deeper amber of
      the same family, since #c8890a on white is about 3:1 (body text needs 4.5). */
-  --accent-ink: #e5a00d;
+  --accent-ink: light-dark(#8a6000, #e5a00d);
   /* Keyboard focus rings: 3:1 or more against the page in both themes. */
-  --focus-outline: var(--accent);
+  --focus-outline: light-dark(var(--accent-ink), var(--accent));
   /* The five status colours (statusSelect.js): soft pastels on dark, deeper inks
      on light, each at least 4.5:1 on the light surfaces. */
-  --status-plan: #7db6f0;
-  --status-watching: #7ed99a;
-  --status-completed: #6fd4c4;
-  --status-paused: #f0c674;
-  --status-dropped: #e5867f;
-  --danger: #e5484d;
-  --kodi-blue: #17b2e8;
+  --status-plan: light-dark(#2f6db3, #7db6f0);
+  --status-watching: light-dark(#2e7d4a, #7ed99a);
+  --status-completed: light-dark(#1d7a6e, #6fd4c4);
+  --status-paused: light-dark(#8f6400, #f0c674);
+  --status-dropped: light-dark(#b5402f, #e5867f);
+  --danger: light-dark(#d33, #e5484d);
+  --kodi-blue: light-dark(#0b6f96, #17b2e8);
   /* How much of a brand colour (Kodi, TMDB, the cinema red) its text keeps; the
      rest is black. Full on dark; the light theme darkens it to stay readable. */
   --brand-ink: 100%;
   /* State inks, for glyphs on a neutral surface: toasts and empty states. */
-  --ink-ok: #a5d6a7;
-  --ink-bad: #ef9a9a;
-  --ink-info: #e5c07b;
+  --ink-ok: light-dark(#2f7d32, #a5d6a7);
+  --ink-bad: light-dark(#c0392b, #ef9a9a);
+  --ink-info: light-dark(#a9760a, #e5c07b);
   /* Theme-dependent looks, kept as tokens so one rule serves dark, light and the
      System mirror below. Heroes: light text on dark art wants the art left alone;
      dark text on the same art needs the page colour to arrive much sooner. */
@@ -55,9 +66,9 @@
   --rp5-colors: #ff5e62, #ff9966, #ffd36e, #7ee8fa, #a18cd1, #ff5e62;
   --rp5-glow: drop-shadow(0 0 4px rgba(255, 165, 70, 0.6));
   --selected-ink: 100%;
-  --ticket-sheet: var(--surface);
-  --border: rgba(255, 255, 255, 0.08);
-  --shadow: rgba(0, 0, 0, 0.5);
+  --ticket-sheet: light-dark(#e9e7e2, var(--surface));
+  --border: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.08));
+  --shadow: light-dark(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.5));
   /* Border around the POS printer's paper strip (.pos-paper). Dark theme: the
      paper already stands out on black, so the rim only has to stay out of the
      way. Light theme: this is what makes the strip visible at all. Distinct
@@ -65,7 +76,7 @@
      The shadow below it is a whole filter list, not a colour, because the light
      theme needs two layers to lift the strip off a near-white page while the
      dark theme only needs one (a black shadow on black does nothing anyway). */
-  --pos-paper-edge: #2a2a2a;
+  --pos-paper-edge: light-dark(#c0bcb4, #2a2a2a);
   --pos-paper-shadow: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.16));
   /* 60, not 56: the tab glyphs and labels each went up a step, and the four
      extra pixels keep the room above the icon that the taller content would
@@ -159,10 +170,10 @@
   --r-lg: 16px;
   --r-xl: 20px;
   --r-pill: 999px;
-  --new-case-from: var(--surface-elevated);
-  --new-case-to: var(--surface);
-  --new-case-sheen: rgba(255, 255, 255, 0.08);
-  --new-case-shadow: rgba(0, 0, 0, 0.5);
+  --new-case-from: light-dark(#f7f7f7, var(--surface-elevated));
+  --new-case-to: light-dark(#c6c6c6, var(--surface));
+  --new-case-sheen: light-dark(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.08));
+  --new-case-shadow: light-dark(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.5));
   --frame-gold-label: #e0b43c; /* The Wall gold — frame + favourite toggle */
 
   /* Named palettes (dark / mid / light triads) — permanent design-system colors,
@@ -198,47 +209,15 @@
 }
 
 [data-theme='light'] {
-  /* Brand blue and brand text, deep enough to read on the light grounds. */
-  --kodi-blue: #0b6f96;
+  /* What light-dark() can't hold (it takes colours only): amounts, filters,
+     gradients and lists. */
   --brand-ink: 62%;
-  /* The New list card's empty cases: on a white card the surface tones would vanish. */
-  --new-case-from: #f7f7f7;
-  --new-case-to: #c6c6c6;
-  --new-case-sheen: rgba(255, 255, 255, 0.6);
-  --new-case-shadow: rgba(0, 0, 0, 0.2);
-  --bg: #f5f5f5;
-  --surface: #ffffff;
-  --surface-elevated: #eeeeee;
-  --text-primary: #111111;
-  --text-secondary: #666666;
-  --accent: #c8890a;
-  --stars: #c8890a;
-  --success: #3d9140;
-  --success-ink: #2e7d4a;
-  --slide-shadow: rgba(0, 0, 0, 0.15);
-  --stop-ink: #2e7d4a;
-  --accent-ink: #8a6000;
-  --focus-outline: var(--accent-ink);
-  --status-plan: #2f6db3;
-  --status-watching: #2e7d4a;
-  --status-completed: #1d7a6e;
-  --status-paused: #8f6400;
-  --status-dropped: #b5402f;
-  --danger: #d33;
-  --ink-ok: #2f7d32;
-  --ink-bad: #c0392b;
-  --ink-info: #a9760a;
+  --selected-ink: 58%;
   --hero-fade: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 10%, transparent), color-mix(in srgb, var(--bg) 62%, transparent) 42%, color-mix(in srgb, var(--bg) 92%, transparent) 70%, var(--bg));
   --hero-wash: blur(22px) saturate(1.15) brightness(1.15);
   --rp5-colors: #d6363b, #c9610f, #a87a00, #0c7f9c, #6a4fb3, #d6363b;
   --rp5-glow: none;
-  --selected-ink: 58%;
-  --ticket-sheet: #e9e7e2;
-  --border: rgba(0, 0, 0, 0.1);
-  --shadow: rgba(0, 0, 0, 0.15);
-  --pos-paper-edge: #c0bcb4;
-  --pos-paper-shadow: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.18))
-    drop-shadow(0 12px 22px rgba(0, 0, 0, 0.26));
+  --pos-paper-shadow: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.18)) drop-shadow(0 12px 22px rgba(0, 0, 0, 0.26));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -249,64 +228,27 @@
   }
 }
 
-/* System theme (Settings → Appearance → "System"): when the user has NOT pinned a
-   choice, <html> carries no data-theme attribute and the OS decides. The block
-   above only fires for an explicit light choice, so every light rule is mirrored
-   here under :root:not([data-theme='dark']) — light when the OS is light and the
-   user hasn't pinned dark; still dark otherwise. Keep this in sync with the
-   scattered `[data-theme='light'] …` overrides elsewhere in this file. */
+/* Colours are written once, as light-dark(light, dark): the root's color-scheme
+   (top of this file) picks the side, for Light, Dark and System alike. Only what
+   light-dark() can't hold (amounts, filters, gradients) still needs the explicit
+   light block above and this System mirror (no data-theme attribute: the OS
+   decides); keep the two in sync. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) {
-    /* Brand blue and brand text, deep enough to read on the light grounds. */
-    --kodi-blue: #0b6f96;
+    /* What light-dark() can't hold (it takes colours only): amounts, filters,
+       gradients and lists. */
     --brand-ink: 62%;
-    /* The New list card's empty cases: on a white card the surface tones would vanish. */
-    --new-case-from: #f7f7f7;
-    --new-case-to: #c6c6c6;
-    --new-case-sheen: rgba(255, 255, 255, 0.6);
-    --new-case-shadow: rgba(0, 0, 0, 0.2);
-    --bg: #f5f5f5;
-    --surface: #ffffff;
-    --surface-elevated: #eeeeee;
-    --text-primary: #111111;
-    --text-secondary: #666666;
-    --accent: #c8890a;
-    --stars: #c8890a;
-    --success: #3d9140;
-    --success-ink: #2e7d4a;
-    --slide-shadow: rgba(0, 0, 0, 0.15);
-    --stop-ink: #2e7d4a;
-    --accent-ink: #8a6000;
-    --focus-outline: var(--accent-ink);
-    --status-plan: #2f6db3;
-    --status-watching: #2e7d4a;
-    --status-completed: #1d7a6e;
-    --status-paused: #8f6400;
-    --status-dropped: #b5402f;
-    --danger: #d33;
-    --ink-ok: #2f7d32;
-    --ink-bad: #c0392b;
-    --ink-info: #a9760a;
+    --selected-ink: 58%;
     --hero-fade: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 10%, transparent), color-mix(in srgb, var(--bg) 62%, transparent) 42%, color-mix(in srgb, var(--bg) 92%, transparent) 70%, var(--bg));
     --hero-wash: blur(22px) saturate(1.15) brightness(1.15);
     --rp5-colors: #d6363b, #c9610f, #a87a00, #0c7f9c, #6a4fb3, #d6363b;
     --rp5-glow: none;
-    --selected-ink: 58%;
-    --ticket-sheet: #e9e7e2;
-    --border: rgba(0, 0, 0, 0.1);
-    --shadow: rgba(0, 0, 0, 0.15);
-    --pos-paper-edge: #c0bcb4;
-    --pos-paper-shadow: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.18))
-      drop-shadow(0 12px 22px rgba(0, 0, 0, 0.26));
-  }
-  :root:not([data-theme='dark']) .selpill-select {
-    color-scheme: light;
-  }
-  :root:not([data-theme='dark']) .text-field[type='date'] {
-    color-scheme: light;
+    --pos-paper-shadow: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.18)) drop-shadow(0 12px 22px rgba(0, 0, 0, 0.26));
   }
 }
+} /* end @layer tokens */
 
+@layer reset {
 /* ============================= Reset ============================= */
 * {
   box-sizing: border-box;
@@ -409,7 +351,9 @@ select {
   font-family: inherit;
   font-size: 1rem;
 }
+} /* end @layer reset */
 
+@layer app {
 /* ============================= App layout ============================= */
 #app {
   min-height: 100vh;
@@ -988,10 +932,6 @@ button:active,
   padding: 0;
   font: inherit;
   cursor: pointer;
-  color-scheme: dark;
-}
-[data-theme='light'] .selpill-select {
-  color-scheme: light;
 }
 /* Focus lands on the select, so the ring has to be drawn by the wrapper. */
 .selpill:focus-within {
@@ -4749,7 +4689,6 @@ textarea.text-field {
   padding: 13px 14px;
 }
 .text-field[type='date'] {
-  color-scheme: dark;
   /* iOS Safari renders date inputs as a shrink-to-fit native control that ignores
      width and mis-aligns its value. Reset the platform appearance so our width /
      padding / height actually apply, and left-align the value below. Resetting the
@@ -4769,9 +4708,6 @@ textarea.text-field {
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 18px 18px;
-}
-[data-theme='light'] .text-field[type='date'] {
-  color-scheme: light;
 }
 /* iOS renders the value in this pseudo-element — left-align it and drop its
    default margins so it sits flush like a text field. */
@@ -13442,13 +13378,10 @@ textarea.lend-message-input:focus {
   height: 8px;
   border-radius: 3px;
   margin-top: 2px;
-  background: linear-gradient(#4a3a2a, #2a2015);
+  background: linear-gradient(light-dark(#c9a882, #4a3a2a), light-dark(#a8825a, #2a2015));
   box-shadow: 0 7px 12px rgba(0, 0, 0, 0.35);
 }
-[data-theme='light'] .sc-ledge { background: linear-gradient(#c9a882, #a8825a); }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) .sc-ledge { background: linear-gradient(#c9a882, #a8825a); }
-}
+
 
 /* --- Page 6: Dust It Off — poster + sparkles + mood chips --- */
 .sc-dust {
@@ -14069,3 +14002,26 @@ textarea.lend-message-input:focus {
     outline-offset: 2px;
   }
 }
+
+/* ============================= Off-screen sections =============================
+   Long pages (a title's Detail, Settings) skip layout and paint for their lower
+   blocks until they come near the screen. The intrinsic size is a stand-in height
+   until a block has been drawn once (then its real height is remembered), so the
+   page doesn't jump; the numbers are the measured typical heights. Only blocks that never draw outside their own box: the rule
+   also clips them (paint containment). The first Settings group is on screen
+   anyway, so it is left out. */
+.bento-section,
+.coll-row,
+.settings-section ~ .settings-section {
+  content-visibility: auto;
+}
+.bento-section {
+  contain-intrinsic-size: auto 300px;
+}
+.coll-row {
+  contain-intrinsic-size: auto 220px;
+}
+.settings-section ~ .settings-section {
+  contain-intrinsic-size: auto 260px;
+}
+} /* end @layer app */

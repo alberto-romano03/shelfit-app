@@ -277,6 +277,10 @@ export async function buildApp({ quiet = false } = {}) {
       prefix: '/',
       index: ['index.html'],
       decorateReply: true,
+      // The build writes a Brotli copy next to each text file (vite.config.js):
+      // sent as is to browsers that accept br, with Vary: Accept-Encoding. The
+      // proxy leaves an already encoded response alone.
+      preCompressed: true,
     });
   }
 

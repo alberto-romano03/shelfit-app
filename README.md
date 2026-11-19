@@ -183,9 +183,10 @@ SQLite database and cache folder that you own.
 | Layer | Technology | Version |
 | --- | --- | --- |
 | Runtime | Node.js | 22 |
-| Backend | Fastify | ^4 |
-| Database | SQLite via better-sqlite3 | ^9 |
+| Backend | Fastify | ^5 |
+| Database | SQLite via better-sqlite3 | ^13 |
 | Frontend | Vanilla JavaScript (no framework) | — |
+| Browsers | Safari and iOS, current Chrome, Edge and Firefox (theme colours use CSS `light-dark()`) | Safari 17.5+ |
 | Build / dev | Vite | ^5 |
 | Metadata | The Movie Database (TMDB) API | v3 |
 | Artwork (optional) | Fanart.tv API | v3 |
@@ -194,7 +195,7 @@ SQLite database and cache folder that you own.
 | Packaging | Docker (multi-stage, `node:22-alpine`) | — |
 | Reverse proxy (optional) | Caddy | 2 |
 
-There are **no runtime dependencies beyond the five in `package.json`** — push
+There are **no runtime dependencies beyond the four in `package.json`**: push
 notifications, the XML parser, the image pipeline and every visual effect are
 built on Node and browser primitives.
 

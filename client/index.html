@@ -30,6 +30,10 @@
     <!-- Splash: inlined so it paints on the first frame, before the JS bundle
          loads. The app boots (and Home starts caching) behind it. -->
     <style>
+      /* In the lowest cascade layer, like the app's own reset (styles.css): the
+         app stylesheet loads after this and keeps winning where both set the
+         same thing (the page background), as it did before the layers. */
+      @layer reset {
       /* Single source of truth for the splash colour, shared by the splash and
          the anti-flash overlay below so they can never drift apart. */
       :root {
@@ -201,6 +205,7 @@
           opacity: 1;
           transform: none;
         }
+      }
       }
     </style>
   </head>

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 
 const BASE = '/shelfit/';
 
@@ -49,6 +50,28 @@ function shelfitServiceWorker() {
       }
       fs.writeFileSync(swFile, sw);
       this.info?.(`sw.js stamped: build ${buildId}, ${precache.length} precached files`);
+
+      // Brotli copies (name.br) of the text files, made once here at the highest
+      // level instead of per request: the server sends them to browsers that
+      // accept br (@fastify/static preCompressed), about 15% smaller than gzip.
+      // After the stamping above, so sw.js.br holds the final worker.
+      let packed = 0;
+      for (const f of filesUnder(outDir)) {
+        if (!/\.(js|css|html|svg|json|webmanifest)$/.test(f)) continue;
+        const raw = fs.readFileSync(f);
+        if (raw.length < 1024) continue; // not worth a second file
+        const br = zlib.brotliCompressSync(raw, {
+          params: {
+            [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY,
+            [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length,
+          },
+        });
+        if (br.length < raw.length) {
+          fs.writeFileSync(`${f}.br`, br);
+          packed += 1;
+        }
+      }
+      this.info?.(`brotli: ${packed} files`);
     },
   };
 }
