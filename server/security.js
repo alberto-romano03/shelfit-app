@@ -5,6 +5,7 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import db from './db.js';
+import { PUBLIC_URL } from './config.js';
 
 // --- client IP -------------------------------------------------------------
 // X-Forwarded-For is "client, proxy1, proxy2…" and the client can spoof the
@@ -61,6 +62,103 @@ export function registerFetchMetadataGuard(fastify) {
     if (isAllowedFetchSite(request)) return;
     reply.code(403).send({ error: 'cross-site request refused' });
     return reply;
+  });
+}
+
+// --- response security headers ---------------------------------------------
+// Sent by the app itself, so they hold on every path, whatever proxy is (or is
+// not) in front. The Content-Security-Policy is enforced: every script is a file
+// from this origin (index.html and the login page carry none inline), so script
+// injection has nothing to run. Images may also come from TMDB and Fanart.tv:
+// the artwork picker shows their thumbnails and crops their originals. Styles
+// keep 'unsafe-inline' (style attributes are used throughout).
+//
+// Violations are reported to /api/csp-report (report-to where supported,
+// report-uri for the rest), so a page that hits the policy is seen in the log.
+const APP_BASE = '/shelfit'; // the public path prefix (Caddy handle_path, client BASE)
+const CSP_REPORT_PATH = `${APP_BASE}/api/csp-report`;
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https://image.tmdb.org https://assets.fanart.tv",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  `report-uri ${CSP_REPORT_PATH}`,
+  'report-to csp',
+].join('; ');
+
+// The Reporting API wants an absolute address: the public origin when it is
+// configured, else the one this request came in on.
+function reportEndpoint(request) {
+  let origin = PUBLIC_URL;
+  if (!origin) {
+    const proto = (request.headers['x-forwarded-proto'] || request.protocol || 'http').split(',')[0].trim();
+    origin = `${proto}://${request.headers.host || 'localhost'}`;
+  }
+  return `${origin.replace(/\/+$/, '')}${CSP_REPORT_PATH}`;
+}
+
+export function registerSecurityHeaders(fastify) {
+  fastify.addHook('onSend', async (request, reply, payload) => {
+    // A route with a policy of its own (the badge SVGs) keeps it.
+    if (!reply.hasHeader('content-security-policy')) {
+      reply.header('Content-Security-Policy', CSP);
+      reply.header('Reporting-Endpoints', `csp="${reportEndpoint(request)}"`);
+    }
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Cross-Origin-Opener-Policy', 'same-origin');
+    reply.header('Cross-Origin-Resource-Policy', 'same-origin');
+    return payload;
+  });
+}
+
+// POST /api/csp-report: what the browser sends when a page breaks the policy.
+// Public (a report may come from the login page) and small. Only the directive
+// and the blocked resource are logged, with any query string cut off, never the
+// page's full address or the code sample.
+const stripQuery = (u) => (typeof u === 'string' ? u.split(/[?#]/)[0].slice(0, 200) : undefined);
+
+export function registerCspReport(fastify) {
+  fastify.register(async (scope) => {
+    for (const type of ['application/csp-report', 'application/reports+json']) {
+      scope.addContentTypeParser(type, { parseAs: 'string', bodyLimit: 16 * 1024 }, (_req, body, done) => {
+        try {
+          done(null, JSON.parse(body));
+        } catch {
+          done(null, null);
+        }
+      });
+    }
+    scope.post('/api/csp-report', async (request, reply) => {
+      const body = request.body;
+      // report-uri: { "csp-report": {...} }; report-to: [{ type, body: {...} }].
+      const reports = Array.isArray(body)
+        ? body.filter((r) => r && r.type === 'csp-violation').map((r) => r.body || {})
+        : body && body['csp-report']
+          ? [body['csp-report']]
+          : [];
+      for (const r of reports.slice(0, 10)) {
+        request.log.warn(
+          {
+            csp: {
+              directive: r.effectiveDirective || r['effective-directive'] || r['violated-directive'],
+              blocked: stripQuery(r.blockedURL || r['blocked-uri']),
+              page: stripQuery(r.documentURL || r['document-uri']),
+            },
+          },
+          'csp violation'
+        );
+      }
+      reply.code(204);
+      return null;
+    });
   });
 }
 

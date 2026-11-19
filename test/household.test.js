@@ -89,10 +89,10 @@ describe('household management', () => {
     assert.doesNotMatch(picker.body, /"name":"Giulia"/);
     const invite = await h.app.inject({ method: 'GET', url: `/login?invite=${giulia.token}` });
     assert.equal(invite.statusCode, 200);
-    assert.match(invite.body, /var INVITE=\{"name":"Giulia"\};/);
+    assert.match(invite.body, /"invite":\{"name":"Giulia"\}/);
     assert.equal(invite.headers['referrer-policy'], 'no-referrer');
     const bogus = await h.app.inject({ method: 'GET', url: `/login?invite=${'0'.repeat(64)}` });
-    assert.match(bogus.body, /var INVITE=\{"invalid":true\};/);
+    assert.match(bogus.body, /"invite":\{"invalid":true\}/);
   });
 
   it('lets the member choose their own password, once', async () => {

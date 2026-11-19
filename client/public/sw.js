@@ -43,6 +43,8 @@ const SHELL = [
   `${BASE}/`,
   `${BASE}/index.html`,
   `${BASE}/manifest.json`,
+  `${BASE}/boot/head.js`,
+  `${BASE}/boot/splash.js`,
   `${BASE}/icons/apple-touch-icon.png`,
   `${BASE}/icons/shelf-iticon-browser.png`,
   `${BASE}/icons/icon-192.png`,

@@ -12,7 +12,7 @@ import { BADGES_DIR, CLIENT_DIST, TMDB_API_KEY, PUBLIC_URL } from './config.js';
 import './db.js'; // opens DB, creates dirs, runs migrations on import
 import { initAuthPassword, registerAuth } from './auth.js';
 import { registerRateLimit } from './rateLimit.js';
-import { registerFetchMetadataGuard } from './security.js';
+import { registerFetchMetadataGuard, registerSecurityHeaders, registerCspReport } from './security.js';
 
 import searchRoutes from './routes/search.js';
 import mediaRoutes from './routes/media.js';
@@ -119,6 +119,10 @@ export async function buildApp({ quiet = false } = {}) {
   // --- Cross-site requests -------------------------------------------------
   // Refuse calls from other sites before any other work (security.js).
   registerFetchMetadataGuard(fastify);
+
+  // --- Security headers and CSP reports (security.js) -----------------------
+  registerSecurityHeaders(fastify);
+  registerCspReport(fastify);
 
   // --- Rate limiting --------------------------------------------------------
   // Per-IP request ceilings for /api/*, registered before the auth gate so floods

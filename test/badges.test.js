@@ -28,7 +28,7 @@ describe('badges on the login picker', () => {
     const master = client(h.app, await login(h.app, TEST_PASSWORD, masterId));
     assert.equal((await master.patch('/api/profile', { active_badge: 'hp_badge.png' })).status, 200);
     const page = (await h.app.inject({ method: 'GET', url: '/login' })).body;
-    const profiles = JSON.parse(/var PROFILES=(\[[^;]*\]);/.exec(page)[1].replace(/\\u003c/g, '<'));
+    const profiles = JSON.parse(/<script type="application\/json" id="login-data">(.*?)<\/script>/.exec(page)[1]).profiles;
     const byId = Object.fromEntries(profiles.map((p) => [p.id, p]));
     assert.match(byId[masterId].badge, new RegExp(`^/api/auth/profiles/${masterId}/badge\\?v=\\d+$`));
     assert.equal(byId[memberId].badge, null);
