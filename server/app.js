@@ -272,14 +272,19 @@ export async function buildApp({ quiet = false } = {}) {
   }
 
   // SPA fallback: any non-API GET that isn't a real file returns index.html so
-  // History-API client routes (e.g. /series/5) work on reload and iOS PWA.
+  // History-API client routes (e.g. /series/5) work on reload and iOS PWA. A
+  // missing file (an old bundle hash, a mistyped icon) gets a real 404: answering
+  // it with index.html would put HTML in caches under a .js or .png name.
+  const ASSET_PATH = /^\/(static|icons|font)\/|\.(js|mjs|css|map|json|png|jpe?g|webp|avif|gif|svg|ico|woff2?|ttf)$/i;
   fastify.setNotFoundHandler((request, reply) => {
     const url = request.raw.url || '';
+    const pathname = url.split('?')[0];
     if (
       request.method === 'GET' &&
       !url.startsWith('/api/') &&
       !url.startsWith('/assets/') &&
-      !url.startsWith('/badges/')
+      !url.startsWith('/badges/') &&
+      !ASSET_PATH.test(pathname)
     ) {
       const indexFile = path.join(CLIENT_DIST, 'index.html');
       if (fs.existsSync(indexFile)) {

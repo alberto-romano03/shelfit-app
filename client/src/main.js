@@ -34,6 +34,7 @@ import { resetUpcoming, rebuildUpcoming } from './views/Upcoming.js';
 import { preloader } from './preloader.js';
 import { markBootSettled } from './warmup.js';
 import { getExplore } from './offlineCache.js';
+import { watchForUpdates } from './swUpdate.js';
 
 initTheme();
 // iOS Safari pinch-zooms whatever the viewport meta says: its own gesture events
@@ -382,6 +383,7 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register(withBase('/sw.js'), { scope: withBase('/') })
+      .then(watchForUpdates)
       .catch(() => {});
   });
 }

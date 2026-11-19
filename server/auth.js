@@ -954,6 +954,10 @@ export function registerAuth(fastify, { configured }) {
     ) {
       return true;
     }
+    // The built JS/CSS (content-hashed, no user data, like the icons). Public so
+    // the service worker can precache a new build even while signed out, instead
+    // of receiving the login page under a .js name. One flat file name only.
+    if (request.method === 'GET' && /^\/static\/[A-Za-z0-9][\w.-]*$/.test(p)) return true;
     // The picker's avatars, shown before anyone has signed in.
     if (request.method === 'GET' && /^\/api\/auth\/profiles\/\d+\/(avatar|badge)$/.test(p)) return true;
     if (request.method === 'POST' && p === '/api/auth/login') return true;

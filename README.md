@@ -626,16 +626,14 @@ The client bundle is **baked into the Docker image**, so a plain restart only
 picks up changes under `server/`.
 
 ```bash
-# Server-only change:
-docker compose up -d --build shelfit
-
-# Client change (JS/CSS/HTML/icons): first bump the service-worker cache name in
-# client/public/sw.js  →  const CACHE = 'shelfit-shell-v71';
-# otherwise the cache-first service worker keeps serving the old shell.
 docker compose up -d --build shelfit
 ```
 
-Then reload the app once. In an installed PWA, close and reopen it.
+The build stamps the service worker with a hash of the built files, so any
+client change ships a new worker and a fresh shell cache: no version to bump.
+Open devices pick it up the next time the app comes back to the foreground, and
+run it from the next launch (or from a later return to the app after a few
+minutes away).
 
 ### Upgrading from a single-user version
 
@@ -742,8 +740,9 @@ Caddy is passing the Docker gateway instead of the device IP: add the global
 shown in setup B.
 
 **Old UI after a rebuild.**
-Bump `CACHE` in `client/public/sw.js` and rebuild; the service worker is
-cache-first for the shell. As a last resort, clear site data for the origin.
+Close and reopen the app (an installed PWA: swipe it away first). The new
+service worker installs in the background and serves the new build from the
+next launch. As a last resort, clear site data for the origin.
 
 **Server exits with "Refusing to start with authentication disabled".**
 Set `APP_PASSWORD` in `.env`, or deliberately set `ALLOW_NO_AUTH=true` for a
