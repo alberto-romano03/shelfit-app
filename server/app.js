@@ -70,6 +70,10 @@ export async function buildApp({ quiet = false } = {}) {
     // the two endpoints that legitimately accept larger payloads (library XML
     // import, profile-photo upload) raise it per-route via their own `bodyLimit`.
     bodyLimit: 512 * 1024,
+    // Fastify 4 treats `;` as the start of the query string by default, so
+    // `/api/x;y` would reach the `/api/x` handler. Nothing here uses `;` in a
+    // path; turn it off (the default from Fastify 5) so a path means one route.
+    useSemicolonDelimiter: false,
   });
 
   // --- CORS -----------------------------------------------------------------
@@ -82,10 +86,11 @@ export async function buildApp({ quiet = false } = {}) {
   const ALLOWED_ORIGINS = new Set(
     [
       PUBLIC_URL || null,
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost:5173', // Vite dev server
-      'http://127.0.0.1:5173',
+      // Local dev origins (incl. the Vite dev server), never in production: there
+      // any other dev server on this machine could make credentialed reads.
+      ...(process.env.NODE_ENV === 'production'
+        ? []
+        : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173', 'http://127.0.0.1:5173']),
     ].filter(Boolean)
   );
   await fastify.register(fastifyCors, {

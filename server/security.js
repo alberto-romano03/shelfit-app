@@ -20,6 +20,25 @@ export function clientIp(request) {
   return chain.length ? chain[chain.length - 1] : request.ip || 'unknown';
 }
 
+// --- the path the router actually matched ----------------------------------
+// Access rules must judge the request the way the router resolved it, never the
+// raw URL text: the router percent-decodes the path (`/api/%68ousehold` reaches
+// the `/api/household` handler), so a regex over request.raw.url could be
+// sidestepped while the real handler still runs. This rebuilds the concrete path
+// from the matched route pattern and its decoded params, e.g.
+// `/api/admin/cache/:type/:tmdb_id` + { type: 'movie', tmdb_id: '603' } ->
+// `/api/admin/cache/movie/603`. The pattern's literal segments always survive, so
+// a prefix rule can never be dodged. Null when no route matched (404): no handler
+// runs, so there is nothing to authorize. Routing is done before onRequest.
+export function routePath(request) {
+  const pattern = request.routeOptions && request.routeOptions.url;
+  if (!pattern) return null;
+  const params = request.params || {};
+  const value = (name) => (params[name] === undefined ? '' : String(params[name]));
+  // `:name` params, then a trailing wildcard (static files, the SPA fallback).
+  return pattern.replace(/:([A-Za-z0-9_]+)/g, (_, name) => value(name)).replace(/\*$/, () => value('*'));
+}
+
 // --- one-way hashing for the access log ------------------------------------
 // The access log must never store a raw IP or user-agent (privacy), yet repeated
 // attempts from the same source must still be recognizable. A per-install random

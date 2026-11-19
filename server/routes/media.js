@@ -773,7 +773,9 @@ export default async function mediaRoutes(fastify) {
     if (body.rating !== undefined) {
       let rating = body.rating;
       if (rating === 0 || rating === null || rating === '') rating = null;
-      if (rating !== null && (rating < 1 || rating > 5)) {
+      // A whole number 1-5: `rating < 1 || rating > 5` let strings like "4" or
+      // "x" through, and the rating is rendered into the poster badge.
+      if (rating !== null && !(Number.isInteger(rating) && rating >= 1 && rating <= 5)) {
         reply.code(400);
         return { error: 'rating must be 1-5 or null' };
       }

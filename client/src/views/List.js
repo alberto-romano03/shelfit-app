@@ -82,7 +82,7 @@ function statusFlag(icon, label, mod = '') {
 
 function buildCell(it) {
   const card = poster(it.poster_url, it.title);
-  if (it.rating) card.append(el('div', { class: 'rating-badge', html: `★ ${it.rating}` }));
+  if (it.rating) card.append(el('div', { class: 'rating-badge', text: `★ ${it.rating}` }));
   const flags = [];
   if (it.owned) flags.push(statusFlag('disc', t('lists.ownedOnDisc')));
   if (it.watched_in_cinema) flags.push(statusFlag('ticket', t('lists.watchedInCinema'), 'list-flag--cine'));

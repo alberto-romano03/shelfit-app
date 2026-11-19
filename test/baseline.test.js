@@ -107,6 +107,10 @@ describe('single-user baseline', () => {
   it('updates status and rating with validation', async () => {
     assert.equal((await api.patch(`/api/media/${movieId}`, { rating: 4 })).status, 200);
     assert.equal((await api.patch(`/api/media/${movieId}`, { rating: 9 })).status, 400);
+    // Whole numbers only: strings and fractions used to slip past `< 1 || > 5`.
+    for (const rating of ['4', '<b>', 2.5, true]) {
+      assert.equal((await api.patch(`/api/media/${movieId}`, { rating })).status, 400, JSON.stringify(rating));
+    }
     assert.equal((await api.patch(`/api/media/${movieId}`, { status: 'bogus' })).status, 400);
 
     const detail = await api.get(`/api/media/${movieId}`);

@@ -11,7 +11,7 @@
 // 429 responses carry a Retry-After header and a GENERIC body — they never reveal
 // the threshold or window.
 
-import { clientIp } from './security.js';
+import { clientIp, routePath } from './security.js';
 
 // Per-endpoint overrides, checked in order; the first match wins. `method` is the
 // HTTP method, `path` an exact pathname (query stripped before matching). Any
@@ -90,7 +90,10 @@ if (sweep.unref) sweep.unref();
 // everything else (static assets, the SPA shell) passes through untouched.
 export function registerRateLimit(fastify) {
   fastify.addHook('onRequest', async (request, reply) => {
-    const pathname = (request.raw.url || '').split('?')[0];
+    // The matched route's path (security.js routePath), so a re-encoded URL can't
+    // slip past a per-endpoint cap into the looser global bucket. Unmatched
+    // requests fall back to the raw path and only ever hit the global ceiling.
+    const pathname = routePath(request) ?? (request.raw.url || '').split('?')[0];
     if (!pathname.startsWith('/api/') || EXEMPT.has(pathname)) return;
 
     const ip = clientIp(request);

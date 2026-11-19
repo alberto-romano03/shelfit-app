@@ -617,7 +617,7 @@ export async function gridView(container, type) {
     const cards = planItems.map((it) => {
       const card = poster(it.poster_url, it.title);
       if (it.rating) {
-        card.append(el('div', { class: 'rating-badge', html: `★ ${it.rating}` }));
+        card.append(el('div', { class: 'rating-badge', text: `★ ${it.rating}` }));
       }
       card.addEventListener('click', () => openDetail(`/detail/${it.id}`));
       return pressable(card, { label: it.title });

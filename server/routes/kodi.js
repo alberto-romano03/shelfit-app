@@ -1,6 +1,6 @@
 // Kodi integration HTTP API. Every endpoint lives behind shelfIt's own auth
-// gate; the frontend calls only these — never Kodi directly. Hosts, ports and
-// credentials never leave the server.
+// gate; the frontend calls only these, never Kodi directly. Passwords never
+// leave the server; hosts, ports and usernames go to the master only.
 
 import {
   isEnabled,
@@ -31,21 +31,28 @@ import {
 } from '../kodiSync.js';
 import { getUser } from '../users.js';
 
-function configPayload() {
+// `full` (the master, who manages Kodi) adds the instance list with hosts, ports
+// and usernames. Members only need to know whether Kodi is on: their Settings
+// shows the section as staff only, and the Now Playing loop reads enabled +
+// active_id.
+function configPayload({ full = true } = {}) {
   const active = getActiveInstance();
   return {
     enabled: isEnabled(),
     active_id: active ? active.id : null,
     active_name: active ? active.name : null,
-    instances: listInstances().map(publicInstance),
+    instances: full ? listInstances().map(publicInstance) : [],
   };
 }
 
 export default async function kodiRoutes(fastify) {
   // --- Configuration (settings UI) ----------------------------------------
   // Safe to call regardless of the enable toggle — pure DB reads, never touches
-  // Kodi. Passwords are never included (only has_password).
-  fastify.get('/api/kodi/config', async () => configPayload());
+  // Kodi. Passwords are never included (only has_password). With auth off the
+  // gate sets request.user to the master.
+  fastify.get('/api/kodi/config', async (request) =>
+    configPayload({ full: !!request.user && request.user.role === 'master' })
+  );
 
   // Selectable instance icons (SVGs the user placed in icons/kodi/).
   fastify.get('/api/kodi/icons', async () => ({ icons: listKodiIcons() }));

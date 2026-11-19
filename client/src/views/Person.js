@@ -101,7 +101,7 @@ function openCredit(c) {
 // The viewer's status on any card: their rating, or "to watch".
 function statusBadge(c) {
   if (!c.inLib) return null;
-  if (c.inLib.rating) return el('div', { class: 'rating-badge person-badge', html: `★ ${c.inLib.rating}` });
+  if (c.inLib.rating) return el('div', { class: 'rating-badge person-badge', text: `★ ${c.inLib.rating}` });
   if (c.inLib.status === 'plan_to_watch') {
     return el('div', { class: 'person-badge person-badge--plan' }, [lucideIcon('calendar-plus', 'person-glyph')]);
   }

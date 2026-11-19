@@ -14,6 +14,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import db from './db.js';
 import { PUBLIC_URL } from './config.js';
 import {
@@ -24,7 +25,7 @@ import {
   revokeMagicLink,
   expiryMsFor,
 } from './magicLinks.js';
-import { clientIp } from './security.js';
+import { clientIp, routePath } from './security.js';
 import { logAccess, getRecentAccess, EVENTS } from './accessLog.js';
 import { getUser, getMaster, pickerUsers, isPickable, avatarFile, badgeFile, fileVersion } from './users.js';
 import { findInvite, clearInvites, pruneInvites } from './invites.js';
@@ -108,17 +109,38 @@ function scrypt(password, salt, params) {
   });
 }
 
+// The same, off the event loop, for request handlers: a hash at these parameters
+// takes hundreds of ms, and scryptSync would stall every other request meanwhile.
+// One hash at a time: each needs about 128 MB, and the queue keeps that bounded
+// however many sign-ins arrive at once.
+const scryptCb = promisify(crypto.scrypt);
+let scryptQueue = Promise.resolve();
+function scryptAsync(password, salt, params) {
+  const run = () =>
+    scryptCb(password, salt, KEYLEN, { N: params.N, r: params.r, p: params.p, maxmem: params.maxmem });
+  const result = scryptQueue.then(run, run);
+  scryptQueue = result.catch(() => {});
+  return result;
+}
+
+const formatHash = (salt, hash) =>
+  `s2:${SCRYPT.N}:${SCRYPT.r}:${SCRYPT.p}:${salt.toString('hex')}:${hash.toString('hex')}`;
+
 // A new stored value for `password` in the current self-describing format.
+// Synchronous for boot (APP_PASSWORD) and tests; handlers use hashPasswordAsync.
 export function hashPassword(password) {
   const salt = crypto.randomBytes(SALT_BYTES);
-  const hash = scrypt(password, salt, SCRYPT);
-  return `s2:${SCRYPT.N}:${SCRYPT.r}:${SCRYPT.p}:${salt.toString('hex')}:${hash.toString('hex')}`;
+  return formatHash(salt, scrypt(password, salt, SCRYPT));
+}
+export async function hashPasswordAsync(password) {
+  const salt = crypto.randomBytes(SALT_BYTES);
+  return formatHash(salt, await scryptAsync(password, salt, SCRYPT));
 }
 
 // Constant-time verification of a submitted password against a stored hash in
 // either the `s2:N:r:p:salt:hash` format (params read from the value) or the
 // legacy `salt:hash` format (verified with the original work factor).
-function verifyPassword(stored, password) {
+async function verifyPassword(stored, password) {
   if (!stored || typeof password !== 'string') return false;
   let salt;
   let expected;
@@ -139,7 +161,7 @@ function verifyPassword(stored, password) {
   }
   let actual;
   try {
-    actual = scrypt(password, salt, params);
+    actual = await scryptAsync(password, salt, params);
   } catch {
     return false;
   }
@@ -972,7 +994,11 @@ export function registerAuth(fastify, { configured }) {
       if (parseCookies(request.headers.cookie)[UID_COOKIE] !== String(user.id)) {
         reply.header('Set-Cookie', buildUidCookie(String(user.id), { maxAge: YEAR_SECONDS, secure: isHttps(request) }));
       }
-      if (user.role !== 'master' && isMasterOnly(request.method, p)) {
+      // Judged on the route the router matched, not on the URL as typed (see
+      // routePath). HEAD runs the GET handler, so it is held to the GET rules.
+      const matched = routePath(request);
+      const method = request.method === 'HEAD' ? 'GET' : request.method;
+      if (user.role !== 'master' && matched !== null && isMasterOnly(method, matched)) {
         reply.code(403).send({ error: 'forbidden' });
         return reply;
       }
@@ -1035,11 +1061,21 @@ export function registerAuth(fastify, { configured }) {
       return { error: 'password_length' };
     }
     clearMagicFailures(ip);
-    db.transaction(() => {
-      setPasswordStmt.run(hashPassword(password), invite.user_id);
+    const passwordHash = await hashPasswordAsync(password);
+    // Hashing yields the event loop, so a second request with the same token may
+    // have used it meanwhile: re-check inside the transaction (single use).
+    const used = db.transaction(() => {
+      const still = findInvite(body.token);
+      if (!still || still.user_id !== invite.user_id) return false;
+      setPasswordStmt.run(passwordHash, invite.user_id);
       clearInvites(invite.user_id);
       setLastLoginStmt.run(Date.now(), invite.user_id);
+      return true;
     })();
+    if (!used) {
+      reply.code(410);
+      return { error: 'invite_invalid' };
+    }
     logAccess(EVENTS.INVITE, request, true, invite.user_id);
     setSessionCookie(reply, request, createSession(invite.user_id, request), invite.user_id);
     return { ok: true };
@@ -1135,7 +1171,7 @@ export function registerAuth(fastify, { configured }) {
       reply.code(429);
       return { error: 'Too many attempts. Try again later.' };
     }
-    if (!user || user.disabled || !verifyPassword(user.password_hash, body.password)) {
+    if (!user || user.disabled || !(await verifyPassword(user.password_hash, body.password))) {
       recordFailure(ip);
       recordGlobalFailure();
       if (user) recordUserFailure(user.id);
@@ -1148,7 +1184,7 @@ export function registerAuth(fastify, { configured }) {
     clearFailures(ip);
     clearGlobalFailures();
     userAttempts.delete(user.id);
-    if (needsRehash(user.password_hash)) setPasswordStmt.run(hashPassword(body.password), user.id);
+    if (needsRehash(user.password_hash)) setPasswordStmt.run(await hashPasswordAsync(body.password), user.id);
     setLastLoginStmt.run(Date.now(), user.id);
     const token = createSession(user.id, request);
     logAccess(EVENTS.LOGIN, request, true, user.id);

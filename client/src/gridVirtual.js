@@ -197,7 +197,7 @@ function createCell(onItemClick, onItemHold) {
     noArt.hidden = true;
     if (item.rating) {
       badge.style.display = '';
-      badge.innerHTML = `★ ${item.rating}`;
+      badge.textContent = `★ ${item.rating}`;
     } else {
       badge.style.display = 'none';
     }
