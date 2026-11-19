@@ -563,7 +563,10 @@ function retryWithoutBlob(img, url) {
   return true;
 }
 
-export function lazyLoad(img, url) {
+// `priority: 'high'` is for the one image a page is about (the Detail poster):
+// loaded at once and ahead of the rest, never lazily. Everything else waits until
+// it is near the screen.
+export function lazyLoad(img, url, { priority } = {}) {
   if (!url) return;
   url = withBase(url); // server emits root-absolute paths; serve under /base
   const cached = imageCache.get(url);
@@ -572,7 +575,12 @@ export function lazyLoad(img, url) {
     img.src = cached;
     return;
   }
-  img.loading = 'lazy';
+  if (priority === 'high') {
+    img.loading = 'eager';
+    img.fetchPriority = 'high';
+  } else {
+    img.loading = 'lazy';
+  }
   img.decoding = 'async';
   img.src = url;
 }
@@ -702,7 +710,7 @@ export function mountPoster(container, url, alt, opts = {}) {
         img.src = withBase(url);
       });
   } else {
-    lazyLoad(img, url);
+    lazyLoad(img, url, { priority: opts.priority });
   }
   // Cache hit may have set src synchronously.
   if (img.complete && img.naturalWidth > 0) reveal();
@@ -920,10 +928,10 @@ export function imgFallback(url, title, className) {
 // Set a node's background-image, routed through the in-memory cache so the blob
 // is reused on subsequent renders. Sets the bg only once the image is ready
 // (avoids a flash), matching the previous preload behaviour.
-export function setBg(node, url) {
+export function setBg(node, url, opts) {
   if (!url) return;
   imageCache
-    .load(url)
+    .load(url, opts)
     .then((resolved) => {
       node.style.backgroundImage = `url("${resolved || url}")`;
     })

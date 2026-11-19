@@ -7485,7 +7485,7 @@ img.mood-emoji {
   width: 72px;
   height: 72px;
   margin: 0 auto;
-  background: url('/icons/shelf-iticon-browser.png') center / contain no-repeat;
+  background: url('/icons/shelf-iticon-224.png') center / contain no-repeat;
   /* The disc logo turns slowly while loading (reuses the generic `spin`), rather
      than fading in and out. */
   animation: spin 2.4s linear infinite;

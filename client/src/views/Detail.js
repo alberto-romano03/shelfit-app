@@ -660,7 +660,8 @@ export default async function Detail(container, params) {
 
   // --- Hero + back ---
   const hero = el('div', { class: 'detail-hero' });
-  setBg(hero, d.backdrop_url);
+  // The page's first big image: ahead of everything else (posters below, preloads).
+  setBg(hero, d.backdrop_url, { priority: 'high' });
   const backBtn = el('button', {
     class: 'icon-btn icon-btn--overlay',
     html: icons.back,
@@ -686,7 +687,7 @@ export default async function Detail(container, params) {
 
   // --- Poster + titles --- (shimmer skeleton until the poster decodes; stays on
   // error / offline rather than showing a broken image)
-  const posterBox = mountPoster(el('div', { class: 'detail-poster' }), d.poster_url, d.title_it);
+  const posterBox = mountPoster(el('div', { class: 'detail-poster' }), d.poster_url, d.title_it, { priority: 'high' });
 
   // Physical-ownership CD: layered BENEATH the poster (poster always on top) and
   // revealed when owned. A real Fanart disc is used when cached; otherwise the

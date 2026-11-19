@@ -46,7 +46,8 @@ const SHELL = [
   `${BASE}/boot/head.js`,
   `${BASE}/boot/splash.js`,
   `${BASE}/icons/apple-touch-icon.png`,
-  `${BASE}/icons/shelf-iticon-browser.png`,
+  `${BASE}/icons/shelf-iticon-224.png`,
+  `${BASE}/icons/shelf-iticon-448.png`,
   `${BASE}/icons/icon-192.png`,
   `${BASE}/icons/icon-512.png`,
 ];

@@ -552,14 +552,14 @@ function magicConfirmHtml(user, token, lang) {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
-<link rel="icon" type="image/png" href="${BASE}/icons/shelf-iticon-browser.png">
+<link rel="icon" type="image/png" href="${BASE}/icons/shelf-iticon-224.png">
 <title>${it ? 'Accedi' : 'Sign in'} · shelfit</title>
 <style>
 ${AUTH_PAGE_CSS}</style>
 </head>
 <body>
   <main class="card">
-    <img class="logo" src="${BASE}/icons/shelf-iticon-browser.png" alt="" width="56" height="56">
+    <img class="logo" src="${BASE}/icons/shelf-iticon-224.png" alt="" width="56" height="56">
     <h1>shelf<span>it</span></h1>
     <div class="who">
       <span class="tile-media"><span class="avatar">${avatar}</span>${badge}</span>
@@ -691,7 +691,7 @@ const AUTH_PAGE_CSS = `  :root{
 // `invite` is null, { name } for a valid invite (the page opens on "choose your
 // password"), or { invalid: true } (the picker shows a notice instead).
 function loginPageHtml(profiles, invite = null) {
-  const logoTag = `<img class="logo" src="${BASE}/icons/shelf-iticon-browser.png" alt="" width="56" height="56">`;
+  const logoTag = `<img class="logo" src="${BASE}/icons/shelf-iticon-224.png" alt="" width="56" height="56">`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -702,7 +702,7 @@ function loginPageHtml(profiles, invite = null) {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="shelfit">
 <link rel="apple-touch-icon" sizes="180x180" href="${BASE}/icons/apple-touch-icon.png">
-<link rel="icon" type="image/png" href="${BASE}/icons/shelf-iticon-browser.png">
+<link rel="icon" type="image/png" href="${BASE}/icons/shelf-iticon-224.png">
 <link rel="manifest" href="${BASE}/manifest.json">
 <title data-it="Accedi · shelfit" data-en="Sign in · shelfit">Sign in · shelfit</title>
 <script src="${BASE}/boot/login-theme.js"></script>

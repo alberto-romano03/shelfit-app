@@ -58,7 +58,7 @@ let previousPath = null;
 // cover.)
 const brandLogo = el('img', {
   class: 'brand-logo',
-  src: withBase('/icons/shelf-iticon-browser.png'),
+  src: withBase('/icons/shelf-iticon-224.png'),
   alt: '',
   width: '28',
   height: '28',
