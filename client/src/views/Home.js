@@ -368,7 +368,7 @@ export default async function Home(container) {
       .join('|');
   }
 
-  const section = el('div', {}, [el('div', { class: 'section-title', text: t('home.watching.title') })]);
+  const section = el('div', {}, [el('h2', { class: 'section-title', text: t('home.watching.title') })]);
   let cachedWatching = getWatching(); // what is painted; refreshed after a change
   let watchRow;
   if (Array.isArray(cachedWatching)) {
@@ -398,7 +398,7 @@ export default async function Home(container) {
 
   // --- Rediscover Your Collection (title + animated-arrows button) ---
   const rediscover = el('div', {}, [
-    el('div', { class: 'section-title', text: t('home.backToShelf') }),
+    el('h2', { class: 'section-title', text: t('home.backToShelf') }),
     el('button', {
       class: 'rediscover-btn shelf-btn',
       html: `${SHELF_ANIM}<span class="rediscover-label">${t('home.shelfCta')}</span>`,
@@ -408,7 +408,7 @@ export default async function Home(container) {
 
   // --- Dust It Off (mood-based suggestion, animated-starfield button) ---
   const dust = el('div', {}, [
-    el('div', { class: 'section-title', text: t('home.dustItOff') }),
+    el('h2', { class: 'section-title', text: t('home.dustItOff') }),
     el('button', {
       class: 'rediscover-btn dust-btn',
       html: `${DUST_ANIM}<span class="rediscover-label">${t('home.dustCta')}</span>`,
@@ -433,7 +433,7 @@ export default async function Home(container) {
 
   // --- Rate-O-Matic (matches the Back to the Shelf / Dust It Off buttons) ---
   const rate = el('div', {}, [
-    el('div', { class: 'section-title', text: 'Rate-O-Matic' }),
+    el('h2', { class: 'section-title', text: 'Rate-O-Matic' }),
     el('button', {
       class: 'rediscover-btn rom-btn',
       html: `${ROM_ANIM}<span class="rediscover-label">${t('home.rateCta')}</span>`,
@@ -494,7 +494,7 @@ export default async function Home(container) {
   // old raster image.
   const plant = el('div', { class: 'dvd-plant', 'aria-hidden': 'true', html: PLANT_SVG });
   const shelf = el('div', {}, [
-    el('div', { class: 'section-title', text: t('home.theShelf') }),
+    el('h2', { class: 'section-title', text: t('home.theShelf') }),
     el('div', { class: 'dvd-shelf' }, [
       el('div', { class: 'dvd-spines' }, [
         plant,
@@ -548,7 +548,7 @@ export default async function Home(container) {
     },
   });
   const theDesk = el('div', { class: 'the-desk' }, [
-    el('div', { class: 'section-title', text: t('home.desk.title') }),
+    el('h2', { class: 'section-title', text: t('home.desk.title') }),
     drawer,
     posPrinter,
   ]);

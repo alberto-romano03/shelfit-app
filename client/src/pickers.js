@@ -32,6 +32,7 @@ export function openTitlePicker({ type, title, onPick }) {
       class: 'search-input',
       type: 'search',
       placeholder: type === 'movie' ? t('pickers.searchFilms') : t('pickers.searchSeries'),
+      'aria-label': type === 'movie' ? t('pickers.searchFilms') : t('pickers.searchSeries'),
     });
     const list = el('div', { class: 'picker-list' });
     modal.append(
@@ -127,6 +128,7 @@ export function openPersonPicker({ onPick }) {
       class: 'search-input',
       type: 'search',
       placeholder: t('pickers.searchPeople'),
+      'aria-label': t('pickers.searchPeople'),
     });
     const list = el('div', { class: 'picker-list' });
     modal.append(

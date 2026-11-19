@@ -311,7 +311,7 @@ body {
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
     Arial, sans-serif;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1.4;
   overscroll-behavior-y: none;
 }
@@ -390,7 +390,7 @@ input,
 textarea,
 select {
   font-family: inherit;
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 /* ============================= App layout ============================= */
@@ -427,7 +427,7 @@ select {
   flex: 0 0 auto;
 }
 .app-header h1 {
-  font-size: 20px;
+  font-size: 1.25rem;
   margin: 0;
   letter-spacing: -0.5px;
 }
@@ -461,7 +461,7 @@ html.theme-reveal::view-transition-new(root) {
   height: 44px;
   display: flex;
   align-items: center;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   opacity: 0;
   transform: translateY(8px);
@@ -694,7 +694,7 @@ body.grid-virtual-active #app {
      caption under it. */
   gap: 5px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
   /* Was the inherited 1.4 — three pixels of leading the label never needed, and
      the gap above is a truer separator than the label's own half-leading. */
   line-height: 1.1;
@@ -755,7 +755,7 @@ body.grid-virtual-active #app {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   line-height: 1;
@@ -812,7 +812,7 @@ button:active,
   bottom: 6px;
   background: var(--scrim);
   color: var(--stars);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   padding: 2px 6px;
   border-radius: var(--r-pill);
@@ -857,7 +857,7 @@ button:active,
   justify-content: center;
   background: var(--surface-elevated);
   color: var(--text-secondary);
-  font-size: 20px;
+  font-size: 1.25rem;
   border: none;
   cursor: pointer;
 }
@@ -915,7 +915,7 @@ button:active,
   justify-content: center;
   text-align: center;
   padding: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   background: linear-gradient(135deg, var(--surface-elevated), var(--surface));
 }
@@ -947,7 +947,7 @@ button:active,
   border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
   overflow: hidden;
@@ -1114,7 +1114,7 @@ button:active,
   border: none;
   background: none;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1;
   text-align: center;
@@ -1141,7 +1141,7 @@ button:active,
   background: var(--surface);
   color: var(--text-secondary);
   border: 1px solid var(--border);
-  font-size: 13px;
+  font-size: 0.8125rem;
   min-height: 34px;
 }
 .chip.active {
@@ -1153,7 +1153,7 @@ button:active,
 /* Inline note under the chips explaining the offline lock. */
 .offline-chip-note {
   margin: 2px 0 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 /* --- Offline read-only affordances (Plan-to-Watch detail + Up Next) --- */
 /* Write controls that can't persist offline: muted + inert, tooltip explains. */
@@ -1168,7 +1168,7 @@ button:active,
   margin: 18px 0;
   text-align: center;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 /* Up Next offline staleness note — a single muted line above the cached cards,
@@ -1176,7 +1176,7 @@ button:active,
 .offline-note {
   margin: 16px 0 12px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1219,7 +1219,7 @@ button:active,
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 34px;
+  font-size: 2.125rem;
   font-weight: 700;
   color: var(--accent-ink);
 }
@@ -1229,7 +1229,7 @@ button:active,
   gap: 8px;
   min-width: 0;
   padding-bottom: 6px;
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
 }
 /* A long name, even one unbroken word, wraps inside the row on a narrow phone. */
@@ -1310,7 +1310,7 @@ button:active,
   min-width: 0;
 }
 .stat-card .value {
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.05;
   /* Neutral value — the colour now lives on the leading glyph, not the number. */
@@ -1319,7 +1319,7 @@ button:active,
   white-space: nowrap;
 }
 .stat-card .label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -1330,7 +1330,7 @@ button:active,
 .stats-grid .stat-card:nth-child(4) { --stat-ink: var(--color-rose); }
 
 .section-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   margin: 22px 0 10px;
 }
@@ -1370,14 +1370,14 @@ button:active,
   margin-bottom: 6px;
 }
 .watching-card .wc-title {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .watching-card .wc-ep {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
 }
 
@@ -1646,18 +1646,18 @@ button:active,
 }
 .detail-titles h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
   line-height: 1.2;
 }
 .detail-titles .orig {
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 0.875rem;
   margin-top: 2px;
 }
 /* Metadata as a vertical stack of icon + label rows (one per line). */
 .detail-meta {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin: 12px 0;
   display: flex;
   flex-direction: column;
@@ -1723,7 +1723,7 @@ button:active,
   margin: 30px 4px;
   font-family: Georgia, 'Times New Roman', serif;
   font-style: italic;
-  font-size: 18px;
+  font-size: 1.125rem;
   line-height: 1.5;
   text-align: center;
   color: var(--text-secondary);
@@ -1784,7 +1784,7 @@ button:active,
 }
 /* Movies: give the production company name a touch more weight. */
 .bento-emphasis .bento-value {
-  font-size: 16px;
+  font-size: 1rem;
 }
 .bento-icon {
   width: 15px;
@@ -1798,7 +1798,7 @@ button:active,
   mask-size: contain;
 }
 .bento-value {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
   display: -webkit-box;
@@ -1808,7 +1808,7 @@ button:active,
 }
 .bento-sub {
   margin-top: auto; /* label pinned to the bottom-left corner of the cell */
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
 }
 /* Soft, transparent pastel tints — one per cell type. The tint is a low mix of a
@@ -1864,11 +1864,11 @@ button:active,
 .bento .bento-shade-light .bento-icon { background-color: var(--bento-dark); }
 .detail-updated {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
   margin-top: 4px;
 }
 .overview {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-primary);
   margin: 12px 0;
 }
@@ -1913,7 +1913,7 @@ button:active,
   border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -2004,18 +2004,18 @@ textarea.notes {
   gap: 10px;
 }
 .prog-pct {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 .prog-pct small {
   margin-left: 5px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-secondary);
 }
 .prog-count {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -2052,7 +2052,7 @@ textarea.notes {
   overflow: hidden;
   white-space: nowrap;
   text-align: center;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -2105,7 +2105,7 @@ textarea.notes {
   font-weight: 600;
 }
 .season-header .s-count {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 /* The season you're on is outlined; a finished one has a tick, an unfinished one a bar. */
@@ -2138,7 +2138,7 @@ textarea.notes {
 .link-btn {
   position: relative;
   color: var(--accent-ink);
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 6px;
 }
 /* A reach of about 44px around the words (Mark all watched sits in a row that
@@ -2174,7 +2174,7 @@ textarea.notes {
   min-width: 0;
 }
 .episode .ep-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -2200,7 +2200,7 @@ textarea.notes {
   gap: 5px;
   margin-top: 5px;
   min-width: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.3;
   color: var(--text-secondary);
 }
@@ -2282,13 +2282,13 @@ textarea.notes {
   transform: none;
 }
 .season-ring-num {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 .season-ring-den,
 .season-ring-unit {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-secondary);
   margin-top: 3px;
@@ -2382,7 +2382,7 @@ textarea.notes {
   transition: opacity var(--dur-medium) var(--ease-state), color var(--dur-medium) var(--ease-state);
 }
 .episode .ep-sub {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -2480,7 +2480,7 @@ textarea.notes {
    checkmark. Inherits the circle's white .check.done colour; sized to stay
    compact within the fixed 30px circle. */
 .check-count {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -2551,7 +2551,7 @@ body.season-active #app {
 }
 .season-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
   line-height: 1.2;
 }
 .season-series-link {
@@ -2564,7 +2564,7 @@ body.season-active #app {
   padding: 8px 8px 8px 0;
   background: none;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -2773,7 +2773,7 @@ body.season-active #app {
 }
 .stop-display-lbl {
   flex: 1; /* label and total share the sides equally, so the counter is centred */
-  font-size: 9px;
+  font-size: 0.5625rem;
   font-weight: 700;
   letter-spacing: 0.16em;
   /* Dimmed through its colour rather than opacity, so the red light over it keeps
@@ -2850,7 +2850,7 @@ body.season-active #app {
 .stop-counter {
   position: relative;
   display: inline-block;
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 700;
   line-height: 1.2;
 }
@@ -2896,7 +2896,7 @@ body.season-active #app {
 }
 .stop-display-of {
   flex: 1;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: #7ed99a;
   opacity: 0.5;
@@ -2987,7 +2987,7 @@ body.season-active #app {
 .stop-clear-legend {
   font-family: 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
   font-stretch: condensed;
-  font-size: 9.5px;
+  font-size: 0.59375rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   line-height: 1;
@@ -3201,7 +3201,7 @@ body.season-active #app {
 }
 .tl-tag {
   align-self: flex-start;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -3219,7 +3219,7 @@ body.season-active #app {
 }
 .tl-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3227,7 +3227,7 @@ body.season-active #app {
 /* Watch Next: the series name is the lead line and may wrap to two lines so long
    titles get room instead of being clipped on one line. */
 .tl-title-lg {
-  font-size: 16px;
+  font-size: 1rem;
   white-space: normal;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -3235,7 +3235,7 @@ body.season-active #app {
   overflow: hidden;
 }
 .tl-sub {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -3306,12 +3306,12 @@ body.season-active #app {
   max-width: 42px;
 }
 .tl-ring-num {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 .tl-ring-den {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-secondary);
   margin-top: 3px;
@@ -3327,19 +3327,19 @@ body.season-active #app {
   gap: 8px;
 }
 .tl-date {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 .tl-eta {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
 }
 
 /* ===================== On the Horizon railway ===================== */
 .section-heading {
   margin: 4px 0 8px;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
 }
 /* Row: [left arrow] [scroller] [right arrow]. Arrows are desktop-only. */
@@ -3405,7 +3405,7 @@ body.season-active #app {
   border-radius: var(--r-pill);
   background: var(--bg); /* interrupts the line, like the stop circles */
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-align: center;
 }
@@ -3460,7 +3460,7 @@ body.season-active #app {
   margin: 0 -6px;
   padding: 0 6px;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.25;
   text-align: center;
@@ -3471,13 +3471,13 @@ body.season-active #app {
   text-align: center;
 }
 .rail-when {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 .rail-ep {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
 }
 /* Outline-only accent circle centred on the line (the line intersects it). */
@@ -3651,7 +3651,7 @@ body.season-active #app {
   flex: 1 1 auto;
   min-width: 0;
   /* 16px so iOS does not zoom the page on focus. */
-  font-size: 16px;
+  font-size: 1rem;
   font-family: inherit;
   line-height: 1.4;
   padding: 13px 0;
@@ -3773,7 +3773,7 @@ body.season-active #app {
   margin-bottom: 4px;
 }
 .ht-count {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -3814,7 +3814,7 @@ body.season-active #app {
 .fc-recent-label {
   display: block;
   margin-bottom: 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -3837,7 +3837,7 @@ body.season-active #app {
   border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-family: inherit;
   cursor: pointer;
   transition: scale var(--dur-long) var(--ease-out);
@@ -3884,7 +3884,7 @@ body.season-active #app {
 }
 .ai-eyebrow {
   display: block;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -3892,7 +3892,7 @@ body.season-active #app {
   margin-bottom: 2px;
 }
 .ai-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   margin: 0;
   line-height: 1.2;
@@ -3962,7 +3962,7 @@ body.season-active #app {
    shape the home screen's cards use. A title that runs long is cut rather
    than allowed to step its year out of line with its neighbours'. */
 .ai-name {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.25;
   margin-top: 6px;
@@ -3971,7 +3971,7 @@ body.season-active #app {
   text-overflow: ellipsis;
 }
 .ai-sub {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -4070,7 +4070,7 @@ body.season-active #app {
   flex-direction: column;
 }
 .pk-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   line-height: 1.2;
   margin: 0 0 4px;
@@ -4085,12 +4085,12 @@ body.season-active #app {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   margin-bottom: 6px;
 }
 .pk-over {
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.45;
   color: var(--text-secondary);
   margin: 0;
@@ -4108,7 +4108,7 @@ body.season-active #app {
 .pk-actions .btn {
   flex: 1 1 auto;
   min-height: 40px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .pk-dots {
   display: flex;
@@ -4225,7 +4225,7 @@ body.season-active #app {
      not personality. */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
     Arial, sans-serif;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.15;
   text-align: left;
@@ -4306,7 +4306,7 @@ body.season-active #app {
   min-width: 0;
 }
 .ht-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.25;
   overflow: hidden;
@@ -4314,7 +4314,7 @@ body.season-active #app {
   white-space: nowrap;
 }
 .ht-orig {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-style: italic;
   color: var(--text-secondary);
   overflow: hidden;
@@ -4326,7 +4326,7 @@ body.season-active #app {
   align-items: center;
   gap: 6px;
   margin-top: 3px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -4338,7 +4338,7 @@ body.season-active #app {
   border-radius: var(--r-pill);
   background: var(--surface-elevated);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -4417,7 +4417,7 @@ body.season-active #app {
   padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -4571,7 +4571,7 @@ a:focus-visible {
 }
 .modal h3 {
   margin: 0 0 14px;
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 /* Two equal buttons side by side, on one line each. A label too long to fit (long
    Italian ones, a count) stacks the pair at full width rather than breaking inside a
@@ -4649,7 +4649,7 @@ a:focus-visible {
   right: 0;
   text-align: center;
   /* shelfIt default font (inherited); tabular figures so width doesn't jump. */
-  font-size: 34px;
+  font-size: 2.125rem;
   font-weight: 700;
   line-height: 44px;
   font-variant-numeric: tabular-nums;
@@ -4717,7 +4717,7 @@ a:focus-visible {
   vertical-align: -3px;
 }
 .field-label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   margin: 14px 0 6px;
   font-weight: 600;
@@ -4850,7 +4850,7 @@ textarea.text-field {
   object-fit: cover;
 }
 .pe-avatar-initial {
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--accent-ink);
 }
@@ -4883,7 +4883,7 @@ textarea.text-field {
   background: none;
   color: var(--text-primary);
   font: inherit;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
 }
 .pe-name-ico {
@@ -4996,7 +4996,7 @@ textarea.text-field {
   border-radius: 50%;
   background: var(--surface-elevated);
   color: var(--accent-ink);
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 700;
 }
 /* "No cover": the header's default gradient (a fixed dark tile in both themes,
@@ -5066,7 +5066,7 @@ textarea.text-field {
   gap: 8px;
   margin: 0;
   padding: 12px 2px 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1.2px;
@@ -5105,7 +5105,7 @@ textarea.text-field {
   background: none;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 0.875rem;
   text-align: left;
   transition: background-color var(--dur-short) var(--ease-state),
     opacity var(--dur-short) var(--ease-state);
@@ -5172,7 +5172,7 @@ button.srow:active {
   line-height: 1.3;
 }
 .srow-sub {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   line-height: 1.35;
   margin-top: 1px;
@@ -5184,7 +5184,7 @@ button.srow:active {
   align-items: center;
   gap: 8px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
 }
 .srow-chev {
@@ -5330,7 +5330,7 @@ button.srow:active {
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   gap: 10px;
 }
 
@@ -5343,7 +5343,7 @@ button.srow:active {
    nothing is drawn — the panel used to render a hard-coded 28% arc around an
    infinity sign, which is the default state and told the user nothing. */
 .usage-desc {
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.45;
   margin: 0 2px 10px;
 }
@@ -5400,7 +5400,7 @@ button.srow:active {
   mask-size: contain;
 }
 .usage-name {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -5409,7 +5409,7 @@ button.srow:active {
 .usage-value {
   position: relative;
   margin-top: 5px;
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
@@ -5417,7 +5417,7 @@ button.srow:active {
 }
 .usage-line {
   position: relative;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 /* Status owns this colour, never the service: the brand tint stays on the
@@ -5456,7 +5456,7 @@ button.srow:active {
 }
 .usage-budget-label {
   margin-bottom: 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -5481,7 +5481,7 @@ button.srow:active {
 
 .muted {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .stack {
   display: flex;
@@ -5490,7 +5490,7 @@ button.srow:active {
   margin-top: 12px;
 }
 .import-file {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   line-height: 1.45;
   padding: 3px 0;
@@ -5513,7 +5513,7 @@ button.srow:active {
 }
 .import-summary {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.4;
 }
 
@@ -5530,7 +5530,7 @@ button.srow:active {
   border: 1px solid var(--border);
   color: var(--text-primary);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   /* Taller: more presence + room for the animated background (width and
      border-radius unchanged). */
   min-height: 84px;
@@ -5746,11 +5746,11 @@ button.srow:active {
   justify-content: flex-end;
 }
 .cd-meta .cd-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
 }
 .cd-meta .cd-sub {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   margin-top: 3px;
 }
@@ -5807,7 +5807,7 @@ button.srow:active {
 }
 .empty .empty-title {
   margin: 0; /* over a dialog's own heading margin */
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -5823,7 +5823,7 @@ button.srow:active {
   margin: 0;
   max-width: 40ch;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
   color: var(--text-secondary);
   opacity: 0.75;
@@ -5840,7 +5840,7 @@ button.srow:active {
   background: var(--surface-elevated);
   color: var(--text-primary);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   transition: opacity var(--dur-short) var(--ease-state),
     scale var(--dur-long) var(--ease-out);
 }
@@ -5911,10 +5911,10 @@ button.srow:active {
   padding: 20px;
 }
 .empty--page .empty-title {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 .empty--page .empty-detail {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .empty--page .empty-act {
   margin-top: 4px;
@@ -5930,15 +5930,15 @@ button.srow:active {
   padding: 11px;
 }
 .empty--section .empty-title {
-  font-size: 16px;
+  font-size: 1rem;
 }
 .empty--section .empty-detail {
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .empty--section .empty-act {
   height: 36px;
   padding: 0 14px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 /* One row: glyph, message, and the action pushed to the far end as a link —
    no medallion, so it sits in a settings panel without shouting. */
@@ -5981,7 +5981,7 @@ button.srow:active {
   stroke: currentColor;
 }
 .empty--inline .empty-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -5996,7 +5996,7 @@ button.srow:active {
   border: 0;
   background: none;
   color: var(--accent-ink);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 .empty--inline .empty-act-ico {
@@ -6093,17 +6093,17 @@ button.srow:active {
   overflow: hidden;
   min-width: 0;
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
   line-height: 1.2;
 }
 .poster-menu-meta {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
 }
 /* Where the title stands, in its status colour: a shade lighter on dark, darker on light,
    so the pale status inks still read as text. */
 .poster-menu-status {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: color-mix(in srgb, var(--sc) 82%, var(--text-primary));
 }
@@ -6151,7 +6151,7 @@ button.srow:active {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 /* Status and rating open here, under the tiles. */
@@ -6309,7 +6309,7 @@ button.srow:active {
 }
 .loader-phrase {
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 0.875rem;
   text-align: center;
   max-width: 260px;
 }
@@ -6348,7 +6348,7 @@ button.srow:active {
   background: var(--surface-elevated);
   color: var(--text-primary);
   border-radius: var(--r-pill);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.3;
   box-shadow: var(--shadow-lg);
@@ -6471,6 +6471,28 @@ button.srow:active {
    (it failed), `info` (a notice, and the default so a bare toast('…') still
    works). The surface stays neutral in all three: a coloured fill would shout
    at a message that lives for two seconds. */
+/* Where every toast is placed (ui.js initToasts): a named region that is in
+   the page from start-up, so screen readers find notifications in one place. It
+   takes no room; the pills inside are fixed to the viewport. */
+.toast-region {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+/* Read by screen readers, not drawn. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 .toast {
   position: fixed;
   left: 0;
@@ -6491,11 +6513,13 @@ button.srow:active {
   border-radius: var(--r-pill);
   background: var(--surface-elevated);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.3;
   box-shadow: var(--shadow-lg);
   animation: toast-in var(--dur-medium) var(--ease-out);
+  /* Stepping past an Undo toast and back (ui.js stackPastUndo). */
+  transition: translate var(--dur-medium) var(--ease-out);
 }
 /* Enter and exit are mirrors — same travel, easing reversed. The toast used to
    fade in over 200ms and then vanish in a single frame when it was removed. */
@@ -6625,6 +6649,7 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .np-toast {
 @media (prefers-reduced-motion: reduce) {
   .toast {
     animation: toast-fade-in var(--dur-short) linear;
+    transition: none;
   }
   .toast.toast-out {
     animation: toast-fade-out var(--dur-short) linear forwards;
@@ -6716,19 +6741,19 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .np-toast {
 }
 .cp-name {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
   line-height: 1.15;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
 .cp-years {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 .cp-owned {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 .cp-owned.is-done {
@@ -6824,12 +6849,12 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .np-toast {
   border-radius: var(--r-pill);
   background: rgba(0, 0, 0, 0.75);
   color: #fff;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
 }
 .cp-title {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.25;
   display: -webkit-box;
@@ -6838,7 +6863,7 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .np-toast {
   overflow: hidden;
 }
 .cp-year {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -6860,7 +6885,7 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .np-toast {
   width: 108px;
 }
 .coll-row-title {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   margin-top: 6px;
   line-height: 1.25;
@@ -6871,7 +6896,7 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .np-toast {
   -webkit-box-orient: vertical;
 }
 .coll-row-year {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   margin-top: 1px;
 }
@@ -6945,7 +6970,7 @@ html.page-hop #app {
 }
 /* Consistent small, uppercase, tracked section headings */
 .dust-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -7032,7 +7057,7 @@ html.page-hop #app {
   }
 }
 .mood-emoji {
-  font-size: 24px;
+  font-size: 1.5rem;
   line-height: 1;
 }
 /* Animated mood images sit where the emoji glyph did, matching its ~24px box. */
@@ -7043,7 +7068,7 @@ img.mood-emoji {
   display: block;
 }
 .mood-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-align: center;
   line-height: 1.15;
@@ -7099,7 +7124,7 @@ img.mood-emoji {
   position: absolute;
   top: 50%;
   left: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   white-space: nowrap;
   color: var(--text-primary);
@@ -7123,7 +7148,7 @@ img.mood-emoji {
   padding: 0 6px;
   white-space: nowrap;
   min-height: 32px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   text-align: center;
   transition: color var(--dur-short) var(--ease-state);
@@ -7161,7 +7186,7 @@ img.mood-emoji {
   position: relative;
   display: inline-block;
   letter-spacing: 3px;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1;
 }
 .stars5 {
@@ -7223,10 +7248,10 @@ img.mood-emoji {
   --tile: #7c9cc7;
 }
 .era-name {
-  font-size: 16px;
+  font-size: 1rem;
 }
 .era-range {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   transition: color var(--dur-short) var(--ease-state);
 }
@@ -7331,7 +7356,7 @@ img.mood-emoji {
 }
 .sheet-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 /* Dust It Off header: title row + centred type toggle */
 .sheet-header.dust-header {
@@ -7583,7 +7608,7 @@ img.mood-emoji {
 .status-cell-label {
   transition: color var(--dur-short) var(--ease-state);
   margin-top: auto; /* label anchored to the bottom-left, like the details bento */
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 /* Selected: highlighted in the cell's own status colour (--sc), falling back to
@@ -7694,7 +7719,7 @@ img.mood-emoji {
   display: inline-block;
   margin-top: 6px;
   min-height: 18px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--accent-ink);
   transform-origin: center;
@@ -7823,7 +7848,7 @@ img.mood-emoji {
 /* ================= Preview (no-add detail) ================= */
 .preview-note {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--accent-ink);
 }
@@ -7871,7 +7896,7 @@ img.mood-emoji {
   border-radius: var(--r-md);
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
   transition: scale var(--dur-long) var(--ease-out), background-color var(--dur-short) var(--ease-state), border-color var(--dur-short) var(--ease-state);
 }
@@ -7883,11 +7908,11 @@ img.mood-emoji {
 .genre-chip.gf-western,
 .genre-chip.gf-scifi,
 .genre-chip.gf-action {
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0.5px;
 }
 .genre-chip.gf-classic {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .genre-chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .gf-horror { font-family: 'Times New Roman', Georgia, serif; font-weight: 700; letter-spacing: 0.5px; }
@@ -7917,8 +7942,8 @@ img.mood-emoji {
   cursor: pointer;
   transition: scale var(--dur-long) var(--ease-out), background-color var(--dur-short) var(--ease-state), border-color var(--dur-short) var(--ease-state);
 }
-.rating-btn-label { font-size: 14px; font-weight: 700; }
-.rating-btn .star-meter { font-size: 12px; letter-spacing: 1px; }
+.rating-btn-label { font-size: 0.875rem; font-weight: 700; }
+.rating-btn .star-meter { font-size: 0.75rem; letter-spacing: 1px; }
 /* Empty stars show on any ground: selected, the button is the base colour they used to have.
    On Any they are the whole meter: no minimum. */
 .rating-btn .stars5.base { color: color-mix(in srgb, var(--text-secondary) 30%, transparent); }
@@ -8006,7 +8031,7 @@ img.mood-emoji {
   padding-bottom: 2px;
 }
 .pick-eyebrow {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -8014,7 +8039,7 @@ img.mood-emoji {
 }
 .pick-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
   line-height: 1.15;
   text-wrap: balance;
@@ -8028,7 +8053,7 @@ img.mood-emoji {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -8059,7 +8084,7 @@ img.mood-emoji {
   border-radius: var(--r-pill);
   background: var(--surface-elevated);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.2;
 }
 .pick-desc {
@@ -8084,7 +8109,7 @@ img.mood-emoji {
   border-radius: var(--r-pill);
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 .pick-why-emoji {
@@ -8092,7 +8117,7 @@ img.mood-emoji {
   height: 16px;
 }
 .pick-why-none {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
 }
 @media (prefers-reduced-motion: reduce) {
@@ -8106,7 +8131,7 @@ img.mood-emoji {
    "Add to library"): a touch smaller and non-wrapping, with ellipsis as the
    last-resort on very narrow screens. */
 .dust-actions .btn {
-  font-size: 14px;
+  font-size: 0.875rem;
   white-space: nowrap;
   min-width: 0;
 }
@@ -8218,7 +8243,7 @@ img.mood-emoji {
 .list-card-name {
   color: var(--text-primary);
   font-weight: 700;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -8231,7 +8256,7 @@ img.mood-emoji {
   align-items: center;
   gap: 5px;
   min-width: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 .list-card-meta > span:last-child {
@@ -8285,7 +8310,7 @@ img.mood-emoji {
   color: var(--text-secondary);
   font: inherit;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* ================= My Lists (Lists.js) =================
@@ -8303,7 +8328,7 @@ img.mood-emoji {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 /* Edit mode's "Done": a small accent pill in place of the pencil. */
 .lp-done {
@@ -8315,7 +8340,7 @@ img.mood-emoji {
   color: var(--accent-ink);
   font: inherit;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 .lp-rows {
@@ -8400,7 +8425,7 @@ button.lw-card:active {
 /* Long names: two lines, then an ellipsis; a single long word breaks too. */
 .lw-name {
   font-weight: 700;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -8418,7 +8443,7 @@ button.lw-card:active {
   align-items: center;
   gap: 5px;
   min-width: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 .lw-meta > span:last-child {
@@ -8572,7 +8597,7 @@ button.lw-card.lw-new:disabled:active {
 .nl-count {
   margin-top: 4px;
   text-align: right;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -8633,7 +8658,7 @@ button.lw-card.lw-new:disabled:active {
   align-items: center;
   gap: 6px;
   margin-bottom: 4px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -8650,7 +8675,7 @@ button.lw-card.lw-new:disabled:active {
    --text-primary reads in both themes without a shadow. */
 .list-hero-name {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -8664,7 +8689,7 @@ button.lw-card.lw-new:disabled:active {
   min-height: 18px;
   margin: 14px 0 4px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 .list-stat {
@@ -8702,7 +8727,7 @@ button.lw-card.lw-new:disabled:active {
 }
 .list-cell-title {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.25;
   overflow: hidden;
@@ -8711,7 +8736,7 @@ button.lw-card.lw-new:disabled:active {
 }
 .list-cell-sub {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -8970,7 +8995,7 @@ button.lw-card.lw-new:disabled:active {
   display: block;
 }
 .dvd-spine-brand {
-  font-size: 8px;
+  font-size: 0.5rem;
   font-weight: 700;
   letter-spacing: -0.3px;
   line-height: 1;
@@ -9032,7 +9057,7 @@ button.lw-card.lw-new:disabled:active {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 0.8125rem;
   letter-spacing: 0.5px;
   line-height: 1;
   color: #f3ede2;
@@ -9063,7 +9088,7 @@ button.lw-card.lw-new:disabled:active {
 /* Long titles ("Torna sullo scaffale") ran the full height of the case and were
    cut at the shelf. */
 .dvd-spine--long .dvd-spine-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0;
 }
 .spine-dust .dvd-spine-label {
@@ -9211,12 +9236,12 @@ button.lw-card.lw-new:disabled:active {
 .search-input {
   padding: 13px var(--gutter);
   border-radius: var(--r-pill);
-  font-size: 16px;
+  font-size: 1rem;
 }
 textarea.notes {
   padding: 13px 14px;
   border-radius: var(--r-md);
-  font-size: 16px;
+  font-size: 1rem;
 }
 /* Label → field gap and inter-field rhythm are uniform across every form. */
 .field-label { margin: 16px 0 8px; }
@@ -9290,7 +9315,7 @@ textarea.notes:focus,
   margin-bottom: 8px;
 }
 .rcpt-mp-year {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -9328,7 +9353,7 @@ textarea.notes:focus,
   background: none;
   border-radius: var(--r-sm);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -9358,7 +9383,7 @@ textarea.notes:focus,
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -9496,7 +9521,7 @@ textarea.notes:focus,
   outline-offset: 2px;
 }
 .rcpt-swatch-name {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -9539,7 +9564,7 @@ textarea.notes:focus,
 }
 .rcpt-blur-title {
   margin: 14px 0 10px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -9593,7 +9618,7 @@ textarea.notes:focus,
   padding: 0 6px;
   white-space: nowrap;
   background: none;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   transition: color var(--dur-short) var(--ease-state);
 }
@@ -9669,7 +9694,7 @@ textarea.notes:focus,
 }
 /* "n / N" for the session: the micro-label scale, tabular so it never jitters. */
 .rom-count {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   color: var(--text-secondary);
@@ -9771,13 +9796,13 @@ textarea.notes:focus,
   padding: 2px 8px;
   border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.18);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
 }
 .rom-title {
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
   line-height: 1.15;
   text-wrap: balance;
@@ -9789,7 +9814,7 @@ textarea.notes:focus,
 }
 .rom-year {
   margin-top: 3px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.75);
 }
@@ -9866,17 +9891,17 @@ textarea.notes:focus,
   height: 32px;
 }
 .rom-done-title {
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
 }
 .rom-done-sub {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary);
   line-height: 1.5;
 }
 .rom-done-count {
   margin-top: 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--accent-ink);
 }
@@ -9920,7 +9945,7 @@ textarea.notes:focus,
   background: color-mix(in srgb, var(--kodi-blue) 14%, transparent);
   color: var(--kodi-blue);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: background var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
@@ -9970,7 +9995,7 @@ textarea.notes:focus,
   opacity: 0;
   overflow: hidden;
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--kodi-blue);
   transition: max-height var(--dur-medium) var(--ease-in-out),
     opacity var(--dur-medium) var(--ease-in-out),
@@ -10029,7 +10054,7 @@ textarea.notes:focus,
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
   transition: border-color var(--dur-short) var(--ease-state),
@@ -10085,7 +10110,7 @@ textarea.notes:focus,
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
 }
 .kodi-status-dot {
@@ -10102,14 +10127,14 @@ textarea.notes:focus,
   background: var(--danger);
 }
 .kodi-inst-sub {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .kodi-test-result {
-  font-size: 12px;
+  font-size: 0.75rem;
   min-height: 0;
   margin-top: 8px;
 }
@@ -10155,11 +10180,11 @@ textarea.notes:focus,
   background: color-mix(in srgb, var(--kodi-blue) 14%, transparent);
 }
 .kodi-icon-none {
-  font-size: 20px;
+  font-size: 1.25rem;
   color: var(--text-secondary);
 }
 .kodi-icon-empty {
-  font-size: 12px;
+  font-size: 0.75rem;
   align-self: center;
 }
 
@@ -10182,13 +10207,13 @@ textarea.notes:focus,
   gap: 10px;
 }
 .ksync-heading {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
 }
 .ksync-summary {
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .ksync-stage {
   flex: 1;
@@ -10225,13 +10250,13 @@ textarea.notes:focus,
   text-align: center;
 }
 .ksync-name {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1.25;
 }
 .ksync-year {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin-top: 2px;
 }
 .ksync-card .status-select {
@@ -10261,7 +10286,7 @@ textarea.notes:focus,
 .ksync-progress {
   text-align: center;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   padding: 4px 0 10px;
 }
@@ -10274,7 +10299,7 @@ textarea.notes:focus,
 }
 .ksync-hint {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
 }
 /* --- Seasonal snow (December only, home cover) ---------------------------- */
@@ -10436,7 +10461,7 @@ textarea.notes:focus,
 /* Scoped to the modal so it outranks the generic .modal h3 margin. */
 .lend-modal .lend-heading {
   margin: 4px 0 0;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: -0.01em;
@@ -10471,7 +10496,7 @@ textarea.lend-message-input:focus {
 .lend-message-count {
   margin-top: 4px;
   text-align: right;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -10561,7 +10586,7 @@ textarea.lend-message-input:focus {
   border-radius: 3px;
   background: #ffd84a;
   color: #3b2f00;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.2;
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
@@ -10570,7 +10595,7 @@ textarea.lend-message-input:focus {
 }
 .lend-quip {
   margin: 10px 0 2px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-style: italic;
   color: var(--text-secondary);
 }
@@ -10586,11 +10611,11 @@ textarea.lend-message-input:focus {
 }
 .magic-result-head {
   font-weight: 700;
-  font-size: 16px;
+  font-size: 1rem;
   margin-bottom: 6px;
 }
 .magic-result-note {
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
   margin: 0 0 14px;
 }
@@ -10607,7 +10632,7 @@ textarea.lend-message-input:focus {
   flex: 1;
   min-width: 0;
   font-family: ui-monospace, 'SF Mono', 'Consolas', monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .magic-copy {
   flex: 0 0 auto;
@@ -10624,7 +10649,7 @@ textarea.lend-message-input:focus {
 .a2hs-intro {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 .a2hs-step {
@@ -10644,19 +10669,19 @@ textarea.lend-message-input:focus {
   border: 1px solid var(--border);
   color: var(--accent-ink);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .a2hs-step-ico svg {
   width: 24px;
   height: 24px;
 }
 .a2hs-step-text {
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.4;
 }
 .a2hs-note {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -10705,7 +10730,7 @@ textarea.lend-message-input:focus {
   border: 1px solid rgba(233, 229, 216, 0.65);
   border-radius: 3px;
   padding: 6px 12px;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   letter-spacing: 2.2px;
   text-transform: uppercase;
@@ -10789,7 +10814,7 @@ textarea.lend-message-input:focus {
 /* ===================== Library backup (export / import) ===================== */
 .backup-status {
   margin-top: 12px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .backup-summary {
   margin-top: 14px;
@@ -10800,7 +10825,7 @@ textarea.lend-message-input:focus {
 }
 .backup-summary-head {
   font-weight: 700;
-  font-size: 16px;
+  font-size: 1rem;
   margin-bottom: 12px;
 }
 .backup-stats {
@@ -10819,44 +10844,44 @@ textarea.lend-message-input:focus {
   border: 1px solid var(--border);
 }
 .backup-stat-num {
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--accent-ink);
 }
 .backup-stat-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   margin-top: 2px;
   line-height: 1.2;
 }
 .backup-note {
   margin-top: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 .backup-fail-head {
   margin-top: 14px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--danger);
 }
 .backup-fail-list {
   margin: 8px 0 0;
   padding-left: 18px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   line-height: 1.5;
 }
 .backup-error {
   color: var(--danger);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* ===== On-demand cache / import check results (Settings → Library) ===== */
 .cache-results,
 .import-results {
   margin: 4px 0 10px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .cache-results.muted,
 .import-results.muted {
@@ -10870,7 +10895,7 @@ textarea.lend-message-input:focus {
   text-transform: capitalize;
 }
 .import-file {
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin: 4px 0;
   line-height: 1.5;
 }
@@ -10983,7 +11008,7 @@ textarea.lend-message-input:focus {
   background: var(--surface-elevated);
   color: var(--text-secondary);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: background var(--dur-short) var(--ease-state),
     border-color var(--dur-short) var(--ease-state),
@@ -11171,7 +11196,7 @@ textarea.lend-message-input:focus {
   background: none;
   border-radius: var(--r-pill);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1;
   color: var(--text-secondary);
   cursor: pointer;
@@ -11315,7 +11340,7 @@ textarea.lend-message-input:focus {
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1;
   color: #000;
   white-space: nowrap;
@@ -11331,7 +11356,7 @@ textarea.lend-message-input:focus {
   background: none;
   border-radius: var(--r-pill);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1;
   color: var(--text-secondary);
   cursor: pointer;
@@ -11418,7 +11443,7 @@ textarea.lend-message-input:focus {
   border-radius: 3px;
   background: #f3e7cf;
   color: #2c2415;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.5px;
   line-height: 1.2;
@@ -11453,7 +11478,7 @@ textarea.lend-message-input:focus {
   flex-shrink: 0;
   padding: 2px var(--gutter) 10px;
 }
-.cine-sheet-title { font-size: 18px; font-weight: 700; }
+.cine-sheet-title { font-size: 1.125rem; font-weight: 700; }
 .cine-sheet-body {
   flex: 1;
   min-height: 0;
@@ -11524,7 +11549,7 @@ textarea.lend-message-input:focus {
 .cine-progress {
   text-align: center;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
   padding-bottom: 10px;
 }
@@ -11541,7 +11566,7 @@ textarea.lend-message-input:focus {
   width: 52px;
   height: 52px;
 }
-.cine-empty-text { color: var(--text-secondary); font-size: 15px; max-width: 320px; }
+.cine-empty-text { color: var(--text-secondary); font-size: 0.9375rem; max-width: 320px; }
 
 /* --- My Tickets: Ticket / Collection views ---------------------------------
    The view switch is the standard centred segmented control under the title. */
@@ -11655,13 +11680,13 @@ textarea.lend-message-input:focus {
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-height: calc(2 * 1.2em); /* two lines reserved: every miniature the same height */
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   font-weight: 800;
   line-height: 1.2;
 }
 .cine-mini-date {
   margin-top: 4px;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
@@ -11753,7 +11778,7 @@ textarea.lend-message-input:focus {
   border-radius: var(--r-pill);
   background: var(--danger);
   color: #fff;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 /* Release date, rule and buttons stay in reach when a long title makes the ticket
@@ -11836,7 +11861,7 @@ textarea.lend-message-input:focus {
   padding: 14px 18px 10px; /* 10, not 18: .cine-tear is 18px tall */
 }
 .cine-title {
-  font-size: 21px;
+  font-size: 1.3125rem;
   font-weight: 800;
   line-height: 1.15;
   letter-spacing: -0.2px;
@@ -11846,7 +11871,7 @@ textarea.lend-message-input:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.5px;
   color: var(--ink-soft);
@@ -11902,7 +11927,7 @@ textarea.lend-message-input:focus {
   mask-size: contain;
 }
 .cine-input-label {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--ink);
   pointer-events: none;
@@ -11926,7 +11951,7 @@ textarea.lend-message-input:focus {
   border: none;
   background: transparent;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--ink);
   padding: 0;
@@ -11940,7 +11965,7 @@ textarea.lend-message-input:focus {
   padding-top: 4px;
 }
 .cine-cinema {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 3px;
   color: var(--ink);
@@ -12009,7 +12034,7 @@ textarea.lend-message-input:focus {
 }
 .cine-code {
   margin-top: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 2px;
   color: var(--ink-soft);
@@ -12074,7 +12099,7 @@ textarea.lend-message-input:focus {
   cursor: pointer;
   color: var(--kodi-blue);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   line-height: 1;
@@ -12165,6 +12190,25 @@ textarea.lend-message-input:focus {
    shadow, no outline (toasts separate by tone and shadow alone). An inner
    padding keeps the poster inside the card, and the outer radius is the
    poster's radius plus that padding, so the two curves are concentric. */
+/* The toast's Close (nowPlaying.js): only drawn once the keyboard reaches it. */
+.np-close:focus-visible {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 6px 12px;
+  clip-path: none;
+  border-radius: var(--r-pill);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.np-toast:focus {
+  outline: none;
+}
 .np-toast {
   --poster-w: 60px;
   --np-pad: 10px;
@@ -12237,7 +12281,7 @@ textarea.lend-message-input:focus {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -12259,7 +12303,7 @@ textarea.lend-message-input:focus {
 }
 .np-toast-title {
   font-weight: 700;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -12267,7 +12311,7 @@ textarea.lend-message-input:focus {
 }
 .np-toast-meta {
   margin-top: -2px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -12291,7 +12335,7 @@ textarea.lend-message-input:focus {
   border-radius: var(--r-pill);
   background: var(--surface);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
@@ -12332,7 +12376,7 @@ textarea.lend-message-input:focus {
   background: var(--surface);
   color: var(--text-primary);
   font: inherit;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   cursor: pointer;
   transition: scale var(--dur-long) var(--ease-out), opacity var(--dur-short) var(--ease-state);
@@ -12361,7 +12405,7 @@ textarea.lend-message-input:focus {
   text-overflow: ellipsis;
 }
 .np-act-aside {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -12370,7 +12414,7 @@ textarea.lend-message-input:focus {
 .np-act-hint {
   flex: 1 0 100%;
   padding-left: 16px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
 }
 /* A note (why there is nothing to record) or the done line: the same pill, read-only. */
@@ -12391,7 +12435,7 @@ textarea.lend-message-input:focus {
 .np-act-note {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.3;
   color: var(--text-secondary);
@@ -12408,7 +12452,7 @@ textarea.lend-message-input:focus {
   background: none;
   color: var(--accent-ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   cursor: pointer;
 }
@@ -12559,12 +12603,12 @@ textarea.lend-message-input:focus {
   text-align: center;
 }
 .wall-empty-plus {
-  font-size: 24px;
+  font-size: 1.5rem;
   line-height: 1;
   color: var(--text-secondary);
 }
 .wall-empty-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   line-height: 1.25;
 }
@@ -12618,14 +12662,14 @@ textarea.lend-message-input:focus {
   min-width: 0;
 }
 .picker-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .picker-year {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -12711,7 +12755,7 @@ textarea.lend-message-input:focus {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -12726,7 +12770,7 @@ textarea.lend-message-input:focus {
 }
 .person-name {
   margin: 0 0 2px;
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
   line-height: 1.1;
   text-wrap: balance;
@@ -12736,7 +12780,7 @@ textarea.lend-message-input:focus {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
 }
 .person-meta-row span {
@@ -12817,7 +12861,7 @@ textarea.lend-message-input:focus {
 }
 .person-role-title {
   margin-top: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -12825,7 +12869,7 @@ textarea.lend-message-input:focus {
 }
 .person-role-sub {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -12879,7 +12923,7 @@ textarea.lend-message-input:focus {
   border-radius: var(--r-pill);
   background: var(--surface);
   border: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -12909,7 +12953,7 @@ textarea.lend-message-input:focus {
 }
 .person-credit-title {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.25;
   overflow: hidden;
@@ -12919,7 +12963,7 @@ textarea.lend-message-input:focus {
 .person-credit-sub {
   min-height: 14px;
   margin-top: 1px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -12967,7 +13011,7 @@ textarea.lend-message-input:focus {
   right: 12px;
   padding: 8px 14px;
   border-radius: var(--r-pill);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -13015,7 +13059,7 @@ textarea.lend-message-input:focus {
   justify-content: center;
 }
 .sc-title {
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   margin: 0;
@@ -13023,7 +13067,7 @@ textarea.lend-message-input:focus {
   text-wrap: balance;
 }
 .sc-desc {
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--text-secondary);
   margin: 0;
@@ -13163,7 +13207,7 @@ textarea.lend-message-input:focus {
 .sc-wall .sc-poster:nth-child(6) { background: linear-gradient(150deg, #c88a16, #5e400a); }
 .sc-cchip {
   position: absolute;
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   font-weight: 600;
   padding: 5px 12px;
   border-radius: var(--r-pill);
@@ -13202,10 +13246,10 @@ textarea.lend-message-input:focus {
 }
 .sc-dt-title {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .sc-dt-sub {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   margin-top: 3px;
 }
@@ -13217,7 +13261,7 @@ textarea.lend-message-input:focus {
   padding: 11px 15px;
   border-radius: var(--r-pill);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   border: 1.5px solid color-mix(in srgb, var(--status-watching) 60%, transparent);
   background: color-mix(in srgb, var(--status-watching) 15%, transparent);
   color: var(--status-watching);
@@ -13238,7 +13282,7 @@ textarea.lend-message-input:focus {
   padding: 10px 8px;
   border-radius: var(--r-pill);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: nowrap;
   background: var(--surface-elevated);
   border: 1.5px solid transparent;
@@ -13284,7 +13328,7 @@ textarea.lend-message-input:focus {
 }
 .sc-tk-body { padding: 13px 16px 8px; } /* 8, not 15: .sc-tk-tear is 16px tall */
 .sc-tk-title {
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 400;
   line-height: 1.15;
   letter-spacing: -0.2px;
@@ -13437,7 +13481,7 @@ textarea.lend-message-input:focus {
   gap: 8px;
 }
 .sc-mood {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   padding: 6px 13px;
   border-radius: var(--r-pill);
@@ -13488,13 +13532,13 @@ textarea.lend-message-input:focus {
 }
 .sc-tl.sc-watch::before { border: 4px solid var(--accent); }
 .sc-tl.sc-soon::before { border: 4px solid var(--success); }
-.sc-tl-t { font-weight: 600; font-size: 14px; }
+.sc-tl-t { font-weight: 600; font-size: 0.875rem; }
 .sc-tl-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-top: 7px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   padding: 4px 10px;
   border-radius: var(--r-pill);
@@ -13551,7 +13595,7 @@ textarea.lend-message-input:focus {
   padding: 10px 18px;
   border-radius: var(--r-pill);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   background: color-mix(in srgb, var(--kodi-blue) 15%, transparent);
   border: 1.5px solid color-mix(in srgb, var(--kodi-blue) 55%, transparent);
   color: color-mix(in srgb, var(--kodi-blue) 82%, var(--text-primary));
@@ -13639,11 +13683,11 @@ textarea.lend-message-input:focus {
 .imgflow-empty {
   padding: 26px 4px;
   text-align: center;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
 }
 .imgflow-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   min-width: 0;
   overflow: hidden;
@@ -13652,7 +13696,7 @@ textarea.lend-message-input:focus {
 }
 .imgflow-sub {
   margin: -8px 0 14px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
 }
 
@@ -13675,9 +13719,9 @@ textarea.lend-message-input:focus {
   border: 1.5px solid transparent;
 }
 .imgtype-cell:active { border-color: var(--accent); }
-.imgtype-label { font-size: 13px; font-weight: 600; }
+.imgtype-label { font-size: 0.8125rem; font-weight: 600; }
 .imgtype-state {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-secondary);
   margin-top: -6px;
 }
@@ -13774,7 +13818,7 @@ textarea.lend-message-input:focus {
   padding: 11px 12px;
   border-radius: var(--r-md);
   background: var(--surface-elevated);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: color-mix(in srgb, var(--danger) 62%, var(--text-secondary));
 }
@@ -13869,7 +13913,7 @@ textarea.lend-message-input:focus {
 .crop-error {
   max-width: 80%;
   color: #fff;
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: center;
 }
 .crop-stage {
@@ -13902,7 +13946,7 @@ textarea.lend-message-input:focus {
 }
 .crop-hint {
   margin: 10px 0 2px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   text-align: center;
 }
@@ -13969,7 +14013,7 @@ textarea.lend-message-input:focus {
 }
 .menu-title-text {
   margin: 0;
-  font-size: 18px;
+  font-size: 1.125rem;
   /* A long title stays on one line rather than growing the fixed-height row. */
   overflow: hidden;
   text-overflow: ellipsis;

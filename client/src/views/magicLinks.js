@@ -132,6 +132,7 @@ export function buildMagicLinks(api) {
       type: 'text',
       maxlength: '60',
       placeholder: t('magic.labelPlaceholder'),
+      'aria-label': t('magic.label'),
     });
 
     // Expiry: a single choice, so the app's segmented control, as wide as the field above.

@@ -823,7 +823,7 @@ export function skelText(width = '100%') {
 }
 
 export function skelTitle(width = '40%') {
-  return el('div', { class: 'section-title' }, [skelText(width)]);
+  return el('div', { class: 'section-title', 'aria-hidden': 'true' }, [skelText(width)]);
 }
 
 const OVERVIEW_WIDTHS = ['100%', '96%', '98%', '93%', '97%', '88%'];
@@ -985,20 +985,87 @@ export function epLabel(season, episode) {
 //   toast('Enter a name')          — a notice; also the default, so every older
 //                                    one-argument call still reads correctly.
 //
-// Two behaviours worth knowing:
+// Behaviours worth knowing:
 //   • It leaves the way it arrived. The node is removed on animationend (with a
 //     timer as the backstop) instead of disappearing in a single frame.
 //   • A second toast while one is showing swaps the glyph and text IN PLACE
 //     behind a 90ms crossfade, rather than replacing the element — consecutive
 //     messages read as one pill changing its mind.
+//   • Every toast lives in one named region that exists from start-up, and is
+//     announced to screen readers (ariaNotify, else a live region that is always
+//     there: one inserted already filled is often not read).
+//   • The countdown pauses while a pointer or the focus is on the toast, so it
+//     never leaves under someone reading it or about to press its button.
 const TOAST_ICONS = { ok: 'circle-check', bad: 'circle-x', info: 'info' };
 const TOAST_HOLD_MS = 2200;
+const TOAST_HOLD_BAD_MS = 5000; // an error says what to do next: it needs reading
 const TOAST_SWAP_MS = 90; // must match the .toast-ico/.toast-msg transition
 const TOAST_EXIT_MS = 400; // backstop > --dur-medium, in case animationend is missed
+const TOAST_STACK_GAP = 10;
 
 let toastNode = null;
-let toastHoldTimer = null;
+let toastHold = null;
 let toastSwapTimer = null;
+let toastRegion = null;
+let toastLive = null;
+
+// The notifications region and its live line. Called at start-up (main.js) so both
+// are in the page before the first message; toast() also creates them if not.
+export function initToasts() {
+  if (toastRegion) return toastRegion;
+  toastRegion = el('div', { class: 'toast-region', role: 'region', 'aria-label': t('toast.region') });
+  toastLive = el('div', { class: 'sr-only', 'aria-live': 'polite', 'aria-atomic': 'true' });
+  toastRegion.append(toastLive);
+  document.body.append(toastRegion);
+  return toastRegion;
+}
+export function relabelToasts() {
+  if (toastRegion) toastRegion.setAttribute('aria-label', t('toast.region'));
+}
+
+function announce(text) {
+  if (typeof document.ariaNotify === 'function') {
+    document.ariaNotify(text);
+    return;
+  }
+  initToasts();
+  // Emptied first, so the same message twice in a row is read twice.
+  toastLive.textContent = '';
+  setTimeout(() => {
+    toastLive.textContent = text;
+  }, 60);
+}
+
+// A countdown that stands still while a pointer or the focus is on `node`.
+function holdFor(node, ms, onDone, onPause) {
+  let left = ms;
+  let started = Date.now();
+  let timer = setTimeout(onDone, left);
+  let paused = false;
+  const pause = () => {
+    if (paused) return;
+    paused = true;
+    clearTimeout(timer);
+    left -= Date.now() - started;
+    if (onPause) onPause(true);
+  };
+  const resume = () => {
+    if (!paused || node.matches(':hover') || node.contains(document.activeElement)) return;
+    paused = false;
+    started = Date.now();
+    timer = setTimeout(onDone, Math.max(left, 1200));
+    if (onPause) onPause(false);
+  };
+  node.addEventListener('pointerenter', pause);
+  node.addEventListener('focusin', pause);
+  node.addEventListener('pointerleave', () => setTimeout(resume));
+  node.addEventListener('focusout', () => setTimeout(resume));
+  return {
+    clear() {
+      clearTimeout(timer);
+    },
+  };
+}
 
 function toastKindClass(kind) {
   return `toast toast--${TOAST_ICONS[kind] ? kind : 'info'}`;
@@ -1027,10 +1094,23 @@ function dismissToast(node) {
   setTimeout(done, TOAST_EXIT_MS);
 }
 
+// While an Undo is on screen a plain toast sits just past it (above it at the
+// bottom, below it at the top while a dialog is open) instead of taking its place.
+function stackPastUndo(node) {
+  const undo = activeUndo && activeUndo.node;
+  if (!undo || !undo.isConnected) {
+    node.style.translate = '';
+    return;
+  }
+  const atTop = getComputedStyle(node).bottom === 'auto';
+  const shift = undo.offsetHeight + TOAST_STACK_GAP;
+  node.style.translate = `0 ${atTop ? shift : -shift}px`;
+}
+
 export function toast(msg, kind = 'info') {
-  finishUndo();
-  clearTimeout(toastHoldTimer);
+  if (toastHold) toastHold.clear();
   clearTimeout(toastSwapTimer);
+  initToasts();
 
   if (toastNode && !toastNode.dataset.leaving) {
     // Already on screen — recolour now (the ink transitions on its own) and
@@ -1047,58 +1127,68 @@ export function toast(msg, kind = 'info') {
     }, TOAST_SWAP_MS);
   } else {
     if (toastNode) dismissToast(toastNode);
-    toastNode = el('div', { class: toastKindClass(kind), role: 'status' }, [
+    toastNode = el('div', { class: toastKindClass(kind) }, [
       lucideIcon(toastIconName(kind), 'toast-ico'),
       el('span', { class: 'toast-msg', text: msg }),
     ]);
-    document.body.append(toastNode);
+    toastRegion.append(toastNode);
   }
+  stackPastUndo(toastNode);
+  announce(msg);
 
   const shown = toastNode;
-  toastHoldTimer = setTimeout(() => dismissToast(shown), TOAST_HOLD_MS);
+  toastHold = holdFor(shown, kind === 'bad' ? TOAST_HOLD_BAD_MS : TOAST_HOLD_MS, () => dismissToast(shown));
 }
 
-// The toast with a way back, for serious actions (see undoable.js). It holds longer, and
-// a thin line shows how long is left. There is one toast slot, so anything that takes it
-// ends this one's window, the same as the time running out.
-const UNDO_HOLD_MS = 6000;
+// The toast with a way back, for serious actions (see undoable.js). It holds
+// longer, and a thin line shows how long is left. Another message does not end it
+// (it shows past it); only a newer Undo, Undo itself, or the time running out do.
+const UNDO_HOLD_MS = 10000;
 let activeUndo = null;
 function finishUndo() {
   if (activeUndo) activeUndo.finish();
 }
 export function undoToast({ msg, onUndo, onExpire }) {
   finishUndo();
-  clearTimeout(toastHoldTimer);
+  if (toastHold) toastHold.clear();
   clearTimeout(toastSwapTimer);
   if (toastNode) dismissToast(toastNode);
+  initToasts();
   const undoBtn = el('button', { class: 'toast-undo', type: 'button', text: t('toast.undo') });
-  const node = el('div', { class: `${toastKindClass('ok')} toast--undo`, role: 'status' }, [
+  const drain = el('i', { class: 'toast-drain', style: { animationDuration: `${UNDO_HOLD_MS}ms` } });
+  const node = el('div', { class: `${toastKindClass('ok')} toast--undo` }, [
     lucideIcon(toastIconName('ok'), 'toast-ico'),
     el('span', { class: 'toast-msg', text: msg }),
     undoBtn,
-    el('i', { class: 'toast-drain', style: { animationDuration: `${UNDO_HOLD_MS}ms` } }),
+    drain,
   ]);
-  let timer = 0;
+  let hold = null;
+  // A message shown past this one moves back to the usual place once it is gone.
+  const settle = () => {
+    activeUndo = null;
+    if (hold) hold.clear();
+    dismissToast(node);
+    if (toastNode && !toastNode.dataset.leaving) toastNode.style.translate = '';
+  };
   const entry = {
+    node,
     finish() {
       if (activeUndo !== entry) return;
-      activeUndo = null;
-      clearTimeout(timer);
-      dismissToast(node);
+      settle();
       if (onExpire) onExpire();
     },
   };
   undoBtn.addEventListener('click', () => {
     if (activeUndo !== entry) return;
-    activeUndo = null;
-    clearTimeout(timer);
-    dismissToast(node);
+    settle();
     if (onUndo) onUndo();
   });
   activeUndo = entry;
-  toastNode = node;
-  document.body.append(node);
-  timer = setTimeout(entry.finish, UNDO_HOLD_MS);
+  toastRegion.append(node);
+  announce(`${msg}. ${t('toast.actionsAvailable')}`);
+  hold = holdFor(node, UNDO_HOLD_MS, entry.finish, (paused) => {
+    drain.style.animationPlayState = paused ? 'paused' : '';
+  });
   return entry;
 }
 
@@ -1783,7 +1873,7 @@ export function openWatchCountModal({ title, count: startCount = 1, min = 0, con
 
     // Optional date picker under the stepper (movie rewatch date).
     const dateInput = showDate
-      ? el('input', { class: 'text-field', type: 'date', value: dateValue || localTodayISO() })
+      ? el('input', { class: 'text-field', type: 'date', value: dateValue || localTodayISO(), 'aria-label': t('ui.date') })
       : null;
 
     const confirmBtn = el('button', { class: 'btn btn-primary' }, [

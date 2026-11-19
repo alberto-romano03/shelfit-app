@@ -160,7 +160,7 @@ export function buildHousehold(api) {
 
   function renameMember(m) {
     openModal((modal, close) => {
-      const input = el('input', { class: 'text-field', type: 'text', maxlength: '40', value: m.display_name });
+      const input = el('input', { class: 'text-field', type: 'text', maxlength: '40', value: m.display_name, 'aria-label': t('household.name') });
       const save = el('button', { class: 'btn btn-primary' }, [
         lucideIcon('check', 'btn-lucide'),
         el('span', { text: t('common.save') }),
@@ -278,6 +278,7 @@ export function buildHousehold(api) {
       type: 'text',
       maxlength: '40',
       placeholder: t('household.namePlaceholder'),
+      'aria-label': t('household.name'),
     });
     const create = el('button', { class: 'btn btn-primary' }, [
       lucideIcon('plus', 'btn-lucide'),

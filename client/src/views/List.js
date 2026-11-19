@@ -228,7 +228,7 @@ export default async function List(container, params) {
     summary.replaceChildren(...stats);
     const content = items.length
       ? [
-          el('div', { class: 'section-title', text: isMovie ? t('nav.movies') : t('nav.series') }),
+          el('h3', { class: 'section-title', text: isMovie ? t('nav.movies') : t('nav.series') }),
           el('div', { class: 'grid' }, items.map(buildCell)),
         ]
       : [stateBlock({ icon: 'library-big', title: t('lists.empty'), detail: t('lists.emptyDetail') })];

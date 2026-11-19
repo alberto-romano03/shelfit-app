@@ -102,7 +102,7 @@ function dateOnly(v) {
 // toasted), or return normally to close it.
 function openDateModal({ title, label, value, confirmLabel = t('detail.confirm'), onConfirm }) {
   openModal((modal, close) => {
-    const input = el('input', { class: 'text-field', type: 'date', value: value || localTodayISO() });
+    const input = el('input', { class: 'text-field', type: 'date', value: value || localTodayISO(), 'aria-label': label || title });
     const confirm = el('button', { class: 'btn btn-primary' }, [
       lucideIcon('check', 'btn-lucide'),
       el('span', { text: confirmLabel }),
@@ -427,7 +427,7 @@ function buildBento(d, meta) {
   // Liner Notes are always fully expanded (no collapse).
   const header = el('div', { class: 'bento-header' }, [
     el('span', { class: 'bento-title' }, [
-      el('span', { class: 'section-title', text: t('detail.linerNotes') }),
+      el('span', { class: 'section-title', role: 'heading', 'aria-level': '3', text: t('detail.linerNotes') }),
     ]),
   ]);
   const bodyWrap = el('div', { class: 'bento-body' }, [grid]);
@@ -442,7 +442,7 @@ function buildOfflineBento(d, meta) {
   if (!st) return null;
   const header = el('div', { class: 'bento-header' }, [
     el('span', { class: 'bento-title' }, [
-      el('span', { class: 'section-title', text: t('detail.linerNotes') }),
+      el('span', { class: 'section-title', role: 'heading', 'aria-level': '3', text: t('detail.linerNotes') }),
     ]),
   ]);
   const grid = applyBentoPalette(
@@ -507,7 +507,7 @@ function detailSkeleton() {
     el('div', {}, [
       skelOverview(4),
       skelShowMore(),
-      el('div', { class: 'section-title remote-title' }, [skelText('34%')]),
+      el('div', { class: 'section-title remote-title', 'aria-hidden': 'true' }, [skelText('34%')]),
       row([skelPill(47)]),
       ...rest,
     ])
@@ -949,7 +949,7 @@ export default async function Detail(container, params) {
       d.favorite = s.favorite;
     },
   });
-  const ratingTitle = el('div', { class: 'section-title', text: t('common.rating') });
+  const ratingTitle = el('h3', { class: 'section-title', text: t('common.rating') });
   const ratingWrap = ratingControls.element;
 
   // --- Movie watch-date + rewatch keys (completed movies only) ---
@@ -1053,7 +1053,7 @@ export default async function Detail(container, params) {
 
   // --- Notes (always the last editable field) ---
   const notePlaceholder = t(NOTE_PLACEHOLDERS[Math.floor(Math.random() * NOTE_PLACEHOLDERS.length)]);
-  const notes = el('textarea', { class: 'notes' });
+  const notes = el('textarea', { class: 'notes', 'aria-label': t('detail.notes') });
   notes.value = d.notes || '';
   // Type the diary-opener placeholder out letter by letter once it scrolls into
   // view — a small "someone's writing" flourish. Stops on cleanup / first keypress.
@@ -1164,7 +1164,7 @@ export default async function Detail(container, params) {
   // has one too: the status button full-width, above the Kodi/Owned row.
   if (isMovie) {
     body.append(
-      el('div', { class: 'section-title remote-title', text: t('detail.remote') }),
+      el('h3', { class: 'section-title remote-title', text: t('detail.remote') }),
       actionsRow,
       rewatchWrap,
       cinemaRow,
@@ -1174,7 +1174,7 @@ export default async function Detail(container, params) {
     );
   } else {
     body.append(
-      el('div', { class: 'section-title', text: t('detail.remote') }),
+      el('h3', { class: 'section-title', text: t('detail.remote') }),
       statusBtn,
       actionsRow,
       kodiFeedback,
@@ -1199,7 +1199,7 @@ export default async function Detail(container, params) {
         unfinished.find((s) => marked != null && s.season_number > marked) ||
         unfinished[0] ||
         null;
-    body.append(el('div', { class: 'section-title', text: t('detail.progress') }), progressSection(p, onSeason, avgRuntime(meta && meta.episode_run_time)));
+    body.append(el('h3', { class: 'section-title', text: t('detail.progress') }), progressSection(p, onSeason, avgRuntime(meta && meta.episode_run_time)));
     // Mark all watched marks only episodes already out. A season still airing
     // with every one of those watched has nothing to mark: no button (the server
     // sends aired_left; null when it can't tell, and the button stays). One tap
@@ -1259,7 +1259,7 @@ export default async function Detail(container, params) {
       item.append(header);
       seasonsWrap.append(item);
     }
-    body.append(el('div', { class: 'section-title', text: t('common.seasons') }), seasonsWrap);
+    body.append(el('h3', { class: 'section-title', text: t('common.seasons') }), seasonsWrap);
   }
 
   // Collapsible "Details" bento — below the description/sections, above notes.
@@ -1411,7 +1411,7 @@ export async function renderCollectionSection(api, body, anchor, btc, d) {
     row.append(cell);
   }
 
-  body.insertBefore(el('div', { class: 'section-title', text: t('detail.moreFromCollection') }), anchor);
+  body.insertBefore(el('h3', { class: 'section-title', text: t('detail.moreFromCollection') }), anchor);
   body.insertBefore(row, anchor);
   return true;
 }
@@ -1808,7 +1808,7 @@ function openAddToListSheet(d) {
     }
 
     // "New list" shortcut
-    const nameInput = el('input', { class: 'text-field', placeholder: t('detail.newListName'), maxlength: '40' });
+    const nameInput = el('input', { class: 'text-field', placeholder: t('detail.newListName'), maxlength: '40', 'aria-label': t('detail.newList') });
     const createBtn = el('button', { class: 'btn btn-primary' }, [
       lucideIcon('plus', 'btn-lucide'),
       el('span', { text: t('detail.createAndAdd') }),

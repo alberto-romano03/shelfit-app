@@ -5,7 +5,7 @@ import './styles.css';
 import { initTheme } from './theme.js';
 import { initI18n, t, onLangChange } from './i18n.js';
 import { initRouter, navigate, start } from './router.js';
-import { el, icons, playOnce } from './ui.js';
+import { el, icons, playOnce, initToasts, relabelToasts } from './ui.js';
 import { startNetworkMonitor, wasDegraded, clearDegraded } from './network.js';
 import { initKodi } from './kodi.js';
 import { initNowPlaying, dismissNowPlaying } from './nowPlaying.js';
@@ -273,6 +273,9 @@ function bootFromShare() {
   return false;
 }
 
+// The notifications region is in the page before anything can raise a toast.
+initToasts();
+
 if (!bootFromShare()) start();
 
 // --- Language switch: relabel the chrome and re-render the current page -----
@@ -280,6 +283,7 @@ onLangChange(() => {
   tabButtons.forEach((btn) => (btn._label.textContent = t(btn._key)));
   settingsBtn.setAttribute('aria-label', t('common.settings'));
   searchBtn.setAttribute('aria-label', t('common.search'));
+  relabelToasts();
   // What's Next keeps its rendered page between visits and would come back in
   // the old language: rebuild it. (The grids keep only data; labels are drawn
   // at mount.)

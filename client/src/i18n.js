@@ -534,6 +534,8 @@ const it = {
   'ticket.removed': 'Biglietto rimosso',
   'toast.undo': 'Annulla',
   'toast.undone': 'Annullato',
+  'toast.region': 'Notifiche',
+  'toast.actionsAvailable': 'Azioni disponibili',
   'ticket.empty': 'Ancora nessun biglietto: segna un film come visto al cinema per aggiungerlo qui.',
   'ticket.loadError': 'Impossibile caricare i tuoi biglietti.',
 
@@ -1691,6 +1693,8 @@ const en = {
   'ticket.removed': 'Ticket removed',
   'toast.undo': 'Undo',
   'toast.undone': 'Undone',
+  'toast.region': 'Notifications',
+  'toast.actionsAvailable': 'Actions available',
   'ticket.empty': 'No tickets yet: mark a movie as watched in cinema to add it here.',
   'ticket.loadError': 'Couldn’t load your tickets.',
 

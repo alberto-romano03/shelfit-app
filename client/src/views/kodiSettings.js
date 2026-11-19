@@ -248,13 +248,15 @@ export function buildKodiSettings(api) {
   function openInstanceForm(inst) {
     const editing = !!inst;
     openModal((modal, close) => {
-      const nameIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.namePlaceholder'), value: editing ? inst.name : '' });
-      const hostIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.hostPlaceholder'), value: editing ? inst.host : '' });
-      const portIn = el('input', { class: 'text-field', type: 'number', placeholder: t('kodiSettings.port'), value: editing ? String(inst.port) : '8080' });
-      const userIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.username'), value: editing ? inst.username : '' });
+      const plain = { autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false' };
+      const nameIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.namePlaceholder'), value: editing ? inst.name : '', 'aria-label': t('kodiSettings.name') });
+      const hostIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.hostPlaceholder'), value: editing ? inst.host : '', 'aria-label': t('kodiSettings.host'), inputmode: 'url', ...plain });
+      const portIn = el('input', { class: 'text-field', type: 'number', inputmode: 'numeric', placeholder: t('kodiSettings.port'), value: editing ? String(inst.port) : '8080', 'aria-label': t('kodiSettings.port') });
+      const userIn = el('input', { class: 'text-field', placeholder: t('kodiSettings.username'), value: editing ? inst.username : '', 'aria-label': t('kodiSettings.username'), autocomplete: 'off', ...plain });
       const passIn = el('input', {
         class: 'text-field',
         type: 'password',
+        'aria-label': t('kodiSettings.password'),
         placeholder: editing && inst.has_password ? t('kodiSettings.passwordUnchanged') : t('kodiSettings.password'),
         autocomplete: 'new-password',
       });

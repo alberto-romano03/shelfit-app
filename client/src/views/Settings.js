@@ -248,6 +248,7 @@ export default async function Settings(container) {
       min: '0',
       step: '100',
       placeholder: t('settings.usage.customLimit'),
+      'aria-label': t('settings.usage.customLimit'),
     });
     if (limited && !CAP_PRESETS.some(([, v]) => v === u.cap)) capInput.value = String(u.cap);
     capInput.addEventListener('change', () =>
@@ -918,7 +919,7 @@ export default async function Settings(container) {
     body.append(
       el('div', {
         class: 'muted',
-        style: { marginBottom: '8px', fontSize: '12.5px' },
+        style: { marginBottom: '8px', fontSize: '0.78125rem' },
         text: t('settings.access.hashNote'),
       })
     );
@@ -950,10 +951,10 @@ export default async function Settings(container) {
             el('div', { class: 'settings-row' }, [
               el('div', {}, [
                 el('span', { text: (EVENT_LABELS[e.event] || e.event) + (e.user ? ` · ${e.user}` : '') }),
-                el('span', { class: 'muted', style: { marginLeft: '8px', fontSize: '12px' }, text: when }),
+                el('span', { class: 'muted', style: { marginLeft: '8px', fontSize: '0.75rem' }, text: when }),
               ]),
               el('span', {
-                style: { fontSize: '12px', color: e.success ? 'var(--text-secondary)' : 'var(--danger)' },
+                style: { fontSize: '0.75rem', color: e.success ? 'var(--text-secondary)' : 'var(--danger)' },
                 text: e.success ? t('settings.access.success') : t('settings.access.failed'),
               }),
             ])
@@ -1261,7 +1262,7 @@ async function showLog(source) {
   openModal((modal, close) => {
     modal.append(
       el('h3', { text: t('settings.tvtime.notFound') }),
-      el('pre', { style: { whiteSpace: 'pre-wrap', fontSize: '13px', color: 'var(--text-secondary)', maxHeight: '50vh', overflow: 'auto' }, text: log || t('settings.tvtime.logNone') }),
+      el('pre', { style: { whiteSpace: 'pre-wrap', fontSize: '0.8125rem', color: 'var(--text-secondary)', maxHeight: '50vh', overflow: 'auto' }, text: log || t('settings.tvtime.logNone') }),
       el('div', { class: 'modal-actions' }, [el('button', { class: 'btn btn-secondary', onClick: close }, [
       lucideIcon('x', 'btn-lucide'),
       el('span', { text: t('common.close') }),

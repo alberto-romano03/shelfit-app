@@ -158,7 +158,7 @@ function buildPage(d, onAdded) {
   if (d.overview) body.append(...collapsibleText(d.overview));
 
   // --- Films (release order) ---
-  body.append(el('div', { class: 'section-title', text: t('collection.films') }));
+  body.append(el('h3', { class: 'section-title', text: t('collection.films') }));
   const grid = el('div', { class: 'grid cp-grid' });
   for (const p of d.parts) {
     const card = poster(p.poster_url, p.title);

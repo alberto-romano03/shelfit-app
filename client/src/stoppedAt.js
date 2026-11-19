@@ -98,7 +98,7 @@ export function openStopSheet({ title, total = 0, value = 0, note = null, onSave
       let textarea = null;
       let stopTypewriter = () => {};
       if (note) {
-        textarea = el('textarea', { class: 'text-field note-sheet-input', rows: '4' });
+        textarea = el('textarea', { class: 'text-field note-sheet-input', rows: '4', 'aria-label': t('stop.note') });
         textarea.value = note.value || '';
         stopTypewriter = typewriterPlaceholder(textarea, note.placeholder || '');
         body.append(el('hr', { class: 'status-sep stop-sep' }), el('div', { class: 'field-label', text: t('stop.note') }), textarea);
