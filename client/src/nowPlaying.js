@@ -229,7 +229,7 @@ function fillToast(np) {
 
   if (posterSrc !== els.poster._src) {
     els.poster._src = posterSrc;
-    els.poster.innerHTML = '';
+    els.poster.replaceChildren();
     if (posterSrc) {
       els.poster.classList.remove('skeleton');
       const img = cachedImg(posterSrc, { alt: '' });

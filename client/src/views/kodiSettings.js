@@ -142,7 +142,7 @@ export function buildKodiSettings(api) {
   // --- Rendering ----------------------------------------------------------
   function renderConfig(cfg) {
     enableRow.setChecked(!!cfg.enabled);
-    listWrap.innerHTML = '';
+    listWrap.replaceChildren();
     if (!cfg.instances.length) {
       listWrap.append(
         el('div', { class: 'muted usage-desc', text: t('kodiSettings.empty') })
@@ -191,7 +191,7 @@ export function buildKodiSettings(api) {
     const status = el('div', { class: 'kodi-inst-status' });
     function setStatus(state) {
       status.className = 'kodi-inst-status is-' + state; // testing | online | offline
-      status.innerHTML = '';
+      status.replaceChildren();
       if (state === 'testing') {
         status.append(el('span', { class: 'kodi-status-label', text: t('kodiSettings.testing') }));
         return;
@@ -267,7 +267,7 @@ export function buildKodiSettings(api) {
       const pickerGrid = el('div', { class: 'kodi-icon-picker' }, [skelLine({ width: '60%' })]);
 
       function renderPicker(icons) {
-        pickerGrid.innerHTML = '';
+        pickerGrid.replaceChildren();
         // "None" option first.
         const none = el('button', {
           class: 'kodi-icon-option kodi-icon-none' + (selectedIcon ? '' : ' selected'),
@@ -469,7 +469,7 @@ export function buildKodiSettings(api) {
     Promise.all([api.kodiConfig(), membersReady])
       .then(([cfg]) => renderConfig(cfg))
       .catch(() => {
-        listWrap.innerHTML = '';
+        listWrap.replaceChildren();
         listWrap.append(
           stateBlock({
             kind: 'error',

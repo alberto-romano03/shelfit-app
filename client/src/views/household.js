@@ -44,13 +44,13 @@ export function buildHousehold(api) {
     try {
       data = await api.householdMembers();
     } catch {
-      listWrap.innerHTML = '';
+      listWrap.replaceChildren();
       listWrap.append(
         stateBlock({ kind: 'error', tier: 'inline', title: t('household.loadError'), action: { onClick: refresh } })
       );
       return;
     }
-    listWrap.innerHTML = '';
+    listWrap.replaceChildren();
     for (const m of (data && data.members) || []) listWrap.append(memberRow(m));
   }
 
@@ -273,7 +273,7 @@ export function buildHousehold(api) {
   // --- Add a member ----------------------------------------------------------
   function openForm() {
     addRow.el.style.display = 'none';
-    formWrap.innerHTML = '';
+    formWrap.replaceChildren();
     const input = el('input', {
       class: 'text-field',
       type: 'text',
@@ -328,14 +328,14 @@ export function buildHousehold(api) {
   }
 
   function closeForm() {
-    formWrap.innerHTML = '';
+    formWrap.replaceChildren();
     addRow.el.style.display = '';
   }
 
   // The one-and-only reveal of an invite link (new member or password reset).
   function showInvite(res) {
     addRow.el.style.display = 'none';
-    formWrap.innerHTML = '';
+    formWrap.replaceChildren();
     const name = res.member ? res.member.display_name : '';
     const urlField = el('input', { class: 'text-field magic-url', type: 'text', readonly: 'readonly', value: res.invite_url });
     urlField.addEventListener('focus', () => urlField.select());

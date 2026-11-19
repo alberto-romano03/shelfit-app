@@ -57,7 +57,7 @@ export function createRatingControls(opts = {}) {
   // `from`: the rating before this tap. The stars it adds fill left to right, ending
   // under the finger.
   function renderStars(still, from = 0) {
-    starsWrap.innerHTML = '';
+    starsWrap.replaceChildren();
     for (let k = 1; k <= 5; k++) {
       // Named for screen readers ("3 stars"), and pressed when it is the rating.
       const b = el('button', {

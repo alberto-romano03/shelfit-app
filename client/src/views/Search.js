@@ -447,7 +447,7 @@ export default async function Search(container) {
 
     function fill(key) {
       const sec = byKey.get(key);
-      rail.innerHTML = '';
+      rail.replaceChildren();
       for (const it of (sec && sec.items) || []) rail.append(cell(it));
       rail.scrollLeft = 0;
     }
@@ -623,7 +623,7 @@ export default async function Search(container) {
   }
 
   function exploreSkeleton() {
-    exploreEl.innerHTML = '';
+    exploreEl.replaceChildren();
     // The chips come from storage, so they paint now rather than shimmering.
     recentEl = null;
     paintRecent();
@@ -632,7 +632,7 @@ export default async function Search(container) {
 
   function renderExplore(data) {
     const sections = (data && data.sections) || [];
-    exploreEl.innerHTML = '';
+    exploreEl.replaceChildren();
     recentEl = null;
     paintRecent();
     if (data && data.capped && !sections.length) {
@@ -728,7 +728,7 @@ export default async function Search(container) {
         markDegraded(); // server unreachable; keep the skeleton rows, recovery re-renders
         return;
       }
-      exploreEl.innerHTML = '';
+      exploreEl.replaceChildren();
       exploreEl.append(
         stateBlock({
           kind: 'error',
@@ -835,7 +835,7 @@ export default async function Search(container) {
 
   function showSkeleton() {
     countEl.textContent = '';
-    resultsEl.innerHTML = '';
+    resultsEl.replaceChildren();
     resultsEl.append(resultsBar, hitSkeleton(7));
   }
 
@@ -875,7 +875,7 @@ export default async function Search(container) {
       frag.append(grid);
     }
     crossfadeSwap(() => {
-      resultsEl.innerHTML = '';
+      resultsEl.replaceChildren();
       resultsEl.append(frag);
     });
   }
@@ -930,7 +930,7 @@ export default async function Search(container) {
         showSkeleton();
         return;
       }
-      resultsEl.innerHTML = '';
+      resultsEl.replaceChildren();
       resultsEl.append(
         stateBlock({
           kind: 'error',
@@ -943,7 +943,7 @@ export default async function Search(container) {
   }
 
   function showBudgetReached() {
-    resultsEl.innerHTML = '';
+    resultsEl.replaceChildren();
     resultsEl.append(
       stateBlock({
         icon: 'wallet',

@@ -703,7 +703,7 @@ export function createPosterGrid({ type, onItemClick, onItemHold, onActiveGroup,
   function showEmpty(on, msg) {
     emptyNode.style.display = on ? '' : 'none';
     if (on) {
-      emptyNode.innerHTML = '';
+      emptyNode.replaceChildren();
       emptyNode.append(
         msg && typeof msg === 'object'
           ? stateBlock(msg)

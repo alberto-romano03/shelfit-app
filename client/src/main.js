@@ -22,11 +22,6 @@ import Movies from './views/Movies.js';
 import Upcoming from './views/Upcoming.js';
 import Search, { setPendingSearch } from './views/Search.js';
 import Detail from './views/Detail.js';
-import Person from './views/Person.js';
-import Preview from './views/Preview.js';
-import Collection from './views/Collection.js';
-import Season from './views/Season.js';
-import Settings from './views/Settings.js';
 import ListView from './views/List.js';
 import Lists from './views/Lists.js';
 import { resetGridSection } from './views/grid.js';
@@ -175,6 +170,22 @@ app.append(header, tabbar);
 // --- Router ---------------------------------------------------------------
 const GRID_PATHS = new Set(['/movies', '/series']);
 const TAB_PATHS = TABS.map((tab) => tab.path);
+// A page whose code loads on first use (see the routes below).
+function lazyView(load) {
+  let mod = null;
+  const view = async (page, params) => {
+    mod = mod || (await load());
+    return mod.default(page, params);
+  };
+  view.prefetch = () => load().then((m) => (mod = m)).catch(() => {});
+  return view;
+}
+const Settings = lazyView(() => import('./views/Settings.js'));
+const Person = lazyView(() => import('./views/Person.js'));
+const Collection = lazyView(() => import('./views/Collection.js'));
+const Season = lazyView(() => import('./views/Season.js'));
+const Preview = lazyView(() => import('./views/Preview.js'));
+
 initRouter({
   // Tabs sit side by side, so they shift along the bar's order. Everything else is deeper or
   // back up. Movies <-> Series keeps the status bar still while its chip glides to the other
@@ -205,6 +216,10 @@ initRouter({
     const h = page.querySelector('h2');
     return h && !h.closest('[aria-hidden="true"]') ? h.textContent.trim() : '';
   },
+  // Pages opened less often load with their own code on first use (their code
+  // is not parsed at every start), and are fetched in idle time after start-up
+  // so the first open stays instant. The service worker precaches every chunk,
+  // so they open offline too.
   routes: [
     { path: '/', view: Home },
     { path: '/series', view: Series },
@@ -396,6 +411,13 @@ if ('serviceWorker' in navigator) {
 // images) between app launches. Best-effort — ignored where unsupported.
 if (navigator.storage && typeof navigator.storage.persist === 'function') {
   navigator.storage.persist().catch(() => {});
+}
+
+// --- Prefetch the pages that load on demand, once the start is over ----------
+{
+  const prefetchAll = () => [Settings, Person, Collection, Season, Preview].forEach((v) => v.prefetch());
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(prefetchAll, { timeout: 8000 });
+  else setTimeout(prefetchAll, 3000);
 }
 
 // --- Service worker -------------------------------------------------------

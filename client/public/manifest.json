@@ -1,6 +1,10 @@
 {
+  "id": "/shelfit/",
   "name": "shelf.it",
   "short_name": "shelf.it",
+  "description": "Film e serie che guardi, su un unico scaffale.",
+  "lang": "it",
+  "dir": "ltr",
   "start_url": "/shelfit/",
   "scope": "/shelfit/",
   "display": "standalone",

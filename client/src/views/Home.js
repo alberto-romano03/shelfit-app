@@ -1544,7 +1544,7 @@ function openRediscoverModal() {
       meta.setAttribute('aria-label', t('home.shelf.openTitle', { title: item.title || t('home.shelf.untitled') }));
       meta.tabIndex = 0;
       titleEl.textContent = item.title || t('home.shelf.untitled');
-      subEl.innerHTML = '';
+      subEl.replaceChildren();
       if (item.year) subEl.append(document.createTextNode(String(item.year)));
       if (item.rating) {
         if (item.year) subEl.append(document.createTextNode('   '));

@@ -23,13 +23,13 @@ export function buildDevices(api) {
     try {
       data = await api.sessions();
     } catch {
-      listWrap.innerHTML = '';
+      listWrap.replaceChildren();
       listWrap.append(
         stateBlock({ kind: 'error', tier: 'inline', title: t('devices.loadError'), action: { onClick: refresh } })
       );
       return;
     }
-    listWrap.innerHTML = '';
+    listWrap.replaceChildren();
     for (const s of (data && data.sessions) || []) listWrap.append(sessionRow(s));
   }
 

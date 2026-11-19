@@ -64,6 +64,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    // What the app actually runs on (an installed PWA on a current iPhone, and
+    // current desktop browsers): modern syntax ships as written.
+    target: ['es2022', 'safari16'],
     // Emit bundled JS/CSS under /static/ so they don't collide with the
     // backend's /assets/* route (which serves cached TMDB images).
     assetsDir: 'static',

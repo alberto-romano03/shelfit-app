@@ -962,7 +962,7 @@ export default async function Detail(container, params) {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 12 18z"/><path d="M22 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 22 18z"/></svg>';
   const rewatchWrap = el('div', { class: 'detail-actions-row rewatch-keys' });
   function renderRewatch() {
-    rewatchWrap.innerHTML = '';
+    rewatchWrap.replaceChildren();
     if (d.type !== 'movie' || d.status !== 'completed') {
       rewatchWrap.style.display = 'none';
       return;
@@ -1311,7 +1311,7 @@ export default async function Detail(container, params) {
   // Crossfade the skeleton out and the real content in (built while the skeleton
   // was still showing, so it's ready in the DOM before the skeleton disappears).
   crossfadeSwap(() => {
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(hero, head, body);
   });
 
@@ -1777,7 +1777,7 @@ function openAddToListSheet(d) {
       try {
         data = await api.lists(`?type=${d.type}&tmdbId=${d.tmdb_id}`);
       } catch {
-        listWrap.innerHTML = '';
+        listWrap.replaceChildren();
         listWrap.append(
           stateBlock({
             kind: 'error',
@@ -1788,7 +1788,7 @@ function openAddToListSheet(d) {
         );
         return;
       }
-      listWrap.innerHTML = '';
+      listWrap.replaceChildren();
       const lists = data.lists || [];
       if (!lists.length) {
         listWrap.append(el('div', { class: 'muted', text: t('detail.noLists') }));

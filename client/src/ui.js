@@ -2093,15 +2093,15 @@ export function stateArt(name) {
 // to the bottom of what it scrolls in (the tab bar for a page, the edge for a sheet), less
 // whatever comes after it, and centres itself in that. A sheet sized by its content has no
 // room to spare, so nothing changes there.
-function fitState(node) {
-  if (!node.isConnected || node.closest('.gc-empty, .rom-stage')) return; // those centre in CSS
+// Measures one state for fitStates() below, after every state's own height was
+// reset: reads only (no style writes), so measuring several costs one layout.
+// Returns what to set, or null when there is no room to spare.
+function measureState(node) {
   let host = node.parentElement;
   while (host && host !== document.body && !/auto|scroll/.test(getComputedStyle(host).overflowY)) {
     host = host.parentElement;
   }
   // Its entrance animation may still be holding it a few pixels low.
-  node.style.minHeight = '';
-  node.style.marginBottom = '';
   const lifted = new DOMMatrixReadOnly(getComputedStyle(node).transform).m42;
   const top = node.getBoundingClientRect().top - lifted;
   let room;
@@ -2114,13 +2114,28 @@ function fitState(node) {
     room = window.innerHeight - (nav ? nav.getBoundingClientRect().height : 0) - top;
   }
   for (let next = node.nextElementSibling; next; next = next.nextElementSibling) room -= next.offsetHeight;
-  if (room <= node.offsetHeight + 1) return; // no room to spare
+  if (room <= node.offsetHeight + 1) return null; // no room to spare
   // Over the host's bottom padding too, so the middle is the middle of what you see. Only
   // here: a host sized by its content would grow to match, every time.
-  node.style.minHeight = `${room + hostPad}px`;
-  if (hostPad) node.style.marginBottom = `${-hostPad}px`;
+  return { node, minHeight: room + hostPad, hostPad };
 }
-const fitStates = () => document.querySelectorAll('.empty--page, .empty--section, .cine-empty').forEach(fitState);
+// All the states on screen in three passes (reset, measure, set) instead of a
+// reset-measure-set per state, which forced a fresh layout for each one.
+const fitStates = () => {
+  const nodes = [...document.querySelectorAll('.empty--page, .empty--section, .cine-empty')].filter(
+    (n) => n.isConnected && !n.closest('.gc-empty, .rom-stage') // those centre in CSS
+  );
+  for (const n of nodes) {
+    n.style.minHeight = '';
+    n.style.marginBottom = '';
+  }
+  const plans = nodes.map(measureState);
+  for (const plan of plans) {
+    if (!plan) continue;
+    plan.node.style.minHeight = `${plan.minHeight}px`;
+    if (plan.hostPad) plan.node.style.marginBottom = `${-plan.hostPad}px`;
+  }
+};
 let stateWatch = null;
 // Measured before the first paint, so a state never appears and then moves.
 export function watchState(node) {

@@ -145,7 +145,7 @@ export default async function Settings(container) {
 
   function renderCacheResults(wrap, data) {
     wrap.className = 'cache-results';
-    wrap.innerHTML = '';
+    wrap.replaceChildren();
     const row = (label, value, cls) =>
       el('div', { class: 'settings-row' + (cls ? ' ' + cls : '') }, [
         el('span', { text: label }),
@@ -390,7 +390,7 @@ export default async function Settings(container) {
       fileInput.value = ''; // allow re-selecting the same file later
       if (!file) return;
       importSummary.style.display = 'none';
-      importSummary.innerHTML = '';
+      importSummary.replaceChildren();
       importStatusLine.style.display = '';
       importStatusLine.textContent = t('settings.backup.reading');
       importRow.busy(true);
@@ -404,7 +404,7 @@ export default async function Settings(container) {
       } catch (err) {
         importStatusLine.style.display = 'none';
         importSummary.style.display = '';
-        importSummary.innerHTML = '';
+        importSummary.replaceChildren();
         importSummary.append(
           el('div', { class: 'backup-error', text: err.message || t('settings.backup.importFailed') })
         );
@@ -527,7 +527,7 @@ export default async function Settings(container) {
   }
   function renderImportFiles(wrap, files) {
     wrap.className = 'import-results';
-    wrap.innerHTML = '';
+    wrap.replaceChildren();
     if (!files.actions.found && !files.episodes.found) {
       wrap.append(el('div', { class: 'muted', text: t('settings.tvtime.folderEmpty') }));
       return;
@@ -935,7 +935,7 @@ export default async function Settings(container) {
       .then((d) => {
         // Show only the 5 most recent attempts (server returns newest-first).
         const entries = ((d && d.entries) || []).slice(0, 5);
-        list.innerHTML = '';
+        list.replaceChildren();
         if (!entries.length) {
           list.append(el('div', { class: 'muted', text: t('settings.access.empty') }));
           return;
@@ -963,7 +963,7 @@ export default async function Settings(container) {
       })
       .catch((err) => {
         if (isAbortError(err)) return;
-        list.innerHTML = '';
+        list.replaceChildren();
         list.append(el('div', { class: 'muted', text: t('settings.access.loadError') }));
       });
   }
@@ -1100,7 +1100,7 @@ export default async function Settings(container) {
 
   // Render the result of a library import into `wrap`.
   function renderImportSummary(wrap, res) {
-    wrap.innerHTML = '';
+    wrap.replaceChildren();
     const stat = (label, n) =>
       el('div', { class: 'backup-stat' }, [
         el('span', { class: 'backup-stat-num', text: String(n) }),

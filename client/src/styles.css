@@ -845,7 +845,6 @@ button:active,
 .gc-scroller {
   position: relative;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
 .gc-spacer {
@@ -1094,7 +1093,6 @@ button:active,
   gap: 1px;
   overflow-x: auto;
   overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   margin: 0 0 12px;
   padding-bottom: 2px;
@@ -1356,7 +1354,6 @@ button:active,
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 6px;
-  -webkit-overflow-scrolling: touch;
 }
 /* Card rows run to the screen edge, the way the clerk's picks (.pk-rail) already
    do: a card slides off at the true screen border instead of being cut against the
@@ -2678,7 +2675,6 @@ body.season-active #app {
   margin-top: -12px;
   padding-top: 12px;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
 .ep-spacer {
@@ -3373,7 +3369,6 @@ body.season-active #app {
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
   scroll-padding-left: 16px;
-  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   /* Fade the track in at the left and out at the right so it reads as a segment
      of a longer, continuing timeline rather than something that starts/stops. */
@@ -3956,7 +3951,6 @@ body.season-active #app {
   display: flex;
   gap: 12px;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   scroll-snap-type: x proximity;
   padding-bottom: 8px;
 }
@@ -4520,7 +4514,6 @@ a:focus-visible {
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
   background: var(--surface);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   padding: 20px var(--gutter-r) calc(20px + env(safe-area-inset-bottom)) var(--gutter-l);
@@ -4561,7 +4554,6 @@ a:focus-visible {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   /* A scroller clips sideways too: 4px of side padding (cancelled by the
      negative margin, so nothing moves) keeps the inputs' 3px focus ring whole.
@@ -6037,6 +6029,7 @@ button.srow:active {
   padding: 20px;
   /* Fill the area between header and tab bar so the icon + phrase sit centered. */
   min-height: calc(100vh - 160px);
+  min-height: calc(100dvh - 160px);
 }
 /* Inside a modal / bottom sheet (Rate-O-Matic, My Tickets): centre in a modest
    area instead of the whole viewport. */
@@ -6899,7 +6892,6 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .np-toast {
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 6px;
-  -webkit-overflow-scrolling: touch;
 }
 .coll-row-cell {
   flex: 0 0 108px;
@@ -7414,7 +7406,6 @@ img.mood-emoji {
   flex: 1;
   overflow-y: auto;
   padding: 0 var(--gutter-r) var(--gutter) var(--gutter-l);
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain; /* keep scroll inside the sheet, no page bleed */
   touch-action: pan-y;
 }
@@ -9556,7 +9547,6 @@ textarea.notes:focus,
   margin: 0 calc(-1 * var(--gutter));
   padding: 4px var(--gutter);
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 .rcpt-bg-scroller::-webkit-scrollbar {
@@ -11296,7 +11286,6 @@ textarea.lend-message-input:focus {
      *into*, so it travels the extra few pixels and the chip keeps the same ring
      it has anywhere else in the track. */
   scroll-padding-inline: var(--segbar-pad);
-  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   isolation: isolate;
 }
@@ -11512,7 +11501,6 @@ textarea.lend-message-input:focus {
   padding: 6px var(--gutter) 12px;
   /* Keep all scrolling inside the sheet — no bleed to the page behind (matches
      .sheet-body). Without this, reaching the scroll edge chains to the document. */
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
 }
@@ -12648,7 +12636,6 @@ textarea.lend-message-input:focus {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  -webkit-overflow-scrolling: touch;
 }
 .picker-row {
   display: flex;

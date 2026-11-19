@@ -665,7 +665,7 @@ export function openReceipt(month) {
       const token = ++loadToken;
       loading = true;
       saveBtn.disabled = true;
-      body.innerHTML = '';
+      body.replaceChildren();
       body.append(spinner());
       (key ? api.receipt(key) : take('receipt', () => api.receipt()))
         .then(async (r) => {
@@ -689,7 +689,7 @@ export function openReceipt(month) {
         })
         .catch(() => {
           if (token !== loadToken) return;
-          body.innerHTML = '';
+          body.replaceChildren();
           body.append(
             stateBlock({
               kind: 'error',
@@ -726,7 +726,7 @@ export function openReceipt(month) {
 
       // The background on show stays on top of the new one and fades away once that's ready.
       const previous = [...card.querySelectorAll('.rcpt-bg.is-painted')].pop();
-      card.innerHTML = '';
+      card.replaceChildren();
       // Background layer by type. Blur applies ONLY to the poster background.
       const myToken = ++renderToken;
       const bg = el('div', { class: 'rcpt-bg' });
@@ -921,7 +921,7 @@ export function openReceipt(month) {
     }
 
     function renderPicker() {
-      pickerArea.innerHTML = '';
+      pickerArea.replaceChildren();
       pickerArea.scrollTop = 0;
       // The posters and the slider fit exactly; only the longer lists scroll.
       pickerArea.classList.toggle('is-fitted', state.bgType === 'poster');
@@ -965,7 +965,7 @@ export function openReceipt(month) {
     }
 
     function build() {
-      body.innerHTML = '';
+      body.replaceChildren();
       renderCard();
       body.append(previewWrap, modeControl(), pickerArea);
       renderPicker();

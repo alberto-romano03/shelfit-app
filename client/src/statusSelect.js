@@ -94,7 +94,7 @@ export function createStatusSelect({ status, onSelect, title, suffix } = {}) {
   const btn = el('button', { class: 'status-select' });
 
   function render() {
-    btn.innerHTML = '';
+    btn.replaceChildren();
     // Leading glyph = the current status's icon, tinted in that status's colour
     // (via --sc). Unset → no icon, neutral pill.
     const iconName = STATUS_ICON[current];

@@ -468,7 +468,7 @@ function buildOfflineUpcoming(watchNext, savedAt) {
 function mountOfflineUpcoming(container, watchNext, savedAt) {
   const view = buildOfflineUpcoming(watchNext, savedAt);
   crossfadeSwap(() => {
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(view);
   });
 }
@@ -486,7 +486,7 @@ function mountUpcomingOffline(container, data, savedAt) {
     content.firstChild
   );
   crossfadeSwap(() => {
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(content);
   });
   if (railway) requestAnimationFrame(() => railway.init());
@@ -497,7 +497,7 @@ function mountUpcomingOffline(container, data, savedAt) {
 function mountUpcoming(container, data, { fade = true } = {}) {
   const { content, railway } = buildUpcoming(data);
   const swap = () => {
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(content);
   };
   if (fade) crossfadeSwap(swap);

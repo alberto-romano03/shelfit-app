@@ -504,7 +504,7 @@ export async function gridView(container, type) {
       setMode('simple');
       showLetterPicker(false);
       simpleGrid.className = 'grid grid-empty';
-      simpleGrid.innerHTML = '';
+      simpleGrid.replaceChildren();
       simpleGrid.append(
         stateBlock({
           kind: 'error',
@@ -581,7 +581,7 @@ export async function gridView(container, type) {
       if (state.status === 'plan_to_watch') {
         crossfadeSwap(() => {
           simpleGrid.className = 'grid grid-empty';
-          simpleGrid.innerHTML = '';
+          simpleGrid.replaceChildren();
           simpleGrid.append(
             stateBlock({
               kind: 'offline',
@@ -603,7 +603,7 @@ export async function gridView(container, type) {
     if (!planItems.length) {
       crossfadeSwap(() => {
         simpleGrid.className = 'grid grid-empty';
-        simpleGrid.innerHTML = '';
+        simpleGrid.replaceChildren();
         simpleGrid.append(
           stateBlock({
             icon: 'popcorn',
@@ -624,7 +624,7 @@ export async function gridView(container, type) {
     });
     crossfadeSwap(() => {
       simpleGrid.className = 'grid';
-      simpleGrid.innerHTML = '';
+      simpleGrid.replaceChildren();
       simpleGrid.append(...cards);
     });
   }
@@ -650,7 +650,7 @@ export async function gridView(container, type) {
       if (!saved.stale) return;
       await afterTransition(); // check once the page has faded in
     } else {
-      simpleGrid.innerHTML = '';
+      simpleGrid.replaceChildren();
       simpleGrid.append(collectionsSkeleton());
     }
     let data;
@@ -662,7 +662,7 @@ export async function gridView(container, type) {
         markDegraded();
         return; // keep the shimmer; recovery re-renders
       }
-      simpleGrid.innerHTML = '';
+      simpleGrid.replaceChildren();
       simpleGrid.append(
         stateBlock({
           kind: 'error',
@@ -709,7 +709,7 @@ export async function gridView(container, type) {
 
     crossfadeSwap(() => {
       simpleGrid.className = '';
-      simpleGrid.innerHTML = '';
+      simpleGrid.replaceChildren();
       simpleGrid.append(out);
     });
   }

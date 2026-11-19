@@ -268,7 +268,7 @@ export function createTheWall() {
   // `fallback` is the previously stored copy (data URLs); the person photo falls
   // back to it if the live one fails to load.
   function paint(fav, fallback) {
-    row.innerHTML = '';
+    row.replaceChildren();
     const personFallback =
       fallback && fallback.person && typeof fallback.person.photo_url === 'string'
         ? imgSrc(fallback.person.photo_url)

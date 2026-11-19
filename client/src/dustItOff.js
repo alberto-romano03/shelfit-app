@@ -473,13 +473,13 @@ export function openDustItOff() {
       typeToggle.style.display = '';
       adjustBtn.style.display = 'none';
       body.className = 'sheet-body';
-      body.innerHTML = '';
+      body.replaceChildren();
       body.append(group(t('common.genre'), buildGenres()));
       body.append(group(t('dust.mood'), buildMood()));
       if (state.type === 'movie') body.append(group(t('dust.duration'), buildDuration()));
       body.append(group(t('dust.minRating'), buildRating()));
       body.append(group(t('dust.era'), buildEra()));
-      footer.innerHTML = '';
+      footer.replaceChildren();
       // Two-button bottom row (Close on the left) — the app's shared modal pattern,
       // matching the result view's action row below.
       footer.append(
@@ -583,9 +583,9 @@ export function openDustItOff() {
       typeToggle.style.display = 'none';
       adjustBtn.style.display = 'flex';
       body.className = 'sheet-body';
-      body.innerHTML = '';
+      body.replaceChildren();
       body.append(spinner());
-      footer.innerHTML = '';
+      footer.replaceChildren();
       resetPicks();
       let first;
       try {
@@ -606,9 +606,9 @@ export function openDustItOff() {
     // No pick to show (an error, or nothing matched): the state, and the way on:
     // Close, and back to the filters to change them.
     function showStuck(block) {
-      body.innerHTML = '';
+      body.replaceChildren();
       body.append(block);
-      footer.innerHTML = '';
+      footer.replaceChildren();
       footer.append(
         el('div', { class: 'dust-actions' }, [
           el('button', { class: 'btn btn-secondary', onClick: close }, [
@@ -630,7 +630,7 @@ export function openDustItOff() {
     // footer actions never re-render.
     function renderResult(firstResult) {
       body.className = 'sheet-body dust-result-mode';
-      body.innerHTML = '';
+      body.replaceChildren();
 
       let current = firstResult;
 
@@ -698,7 +698,7 @@ export function openDustItOff() {
         // it paints in the same frame as the rest of the card.
         if (r.backdrop_url) heroImg.src = imageCache.get(r.backdrop_url) || withBase(r.backdrop_url);
         else heroImg.removeAttribute('src');
-        posterHost.innerHTML = '';
+        posterHost.replaceChildren();
         mountPoster(posterHost, r.poster_url, r.title, { viaCache: true }); // joins the queue's load
         titleEl.textContent = r.title || t('dust.untitled');
         // Year · type · TMDB score. The 0-10 score wears the TMDB mark so it is
@@ -796,7 +796,7 @@ export function openDustItOff() {
       }
       againBtn.addEventListener('click', suggestAnother);
 
-      footer.innerHTML = '';
+      footer.replaceChildren();
       footer.append(el('div', { class: 'dust-actions' }, [againBtn, addBtn]));
     }
 

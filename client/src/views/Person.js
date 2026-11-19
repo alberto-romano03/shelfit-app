@@ -213,7 +213,7 @@ export async function Person(container, params) {
       markDegraded();
       return;
     }
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(
       stateBlock({
         kind: 'error',
@@ -335,7 +335,7 @@ export async function Person(container, params) {
   }
 
   function paint() {
-    container.innerHTML = '';
+    container.replaceChildren();
     container.append(fileInput);
 
     // Versioned by the server (the file's change time), so the browser keeps it

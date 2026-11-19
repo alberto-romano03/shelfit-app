@@ -2417,8 +2417,12 @@ export function locale(enTag) {
   return lang === 'it' ? LOCALES.it : enTag;
 }
 
-// No grouping: a count reads "1000" in both languages, as it always has.
+// No grouping: a count reads "1000" in both languages, as it always has. One
+// formatter per language, made once (t() formats a number on every call with n).
+const numberFormats = {};
 export function fmtNumber(n) {
   if (n == null || !Number.isFinite(Number(n))) return '';
-  return new Intl.NumberFormat(LOCALES[lang] || LOCALES.en, { maximumFractionDigits: 2, useGrouping: false }).format(Number(n));
+  const tag = LOCALES[lang] || LOCALES.en;
+  const nf = numberFormats[tag] || (numberFormats[tag] = new Intl.NumberFormat(tag, { maximumFractionDigits: 2, useGrouping: false }));
+  return nf.format(Number(n));
 }
