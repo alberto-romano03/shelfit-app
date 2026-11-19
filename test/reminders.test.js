@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { startApp, login, client, addUser, TEST_PASSWORD } from './helpers/harness.js';
 
 const DAY = 24 * 60 * 60 * 1000;
-const ENDPOINT = 'https://push.example.test/device-1';
+const ENDPOINT = 'https://fcm.googleapis.com/fcm/send/device-1';
 const SUB = { endpoint: ENDPOINT, keys: { p256dh: 'p', auth: 'a' } };
 
 describe('reminders', () => {

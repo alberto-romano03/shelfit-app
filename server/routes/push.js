@@ -16,12 +16,24 @@ import {
   deviceLang,
 } from '../push.js';
 
+// The push services browsers use. A subscription endpoint is where the server
+// POSTs, so anything else (a LAN address, another site) is refused.
+const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /(^|\.)push\.services\.mozilla\.com$/, /(^|\.)notify\.windows\.com$/, /(^|\.)push\.apple\.com$/];
+export function isPushServiceUrl(v) {
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' && !u.username && !u.password && !u.port && PUSH_HOSTS.some((re) => re.test(u.hostname));
+  } catch {
+    return false;
+  }
+}
+
 // Validate the shape the browser's PushSubscription.toJSON() produces.
 function validSubscription(s) {
   return (
     s &&
     typeof s.endpoint === 'string' &&
-    /^https:\/\//.test(s.endpoint) &&
+    isPushServiceUrl(s.endpoint) &&
     s.keys &&
     typeof s.keys.p256dh === 'string' &&
     typeof s.keys.auth === 'string'

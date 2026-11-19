@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { TMDB_API_KEY } from './config.js';
 import { getTmdbLanguage, fallbackTmdbLanguage } from './language.js';
 import { guard, record } from './usage.js';

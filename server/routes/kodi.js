@@ -11,6 +11,8 @@ import {
   publicInstance,
   createInstance,
   updateInstance,
+  validKodiHost,
+  validKodiPort,
   deleteInstance,
   activateInstance,
   pingInstance,
@@ -72,6 +74,10 @@ export default async function kodiRoutes(fastify) {
       reply.code(400);
       return { error: 'name and host are required' };
     }
+    if (!validKodiHost(host) || !validKodiPort(b.port)) {
+      reply.code(400);
+      return { error: 'invalid host or port' };
+    }
     createInstance({
       name,
       host,
@@ -92,6 +98,10 @@ export default async function kodiRoutes(fastify) {
       return { error: 'instance not found' };
     }
     const b = request.body || {};
+    if ((b.host !== undefined && !validKodiHost(String(b.host).trim())) || !validKodiPort(b.port)) {
+      reply.code(400);
+      return { error: 'invalid host or port' };
+    }
     updateInstance(id, {
       name: b.name !== undefined ? String(b.name).trim() : undefined,
       host: b.host !== undefined ? String(b.host).trim() : undefined,
@@ -138,6 +148,9 @@ export default async function kodiRoutes(fastify) {
       if (b.password) overridePassword = b.password;
     } else {
       if (!b.host) return { ok: false, error: 'host required' };
+      if (!validKodiHost(String(b.host).trim()) || !validKodiPort(b.port)) {
+        return { ok: false, error: 'invalid host or port' };
+      }
       instance = {
         host: String(b.host).trim(),
         port: Number(b.port) || 8080,

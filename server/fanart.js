@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import fetch from 'node-fetch';
 import { CACHE_DIR, FANART_API_KEY } from './config.js';
 import { tmdbGet } from './tmdb.js';
 import { toWebp } from './images.js';
@@ -139,8 +138,10 @@ function byLanguageThenLikes() {
   };
 }
 
+// Only Fanart.tv's own image host: the URL comes from its API's answer.
 async function fetchBuffer(url) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
+  if (typeof url !== 'string' || !/^https?:\/\/assets\.fanart\.tv\//.test(url)) return null;
+  const res = await fetch(url.replace(/^http:/, 'https:'), { signal: AbortSignal.timeout(30000), redirect: 'error' });
   if (!res.ok) return null;
   return Buffer.from(await res.arrayBuffer());
 }

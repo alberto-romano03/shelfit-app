@@ -26,7 +26,7 @@ import {
   expiryMsFor,
   deleteUserMagicLinks,
 } from './magicLinks.js';
-import { clientIp, routePath } from './security.js';
+import { clientIp, routePath, forwarded } from './security.js';
 import { logAccess, getRecentAccess, EVENTS } from './accessLog.js';
 import { getUser, getMaster, pickerUsers, isPickable, avatarFile, badgeFile, fileVersion } from './users.js';
 import { findInvite, clearInvites, pruneInvites } from './invites.js';
@@ -349,7 +349,7 @@ function parseCookies(header) {
 // Behind Caddy the app sees HTTP; the Secure flag must follow the *external*
 // scheme, which Caddy reports via X-Forwarded-Proto.
 function isHttps(request) {
-  return (request.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+  return forwarded(request, 'x-forwarded-proto') === 'https';
 }
 // Secure whenever the app's public address is https, not only when the proxy
 // says so: a missing X-Forwarded-Proto must not drop the flag.
@@ -1135,7 +1135,7 @@ export function registerAuth(fastify, { configured }) {
     const ip = clientIp(request);
     const fail = (userId = null) => {
       logAccess(EVENTS.MAGIC_LINK, request, false, userId); // fire-and-forget audit entry
-      reply.redirect(303, `${BASE}/login?error=magic`);
+      reply.redirect(`${BASE}/login?error=magic`, 303);
       return null;
     };
     if (isMagicRateLimited(ip)) return fail();
@@ -1179,7 +1179,7 @@ export function registerAuth(fastify, { configured }) {
       // lifetime, same cookie): no reduced permissions.
       setLastLoginStmt.run(Date.now(), ok.user.id);
       setSessionCookie(reply, request, createSession(ok.user.id, request), ok.user.id);
-      return reply.redirect(303, `${BASE}/`);
+      return reply.redirect(`${BASE}/`, 303);
     });
   });
 
@@ -1230,11 +1230,8 @@ export function registerAuth(fastify, { configured }) {
 export function publicAppUrl(request, appPath) {
   let origin = PUBLIC_URL;
   if (!origin) {
-    const proto = (request.headers['x-forwarded-proto'] || '').split(',')[0].trim() ||
-      (request.headers[':scheme']) || 'https';
-    const host = (request.headers['x-forwarded-host'] || request.headers.host || '')
-      .split(',')[0]
-      .trim();
+    const proto = forwarded(request, 'x-forwarded-proto') || 'https';
+    const host = forwarded(request, 'x-forwarded-host') || String(request.headers.host || '').split(',')[0].trim();
     origin = host ? `${proto}://${host}` : '';
   }
   return `${origin}${BASE}${appPath}`;

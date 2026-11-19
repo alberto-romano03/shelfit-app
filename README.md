@@ -478,6 +478,7 @@ All variables are read from `.env` at container startup. Only `TMDB_API_KEY` and
 | `APP_PASSWORD_RESET` | Set `true` together with a new `APP_PASSWORD` to change the master password once (it also signs the master out everywhere), then remove both lines. Members' passwords are reset from **Settings → Household**. | No | `false` |
 | `ALLOW_NO_AUTH` | Run with no login gate (trusted LAN only). Without it the server refuses to start in production with no password. | No | `false` |
 | `PORT` | Port the Node server listens on inside the container. | No | `3000` |
+| `TRUSTED_PROXY` | Comma-separated host names or IPs of the reverse proxy. Only these (and loopback) may set `X-Forwarded-For`/`-Proto`/`-Host`; any other peer is taken as the client itself. | No | `caddy` |
 | `PUBLIC_URL` | External origin the app is reached at — no trailing slash, **no sub-path**. Used for magic-link URLs and as the only non-localhost CORS origin. | No | request host |
 | `FANART_API_KEY` | Fanart.tv key for clear logos / disc art. | No | — |
 | `CACHE_MAX_AGE_DAYS_MOVIES` | Days before cached movie metadata is refreshed. | No | `180` |

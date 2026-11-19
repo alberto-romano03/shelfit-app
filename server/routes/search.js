@@ -166,7 +166,6 @@ export default async function searchRoutes(fastify) {
     const safeSize = /^w\d+$/.test(size || '') ? size : IMG_SIZES.poster;
     const url = imageUrl(safeSize, imgPath);
     try {
-      const { default: fetch } = await import('node-fetch');
       // Bound the upstream call so a stalled CDN connection can't hang the
       // handler (consistent with every other external fetch in the backend).
       const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
@@ -175,9 +174,11 @@ export default async function searchRoutes(fastify) {
         return { error: 'not found' };
       }
       const buf = Buffer.from(await res.arrayBuffer());
+      // Only ever an image type from this origin, whatever the CDN answers.
+      const type = res.headers.get('content-type') || '';
       reply
-        .header('Content-Type', res.headers.get('content-type') || 'image/jpeg')
-        .header('Cache-Control', 'public, max-age=86400');
+        .header('Content-Type', /^image\/(jpeg|png|webp|gif|avif)$/i.test(type.split(';')[0].trim()) ? type : 'image/jpeg')
+        .header('Cache-Control', 'private, max-age=86400');
       return reply.send(buf);
     } catch (err) {
       reply.code(502);

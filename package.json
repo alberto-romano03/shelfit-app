@@ -15,11 +15,13 @@
     "docker:logs": "docker compose logs -f"
   },
   "dependencies": {
-    "fastify": "^4",
-    "better-sqlite3": "^9",
-    "@fastify/static": "^7",
-    "@fastify/cors": "^9",
-    "node-fetch": "^3"
+    "fastify": "^5.12.8",
+    "better-sqlite3": "^13.2.0",
+    "@fastify/static": "^10.1.11",
+    "@fastify/cors": "^11.4.3"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "devDependencies": {
     "vite": "^5",

@@ -20,6 +20,22 @@ services:
       - ./data:/app/data
     env_file:
       - .env
+    # Least privilege: a read-only filesystem except the data volume and a
+    # scratch /tmp (cwebp's temp files), and no Linux capabilities except the
+    # three the entrypoint needs to hand the data folder to `node` and switch to
+    # it (docker-entrypoint.sh); the app itself runs as `node` with none, and
+    # no-new-privileges keeps it that way.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
     networks:
       - webproxy
 

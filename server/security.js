@@ -3,22 +3,74 @@
 // path-traversal guard for file-serving routes. Node's crypto/path only — no deps.
 
 import crypto from 'node:crypto';
+import dns from 'node:dns';
+import net from 'node:net';
 import path from 'node:path';
 import db from './db.js';
 import { PUBLIC_URL } from './config.js';
 
+// --- the reverse proxy -----------------------------------------------------
+// X-Forwarded-For / -Proto / -Host are believed only from the proxy in front of
+// the app: loopback, and the hosts named in TRUSTED_PROXY (comma separated names
+// or IPs; default `caddy`, the Caddy container on the shared Docker network).
+// Any other container on that network can reach the app directly, and must not
+// be able to pick its own client IP (rate limits) or claim https. Names are
+// resolved now, every few minutes, and again (at most every 30 s) when an
+// unknown address sends forwarded headers: a recreated container gets a new IP.
+const TRUSTED_PROXY = (process.env.TRUSTED_PROXY ?? 'caddy')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+let proxyIps = new Set(TRUSTED_PROXY.filter((n) => net.isIP(n)));
+let lastResolve = 0;
+
+function resolveProxies() {
+  lastResolve = Date.now();
+  const names = TRUSTED_PROXY.filter((n) => !net.isIP(n));
+  if (!names.length) return;
+  Promise.all(
+    names.map(
+      (name) =>
+        new Promise((done) => dns.lookup(name, { all: true }, (err, addrs) => done(err ? [] : addrs.map((a) => a.address))))
+    )
+  ).then((lists) => {
+    proxyIps = new Set([...TRUSTED_PROXY.filter((n) => net.isIP(n)), ...lists.flat()]);
+  });
+}
+resolveProxies();
+const proxyTimer = setInterval(resolveProxies, 5 * 60 * 1000);
+if (proxyTimer.unref) proxyTimer.unref();
+
+const bareIp = (ip) => String(ip || '').replace(/^::ffff:/, '');
+const isLoopback = (ip) => ip === '::1' || /^127\./.test(ip);
+
+export function fromTrustedProxy(request) {
+  const peer = bareIp(request.socket ? request.socket.remoteAddress : request.ip);
+  if (isLoopback(peer) || proxyIps.has(peer)) return true;
+  if (request.headers['x-forwarded-for'] && Date.now() - lastResolve > 30 * 1000) resolveProxies();
+  return false;
+}
+
+// The first value of a forwarded header, only when the proxy sent it.
+export function forwarded(request, name) {
+  if (!fromTrustedProxy(request)) return '';
+  return String(request.headers[name] || '').split(',')[0].trim();
+}
+
 // --- client IP -------------------------------------------------------------
 // X-Forwarded-For is "client, proxy1, proxy2…" and the client can spoof the
 // left-most entries. Caddy appends the real peer IP as the LAST hop, so trust
-// the right-most value (not the attacker-controlled first one). Mirrors the
-// logic long used by the login limiter in auth.js — kept here as the single
-// source so the rate limiter and access log identify a caller the same way.
+// the right-most value (not the attacker-controlled first one), and only from
+// the proxy itself (above). Kept here as the single source so the rate limiter
+// and access log identify a caller the same way.
 export function clientIp(request) {
+  const peer = bareIp(request.ip) || 'unknown';
+  if (!fromTrustedProxy(request)) return peer;
   const chain = (request.headers['x-forwarded-for'] || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  return chain.length ? chain[chain.length - 1] : request.ip || 'unknown';
+  return chain.length ? chain[chain.length - 1] : peer;
 }
 
 // --- the path the router actually matched ----------------------------------
@@ -99,7 +151,7 @@ const CSP = [
 function reportEndpoint(request) {
   let origin = PUBLIC_URL;
   if (!origin) {
-    const proto = (request.headers['x-forwarded-proto'] || request.protocol || 'http').split(',')[0].trim();
+    const proto = forwarded(request, 'x-forwarded-proto') || request.protocol || 'http';
     origin = `${proto}://${request.headers.host || 'localhost'}`;
   }
   return `${origin.replace(/\/+$/, '')}${CSP_REPORT_PATH}`;
