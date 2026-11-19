@@ -21,6 +21,7 @@ import {
   openModal,
   lucideIcon,
   copyWithFeedback,
+  markInvalid,
 } from '../ui.js';
 import { t } from '../i18n.js';
 
@@ -169,7 +170,7 @@ export function buildHousehold(api) {
         if (save.disabled) return; // Enter again while saving
         const name = input.value.trim();
         if (!name) {
-          input.focus();
+          markInvalid(input);
           return;
         }
         save.disabled = true;
@@ -184,7 +185,7 @@ export function buildHousehold(api) {
       };
       save.addEventListener('click', submit);
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') submit();
+        if (e.key === 'Enter' && !e.isComposing) submit();
       });
       modal.append(
         el('h3', { text: t('household.renameTitle') }),
@@ -291,7 +292,7 @@ export function buildHousehold(api) {
       if (sending) return;
       const name = input.value.trim();
       if (!name) {
-        input.focus();
+        markInvalid(input);
         return;
       }
       sending = true;
@@ -308,7 +309,7 @@ export function buildHousehold(api) {
     };
     create.addEventListener('click', submit);
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') submit();
+      if (e.key === 'Enter' && !e.isComposing) submit();
     });
     formWrap.append(
       el('div', { class: 'magic-form' }, [

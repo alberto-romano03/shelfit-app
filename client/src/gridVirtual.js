@@ -174,6 +174,9 @@ function createCell(onItemClick, onItemHold) {
     if (currentItem && onItemClick) onItemClick(currentItem);
   });
   if (onItemHold) {
+    // The quick menu behind a long press, said to screen readers (the keyboard
+    // reaches it with the context-menu key or Shift+F10, below).
+    node.setAttribute('aria-description', t('grid.holdHint'));
     longPress(node, () => {
       if (currentItem) onItemHold(currentItem);
     });

@@ -189,6 +189,22 @@ initRouter({
     if (nav === 'pop' || b >= 0) return { kind: 'pop' }; // back, or up to a tab (a deleted list)
     return { kind: 'push' };
   },
+  // The browser tab / screen reader name of each page.
+  pageTitle: (path, page) => {
+    const fixed = {
+      '/': 'nav.home',
+      '/series': 'nav.series',
+      '/movies': 'nav.movies',
+      '/upcoming': 'nav.upcoming',
+      '/search': 'common.search',
+      '/settings': 'common.settings',
+      '/lists': 'home.myLists',
+    }[path];
+    if (fixed) return t(fixed);
+    // A title, person, collection, list or season page: the name it shows.
+    const h = page.querySelector('h2');
+    return h && !h.closest('[aria-hidden="true"]') ? h.textContent.trim() : '';
+  },
   routes: [
     { path: '/', view: Home },
     { path: '/series', view: Series },

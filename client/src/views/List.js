@@ -268,7 +268,7 @@ export default async function List(container, params) {
         }
       });
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.isComposing) {
           e.preventDefault();
           save.click();
         }

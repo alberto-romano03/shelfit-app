@@ -23,6 +23,7 @@ import {
   settingsRow,
   lucideIcon,
   selectPill,
+  markInvalid,
 } from '../ui.js';
 import { t } from '../i18n.js';
 
@@ -272,8 +273,9 @@ export function buildKodiSettings(api) {
           class: 'kodi-icon-option kodi-icon-none' + (selectedIcon ? '' : ' selected'),
           type: 'button',
           title: t('kodiSettings.noIcon'),
-          text: '∅',
-        });
+          'aria-label': t('kodiSettings.noIcon'),
+          'aria-pressed': String(!selectedIcon),
+        }, [el('span', { 'aria-hidden': 'true', text: '∅' })]);
         none.addEventListener('click', () => {
           selectedIcon = null;
           syncPicker();
@@ -287,12 +289,16 @@ export function buildKodiSettings(api) {
           return;
         }
         for (const ic of icons) {
+          // Named after the file, without its extension ("living-room").
+          const name = ic.file.replace(/\.svg$/i, '');
           const opt = el('button', {
             class: 'kodi-icon-option' + (selectedIcon === ic.file ? ' selected' : ''),
             type: 'button',
-            title: ic.file,
+            title: name,
+            'aria-label': name,
+            'aria-pressed': String(selectedIcon === ic.file),
             'data-file': ic.file,
-          }, [el('img', { src: withBase(ic.url), alt: ic.file })]);
+          }, [el('img', { src: withBase(ic.url), alt: '' })]);
           opt.addEventListener('click', () => {
             selectedIcon = ic.file;
             syncPicker();
@@ -305,6 +311,7 @@ export function buildKodiSettings(api) {
           const file = b.getAttribute('data-file');
           const isSel = b.classList.contains('kodi-icon-none') ? !selectedIcon : file === selectedIcon;
           b.classList.toggle('selected', isSel);
+          b.setAttribute('aria-pressed', String(isSel));
         });
       }
       loadIcons().then(renderPicker);
@@ -382,6 +389,7 @@ export function buildKodiSettings(api) {
       saveBtn.addEventListener('click', async () => {
         const b = formBody();
         if (!b.name || !b.host) {
+          markInvalid(!b.name ? nameIn : hostIn);
           toast(t('kodiSettings.nameHostRequired'));
           return;
         }

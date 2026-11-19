@@ -353,6 +353,7 @@ export default async function Home(container) {
       el('div', { class: 'wc-ep', text: epText(it) }),
     ]);
     card.addEventListener('click', () => navigate(`/detail/${it.id}`));
+    card.setAttribute('aria-description', t('grid.holdHint'));
     longPress(card, () => openPosterMenu(it));
     return pressable(card, { onHold: () => openPosterMenu(it) });
   }

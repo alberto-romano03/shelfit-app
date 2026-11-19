@@ -985,6 +985,16 @@ export function epLabel(season, episode) {
   return `S${pad2(season)} E${pad2(episode)}`;
 }
 
+// A field that blocked a form (left empty): marked invalid for screen readers and
+// focused, so the message (a toast) is tied to a place; the mark clears as soon
+// as it is edited.
+export function markInvalid(field) {
+  if (!field) return;
+  field.setAttribute('aria-invalid', 'true');
+  field.addEventListener('input', () => field.removeAttribute('aria-invalid'), { once: true });
+  field.focus();
+}
+
 // --- Toast ----------------------------------------------------------------
 // A transient pill at the bottom of the screen: one glyph, one line of text.
 //
@@ -1400,10 +1410,16 @@ export function segmentedControl({
   );
   root.style.setProperty('--seg-count', String(options.length || 1));
 
+  // One Tab stop for the whole group, on the chosen option (the first when none
+  // is chosen), like any radio group; the arrow keys move within it.
   function paint() {
     root.style.setProperty('--seg-i', String(Math.max(0, active)));
     root.classList.toggle('seg--none', active < 0);
-    buttons.forEach((b, i) => b.setAttribute('aria-checked', String(i === active)));
+    const stop = Math.max(0, active);
+    buttons.forEach((b, i) => {
+      b.setAttribute('aria-checked', String(i === active));
+      b.tabIndex = i === stop ? 0 : -1;
+    });
   }
   function pick(i, notify) {
     if (i < 0 || i >= options.length || i === active) return;
@@ -1412,12 +1428,22 @@ export function segmentedControl({
     if (notify && onChange) onChange(options[active][0]);
   }
   buttons.forEach((b, i) => b.addEventListener('click', () => pick(i, true)));
-  // Arrow keys move the selection, as a radio group should.
+  // Arrow keys move the selection, as a radio group should (Right/Down forward,
+  // Left/Up back, Home and End to the ends).
   root.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const last = options.length - 1;
+    const from = Math.max(0, active);
+    const next = {
+      ArrowRight: from + 1,
+      ArrowDown: from + 1,
+      ArrowLeft: from - 1,
+      ArrowUp: from - 1,
+      Home: 0,
+      End: last,
+    }[e.key];
+    if (next === undefined) return;
     e.preventDefault();
-    const next = active + (e.key === 'ArrowRight' ? 1 : -1);
-    if (next < 0 || next >= options.length) return;
+    if (next < 0 || next > last) return;
     pick(next, true);
     buttons[next].focus();
   });

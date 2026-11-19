@@ -53,6 +53,7 @@ import {
   epLabel,
   pressable,
   skelLine,
+  markInvalid,
 } from '../ui.js';
 
 // Who this member can suggest a title to (see openSuggestSheet). Fetched when a
@@ -496,7 +497,7 @@ function detailSkeleton() {
       // into the hero) instead of overflowing DOWN into the description below.
       el('div', { class: 'detail-poster-wrap' }, [el('div', { class: 'detail-poster skeleton' })]),
       el('div', { class: 'detail-titles', style: { flex: '1' } }, [
-        el('h2', {}, [skelText('78%')]),
+        el('h2', { 'aria-hidden': 'true' }, [skelText('78%')]),
         el('div', { class: 'detail-meta' }, [
           el('div', { class: 'meta-row' }, [skelText('34%')]),
           el('div', { class: 'meta-row' }, [skelText('48%')]),
@@ -1519,6 +1520,11 @@ export async function openPosterMenu(item) {
       paintRating();
 
       let open = null; // the tile whose panel is showing
+      // Each tile opens a panel: it says whether its panel is open.
+      const sayOpen = () => {
+        for (const tile of [statusTile, rateTile]) tile.setAttribute('aria-expanded', String(tile.classList.contains('is-open')));
+      };
+      sayOpen();
       function showPanel(which, build) {
         statusTile.classList.toggle('is-open', which === statusTile);
         rateTile.classList.toggle('is-open', which === rateTile);
@@ -1526,9 +1532,11 @@ export async function openPosterMenu(item) {
           open = null;
           statusTile.classList.remove('is-open');
           rateTile.classList.remove('is-open');
+          sayOpen();
           panel.style.height = '0px';
           return;
         }
+        sayOpen();
         open = which;
         panelIn.replaceChildren(build());
         panel.style.height = `${panelIn.offsetHeight}px`;
@@ -1632,8 +1640,10 @@ function openSuggestSheet(d) {
       rows: '2',
       maxlength: String(LEND_MESSAGE_MAX),
       'aria-label': t('lend.messageLabel'),
+      'aria-describedby': 'lend-message-count',
+      enterkeyhint: 'done',
     });
-    const counter = el('div', { class: 'lend-message-count', 'aria-live': 'polite' });
+    const counter = el('div', { class: 'lend-message-count', id: 'lend-message-count' });
     const count = () => {
       const n = [...message.value].length;
       counter.textContent = `${n}/${LEND_MESSAGE_MAX}`;
@@ -1817,6 +1827,7 @@ function openAddToListSheet(d) {
     createBtn.addEventListener('click', async () => {
       const name = nameInput.value.trim();
       if (!name) {
+        markInvalid(nameInput);
         toast(t('detail.enterName'));
         return;
       }

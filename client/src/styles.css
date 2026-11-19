@@ -1,4 +1,17 @@
 /* ============================= Theme tokens ============================= */
+/* The browser's own parts (caret, autofill, checkboxes, the date and select
+   pickers) follow the theme from the root, not only where a control was patched. */
+:root {
+  color-scheme: dark;
+}
+[data-theme='light'] {
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+  }
+}
 :root {
   --bg: #0a0a0a;
   --surface: #1a1a1a;
@@ -16,6 +29,8 @@
   /* Text in the accent: the accent itself on dark; on light, a deeper amber of
      the same family, since #c8890a on white is about 3:1 (body text needs 4.5). */
   --accent-ink: #e5a00d;
+  /* Keyboard focus rings: 3:1 or more against the page in both themes. */
+  --focus-outline: var(--accent);
   /* The five status colours (statusSelect.js): soft pastels on dark, deeper inks
      on light, each at least 4.5:1 on the light surfaces. */
   --status-plan: #7db6f0;
@@ -203,6 +218,7 @@
   --slide-shadow: rgba(0, 0, 0, 0.15);
   --stop-ink: #2e7d4a;
   --accent-ink: #8a6000;
+  --focus-outline: var(--accent-ink);
   --status-plan: #2f6db3;
   --status-watching: #2e7d4a;
   --status-completed: #1d7a6e;
@@ -261,6 +277,7 @@
     --slide-shadow: rgba(0, 0, 0, 0.15);
     --stop-ink: #2e7d4a;
     --accent-ink: #8a6000;
+    --focus-outline: var(--accent-ink);
     --status-plan: #2f6db3;
     --status-watching: #2e7d4a;
     --status-completed: #1d7a6e;
@@ -2941,7 +2958,7 @@ body.season-active #app {
   transition: translate 70ms ease-out, box-shadow 70ms ease-out;
 }
 .stop-clear:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-outline);
   outline-offset: 3px;
 }
 /* The lamp strip: dark red glass, lit while held and for a moment after. */
@@ -4472,7 +4489,7 @@ body.modal-open {
    show where the keyboard is. A poster in the grids draws it inside its edge, so
    the scroller never clips it. */
 [role='button']:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
 }
 .gc-cell:focus-visible,
@@ -4483,7 +4500,7 @@ body.modal-open {
    tab bar clips anything outside its buttons, so there it is drawn inside. */
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
 }
 .tabbar button:focus-visible {
@@ -6474,6 +6491,10 @@ button.srow:active {
 /* Where every toast is placed (ui.js initToasts): a named region that is in
    the page from start-up, so screen readers find notifications in one place. It
    takes no room; the pills inside are fixed to the viewport. */
+/* A page takes the focus when it opens (router.js); no ring around the page. */
+main.view:focus {
+  outline: none;
+}
 .toast-region {
   position: fixed;
   top: 0;
@@ -7435,7 +7456,7 @@ img.mood-emoji {
 }
 /* The input itself is invisible: the keyboard's ring goes on the slider. */
 .switch input:focus-visible + .slider {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
 }
 .switch .slider {
@@ -10072,7 +10093,7 @@ textarea.notes:focus,
   cursor: default;
 }
 .kodi-active-chip:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
 }
 .kodi-inst-head {
@@ -11223,7 +11244,7 @@ textarea.lend-message-input:focus {
   color: #000;
 }
 .seg-opt:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-outline);
   outline-offset: 3px;
 }
 .seg:active .seg-chip {
@@ -11371,7 +11392,7 @@ textarea.lend-message-input:focus {
   transition-timing-function: var(--ease-in-out);
 }
 .segbar-opt:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-outline);
   outline-offset: -2px;
 }
 /* The chip covers the chosen option: lift its focus ring above the chip, with
@@ -11647,7 +11668,7 @@ textarea.lend-message-input:focus {
     drop-shadow(0 2px 4px rgba(0, 0, 0, 0.06));
 }
 .cine-mini:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-outline);
   outline-offset: 3px;
 }
 /* The rounded top corners are drawn by the banner and its image themselves, with
@@ -11958,6 +11979,11 @@ textarea.lend-message-input:focus {
 }
 .cine-input-text::placeholder { color: var(--ink-soft); font-weight: 500; }
 .cine-input-text:focus { outline: none; }
+/* ...so the field around it shows the focus, in the ticket's own ink. */
+.cine-field:has(.cine-input-text:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
 .cine-brandrow {
   display: flex;
   align-items: center;
@@ -14039,4 +14065,20 @@ textarea.lend-message-input:focus {
 }
 .menu-title.has-logo .menu-title-logo {
   opacity: 1;
+}
+
+/* ============================= Forced colours =============================
+   Windows High Contrast and other forced palettes repaint backgrounds, and the
+   Lucide icons are drawn as a background through a mask, so they would vanish:
+   they take the system text colour instead. Focus is always the system
+   highlight, whatever a component set for its own ring. */
+@media (forced-colors: active) {
+  [style*='mask-image'] {
+    forced-color-adjust: none;
+    background-color: CanvasText;
+  }
+  :focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
+  }
 }

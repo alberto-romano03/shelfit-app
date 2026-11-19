@@ -566,6 +566,11 @@ export default async function Season(container, params) {
       check.classList.remove('check-draw');
       check.classList.toggle('done', !!ep.watched);
       check.setAttribute('aria-pressed', ep.watched ? 'true' : 'false');
+      // Every tick names its own episode (and how often it was watched, which
+      // only the ×N badge shows), not one "Watched" repeated down the list.
+      const which = `${epLabel(data.season_number, ep.episode_number)}${ep.name ? ` ${ep.name}` : ''}`;
+      const times = ep.watched && ep.watch_count > 1 ? `, ${t('season.timesWatched', { n: ep.watch_count })}` : '';
+      check.setAttribute('aria-label', `${t('season.watchedFor', { ep: which })}${times}`);
       if (upcoming) check.setAttribute('aria-disabled', 'true');
       else check.removeAttribute('aria-disabled');
       if (ep.watched && ep.watch_count > 1) check.innerHTML = `<span class="check-count">×${ep.watch_count}</span>`;

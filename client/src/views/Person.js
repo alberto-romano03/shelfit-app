@@ -171,7 +171,7 @@ function personSkeleton() {
       el('div', { class: 'person-photo skeleton' }),
       el('div', { class: 'person-head-text' }, [
         el('div', { class: 'person-eyebrow' }, [skelText('74px')]),
-        el('h2', { class: 'person-name' }, [skelText('72%')]),
+        el('h2', { class: 'person-name', 'aria-hidden': 'true' }, [skelText('72%')]),
         el('div', { class: 'person-meta-row' }, [skelText('62%')]),
         el('div', { class: 'person-meta-row' }, [skelText('78%')]),
       ]),

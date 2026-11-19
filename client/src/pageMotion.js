@@ -120,6 +120,9 @@ export function pin(el, path) {
   const { top, left, height } = el._box;
   el.removeAttribute('id');
   el.classList.add('page-ghost');
+  // On its way out: out of reach of the keyboard and screen readers, which would
+  // otherwise find two pages (and two <main>s) for the length of the move.
+  el.inert = true;
   el.style.top = `${top}px`;
   el.style.left = `${left}px`;
   el.style.height = `${Math.max(height, window.innerHeight - top)}px`;
