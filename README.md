@@ -442,6 +442,8 @@ PUBLIC_URL=https://myserver.tail1234.ts.net
 ```
 
 It builds magic-link URLs and is the one non-localhost origin allowed by CORS.
+With an `https` address the session cookie is always `Secure` and named
+`__Secure-shelfit_session` (a session under the old name moves over by itself).
 Open **`https://myserver.tail1234.ts.net/shelfit/`** from any device with
 Tailscale connected, or `http://localhost/shelfit/` on the host.
 

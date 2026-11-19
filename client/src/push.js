@@ -9,6 +9,7 @@
 
 import { api } from './api.js';
 import { t, getLang, onLangChange } from './i18n.js';
+import { setPushOwner, currentUid } from './userScope.js';
 
 export function pushSupported() {
   return (
@@ -67,6 +68,7 @@ export async function enablePush() {
     });
   }
   await api.pushSubscribe(sub.toJSON(), getLang());
+  setPushOwner(currentUid());
   return true;
 }
 
@@ -96,6 +98,7 @@ export async function disablePush() {
   }
   if (sub) {
     await api.pushUnsubscribe(sub.endpoint);
+    setPushOwner(null);
     try {
       await sub.unsubscribe();
     } catch {

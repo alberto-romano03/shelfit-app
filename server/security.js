@@ -39,6 +39,31 @@ export function routePath(request) {
   return pattern.replace(/:([A-Za-z0-9_]+)/g, (_, name) => value(name)).replace(/\*$/, () => value('*'));
 }
 
+// --- cross-site requests (Fetch Metadata) ----------------------------------
+// Browsers say where a request comes from in Sec-Fetch-Site. Only shelfit's own
+// pages (same-origin) and things the user does directly (none: typing the URL,
+// a home-screen launch, a share sheet) may call the app. From another site only
+// a plain page navigation gets through (opening a magic link or a shared link
+// from a chat app), and only as a GET: a cross-site form POST, fetch, image or
+// script is refused. same-site is refused too: nothing legitimate is same-site
+// but not same-origin. Requests without the header (curl, the health probe,
+// older browsers) pass, and SameSite=Lax still covers them.
+export function isAllowedFetchSite(request) {
+  const site = request.headers['sec-fetch-site'];
+  if (!site || site === 'same-origin' || site === 'none') return true;
+  const navigation =
+    request.headers['sec-fetch-mode'] === 'navigate' && request.headers['sec-fetch-dest'] === 'document';
+  return navigation && (request.method === 'GET' || request.method === 'HEAD');
+}
+
+export function registerFetchMetadataGuard(fastify) {
+  fastify.addHook('onRequest', async (request, reply) => {
+    if (isAllowedFetchSite(request)) return;
+    reply.code(403).send({ error: 'cross-site request refused' });
+    return reply;
+  });
+}
+
 // --- one-way hashing for the access log ------------------------------------
 // The access log must never store a raw IP or user-agent (privacy), yet repeated
 // attempts from the same source must still be recognizable. A per-install random

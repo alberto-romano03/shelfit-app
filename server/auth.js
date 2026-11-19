@@ -24,6 +24,7 @@ import {
   recordUse,
   revokeMagicLink,
   expiryMsFor,
+  deleteUserMagicLinks,
 } from './magicLinks.js';
 import { clientIp, routePath } from './security.js';
 import { logAccess, getRecentAccess, EVENTS } from './accessLog.js';
@@ -53,7 +54,13 @@ const SALT_BYTES = 32;
 export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
 
-const COOKIE = 'shelfit_session';
+// Served over https (PUBLIC_URL), the session cookie is always Secure and carries
+// the __Secure- prefix, which the browser only accepts with Secure set from an
+// https page. The older name is still read, and swapped for the new one on the
+// next request (see the gate), so nobody is signed out by the rename.
+const SECURE_COOKIES = /^https:\/\//i.test(PUBLIC_URL || '');
+const LEGACY_COOKIE = 'shelfit_session';
+const COOKIE = SECURE_COOKIES ? '__Secure-shelfit_session' : LEGACY_COOKIE;
 // Readable companion cookie holding only the signed-in user's id. It grants
 // nothing (the session cookie above is what authenticates); it tells the client,
 // synchronously at startup, whose on-device cache to read, so one member's cached
@@ -265,8 +272,16 @@ function createSession(userId, request) {
 }
 
 function sessionTokenFrom(request) {
-  const value = parseCookies(request.headers.cookie)[COOKIE];
+  const cookies = parseCookies(request.headers.cookie);
+  const value = cookies[COOKIE] || (SECURE_COOKIES ? cookies[LEGACY_COOKIE] : undefined);
   return value && TOKEN_RE.test(value) ? value : null;
+}
+
+// True when the session came in under the pre-__Secure- cookie name.
+function usesLegacyCookie(request) {
+  if (!SECURE_COOKIES) return false;
+  const cookies = parseCookies(request.headers.cookie);
+  return !cookies[COOKIE] && !!cookies[LEGACY_COOKIE];
 }
 
 // The account behind the request's session cookie ({ id, role }), or null.
@@ -286,11 +301,14 @@ function destroySession(request) {
   if (token) deleteSessionStmt.run(hashToken(token));
 }
 
-// Sign `userId` out everywhere: no existing token can match again.
+// Sign `userId` out everywhere: no existing token can match again, and their
+// magic links go too (a link is a standing login, so it must not outlive "sign
+// out everywhere", a password reset, or a disabled account).
 export function revokeAllSessions(userId) {
   db.transaction(() => {
     bumpGenerationStmt.run(userId);
     deleteUserSessionsStmt.run(userId);
+    deleteUserMagicLinks(userId);
   })();
 }
 
@@ -333,7 +351,12 @@ function parseCookies(header) {
 function isHttps(request) {
   return (request.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
 }
-function buildSessionCookie(value, { maxAge, secure }) {
+// Secure whenever the app's public address is https, not only when the proxy
+// says so: a missing X-Forwarded-Proto must not drop the flag.
+function secureFor(request) {
+  return SECURE_COOKIES || isHttps(request);
+}
+function buildSessionCookie(value, { maxAge, secure, name = COOKIE }) {
   // Scope the cookie to the app's sub-path so it isn't sent to sibling apps
   // hosted under other prefixes on the same hostname.
   //
@@ -344,7 +367,7 @@ function buildSessionCookie(value, { maxAge, secure }) {
   // (this broke magic-link auto-login on Android/Chrome). Lax still sends it on
   // top-level GET navigations while withholding it from cross-site POST/fetch, so
   // state-changing requests stay CSRF-safe.
-  const parts = [`${COOKIE}=${value}`, `Path=${BASE}/`, 'HttpOnly', 'SameSite=Lax'];
+  const parts = [`${name}=${value}`, `Path=${BASE}/`, 'HttpOnly', 'SameSite=Lax'];
   if (maxAge != null) parts.push(`Max-Age=${maxAge}`);
   if (secure) parts.push('Secure');
   return parts.join('; ');
@@ -355,18 +378,24 @@ function buildUidCookie(value, { maxAge, secure }) {
   if (secure) parts.push('Secure');
   return parts.join('; ');
 }
+// Clears the pre-__Secure- cookie, when the new name is in use.
+function legacyCookieClear(secure) {
+  return SECURE_COOKIES ? [buildSessionCookie('', { maxAge: 0, secure, name: LEGACY_COOKIE })] : [];
+}
 function setSessionCookie(reply, request, token, userId) {
-  const secure = isHttps(request);
+  const secure = secureFor(request);
   reply.header('Set-Cookie', [
     buildSessionCookie(token, { maxAge: YEAR_SECONDS, secure }),
     buildUidCookie(String(userId), { maxAge: YEAR_SECONDS, secure }),
+    ...(usesLegacyCookie(request) ? legacyCookieClear(secure) : []),
   ]);
 }
 function clearSessionCookie(reply, request) {
-  const secure = isHttps(request);
+  const secure = secureFor(request);
   reply.header('Set-Cookie', [
     buildSessionCookie('', { maxAge: 0, secure }),
     buildUidCookie('', { maxAge: 0, secure }),
+    ...legacyCookieClear(secure),
   ]);
 }
 
@@ -497,42 +526,57 @@ function scriptJson(value) {
   return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
-// The logo is the same file as the favicon, linked rather than inlined: /icons/*
-// is public (see isPublic), so it loads without a session, and as a separate URL
-// it is downloaded once and browser-cached (Caddy sends a week's max-age) instead
-// of riding along, base64-inflated, in every no-store copy of this page.
-//
-// `invite` is null, { name } for a valid invite (the page opens on "choose your
-// password"), or { invalid: true } (the picker shows a notice instead).
-function loginPageHtml(profiles, invite = null) {
-  const logoTag = `<img class="logo" src="${BASE}/icons/shelf-iticon-browser.png" alt="" width="56" height="56">`;
+const escHtml = (v) =>
+  String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// The page a magic link opens: whose account it is and one button. Signing in
+// is the button's POST, so a chat app's link preview or an accidental open
+// signs nobody in. No script: the language comes from Accept-Language and the
+// theme from the system setting.
+function magicConfirmHtml(user, token, lang) {
+  const it = lang === 'it';
+  const f = avatarFile(user);
+  const b = badgeFile(user);
+  const initial = (Array.from(user.display_name || '?')[0] || '?').toUpperCase();
+  const avatar = f
+    ? `<img src="${BASE}/api/auth/profiles/${user.id}/avatar?v=${fileVersion(f)}" alt="">`
+    : escHtml(initial);
+  const badge = b
+    ? `<span class="badge"><img src="${BASE}/api/auth/profiles/${user.id}/badge?v=${fileVersion(b)}" alt=""></span>`
+    : '';
+  const name = escHtml(user.display_name);
   return `<!doctype html>
-<html lang="en">
+<html lang="${it ? 'it' : 'en'}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#0a0a0a">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="shelfit">
-<link rel="apple-touch-icon" sizes="180x180" href="${BASE}/icons/apple-touch-icon.png">
+<meta name="referrer" content="no-referrer">
 <link rel="icon" type="image/png" href="${BASE}/icons/shelf-iticon-browser.png">
-<link rel="manifest" href="${BASE}/manifest.json">
-<title data-it="Accedi · shelfit" data-en="Sign in · shelfit">Sign in · shelfit</title>
-<script>
-  // Theme, before first paint: the app's stored choice (theme.js, 'shelfit-theme').
-  // 'system' or nothing leaves the attribute off and the media query decides.
-  (function(){
-    var root=document.documentElement,t=null;
-    try{t=localStorage.getItem('shelfit-theme');}catch(e){}
-    if(t==='light'||t==='dark')root.setAttribute('data-theme',t);
-    var light=t==='light'||(t!=='dark'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches);
-    var meta=document.querySelector('meta[name="theme-color"]');
-    if(meta)meta.setAttribute('content',light?'#f5f5f5':'#0a0a0a');
-  })();
-</script>
+<title>${it ? 'Accedi' : 'Sign in'} · shelfit</title>
 <style>
-  :root{
+${AUTH_PAGE_CSS}</style>
+</head>
+<body>
+  <main class="card">
+    <img class="logo" src="${BASE}/icons/shelf-iticon-browser.png" alt="" width="56" height="56">
+    <h1>shelf<span>it</span></h1>
+    <div class="who">
+      <span class="tile-media"><span class="avatar">${avatar}</span>${badge}</span>
+      <span class="name">${name}</span>
+    </div>
+    <p class="sub">${it ? `Entra in shelfit come ${name} su questo dispositivo.` : `Sign in to shelfit as ${name} on this device.`}</p>
+    <form method="post" action="${BASE}/api/auth/magic/${token}">
+      <button class="primary" type="submit">${it ? 'Entra' : 'Sign in'}</button>
+    </form>
+    <p class="sub note">${it ? "Non te l'aspettavi? Chiudi questa pagina." : "Didn't expect this? Just close this page."}</p>
+  </main>
+</body>
+</html>`;
+}
+
+// Styles shared by the sign-in pages (login, magic link confirm).
+const AUTH_PAGE_CSS = `  :root{
     --bg:#0a0a0a;--surface:#1a1a1a;--surface-elevated:#2a2a2a;
     --text-primary:#fff;--text-secondary:#999;--accent:#e5a00d;
     --danger:#e5484d;--border:rgba(255,255,255,.08);--shadow:rgba(0,0,0,.5);
@@ -602,6 +646,7 @@ function loginPageHtml(profiles, invite = null) {
   .who .badge{width:38px;height:38px}
   .who .name{font-size:20px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sub{color:var(--text-secondary);font-size:14px;margin:0 0 20px}
+  .sub.note{margin:24px 0 0}
   form{display:flex;flex-direction:column;gap:12px;max-width:320px;margin:0 auto}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
   /* The app's text field: 12px radius, focus as a border swap + outside ring so
@@ -636,7 +681,44 @@ function loginPageHtml(profiles, invite = null) {
   .error{color:var(--danger);font-size:14px;min-height:18px;margin-top:4px}
   .notice{color:var(--danger);font-size:14px;margin:-8px 0 20px}
   .notice[hidden]{display:none}
-</style>
+`;
+
+// The logo is the same file as the favicon, linked rather than inlined: /icons/*
+// is public (see isPublic), so it loads without a session, and as a separate URL
+// it is downloaded once and browser-cached (Caddy sends a week's max-age) instead
+// of riding along, base64-inflated, in every no-store copy of this page.
+//
+// `invite` is null, { name } for a valid invite (the page opens on "choose your
+// password"), or { invalid: true } (the picker shows a notice instead).
+function loginPageHtml(profiles, invite = null) {
+  const logoTag = `<img class="logo" src="${BASE}/icons/shelf-iticon-browser.png" alt="" width="56" height="56">`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="shelfit">
+<link rel="apple-touch-icon" sizes="180x180" href="${BASE}/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="${BASE}/icons/shelf-iticon-browser.png">
+<link rel="manifest" href="${BASE}/manifest.json">
+<title data-it="Accedi · shelfit" data-en="Sign in · shelfit">Sign in · shelfit</title>
+<script>
+  // Theme, before first paint: the app's stored choice (theme.js, 'shelfit-theme').
+  // 'system' or nothing leaves the attribute off and the media query decides.
+  (function(){
+    var root=document.documentElement,t=null;
+    try{t=localStorage.getItem('shelfit-theme');}catch(e){}
+    if(t==='light'||t==='dark')root.setAttribute('data-theme',t);
+    var light=t==='light'||(t!=='dark'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches);
+    var meta=document.querySelector('meta[name="theme-color"]');
+    if(meta)meta.setAttribute('content',light?'#f5f5f5':'#0a0a0a');
+  })();
+</script>
+<style>
+${AUTH_PAGE_CSS}</style>
 </head>
 <body>
   <main class="card">
@@ -967,7 +1049,7 @@ export function registerAuth(fastify, { configured }) {
     // reachable without a session. Only the token URL is public; the management
     // routes (list/create/revoke) stay behind the gate.
     if (
-      request.method === 'GET' &&
+      (request.method === 'GET' || request.method === 'POST') &&
       /^\/api\/auth\/magic\/[a-f0-9]{64}$/.test(p)
     ) {
       return true;
@@ -984,7 +1066,7 @@ export function registerAuth(fastify, { configured }) {
       // The device cache is keyed by the uid hint (client/src/userScope.js), so
       // state it here too or nothing would be cached on the device.
       if (master && parseCookies(request.headers.cookie)[UID_COOKIE] !== String(master.id)) {
-        reply.header('Set-Cookie', buildUidCookie(String(master.id), { maxAge: YEAR_SECONDS, secure: isHttps(request) }));
+        reply.header('Set-Cookie', buildUidCookie(String(master.id), { maxAge: YEAR_SECONDS, secure: secureFor(request) }));
       }
       return;
     }
@@ -996,7 +1078,14 @@ export function registerAuth(fastify, { configured }) {
       // Sessions from before the hint cookie existed, or a hint left behind by
       // another member: (re)state whose session this is.
       if (parseCookies(request.headers.cookie)[UID_COOKIE] !== String(user.id)) {
-        reply.header('Set-Cookie', buildUidCookie(String(user.id), { maxAge: YEAR_SECONDS, secure: isHttps(request) }));
+        reply.header('Set-Cookie', buildUidCookie(String(user.id), { maxAge: YEAR_SECONDS, secure: secureFor(request) }));
+      }
+      // A session still under the old cookie name: carry it over to __Secure-.
+      if (usesLegacyCookie(request)) {
+        reply.header('Set-Cookie', [
+          buildSessionCookie(sessionTokenFrom(request), { maxAge: YEAR_SECONDS, secure: true }),
+          ...legacyCookieClear(true),
+        ]);
       }
       // Judged on the route the router matched, not on the URL as typed (see
       // routePath). HEAD runs the GET handler, so it is held to the GET rules.
@@ -1013,7 +1102,7 @@ export function registerAuth(fastify, { configured }) {
     // disabled): drop the uid hint so the next start doesn't open that member's
     // device cache.
     if (parseCookies(request.headers.cookie)[UID_COOKIE]) {
-      reply.header('Set-Cookie', buildUidCookie('', { maxAge: 0, secure: isHttps(request) }));
+      reply.header('Set-Cookie', buildUidCookie('', { maxAge: 0, secure: secureFor(request) }));
     }
     if (p.startsWith('/api/') || p.startsWith('/assets/') || p.startsWith('/badges/')) {
       reply.code(401).send({ error: 'unauthorized' });
@@ -1219,36 +1308,60 @@ export function registerAuth(fastify, { configured }) {
   });
 
   // --- Magic links ---------------------------------------------------------
-  // GET /api/auth/magic/:token: the passwordless login itself. Public (see
-  // isPublic), rate limited per IP, and redirects (never returns JSON) so a
-  // real browser navigation lands on the app or the login page.
-  fastify.get('/api/auth/magic/:token', async (request, reply) => {
+  // GET /api/auth/magic/:token opens the confirm page (magicConfirmHtml); its
+  // button POSTs to the same URL, which signs in. Both are public (see
+  // isPublic) and rate limited per IP on failures, and any failure redirects to
+  // a generic login error: never a reason.
+  function redeemCheck(request, reply) {
     const ip = clientIp(request);
-    // Redirect (302) to a generic login error on ANY failure: never reveal why.
     const fail = (userId = null) => {
       logAccess(EVENTS.MAGIC_LINK, request, false, userId); // fire-and-forget audit entry
-      return reply.redirect(`${BASE}/login?error=magic`);
+      reply.redirect(303, `${BASE}/login?error=magic`);
+      return null;
     };
-
     if (isMagicRateLimited(ip)) return fail();
-
-    const token = request.params && request.params.token;
-    const match = redeemToken(token); // timing-safe; null when invalid/expired
+    const match = redeemToken(request.params && request.params.token); // null when invalid/expired
     if (!match) {
       recordMagicFailure(ip); // only failures count toward the brute-force limit
       return fail();
     }
     const user = getUser(match.user_id);
     if (!user || user.disabled) return fail(match.user_id);
-    clearMagicFailures(ip);
-    recordUse(match.id);
-    logAccess(EVENTS.MAGIC_LINK, request, true, user.id);
+    return { match, user, ip };
+  }
 
-    // A session IDENTICAL to a password login for the link's account (same
-    // lifetime, same cookie): no reduced permissions.
-    setLastLoginStmt.run(Date.now(), user.id);
-    setSessionCookie(reply, request, createSession(user.id, request), user.id);
-    return reply.redirect(`${BASE}/`);
+  fastify.get('/api/auth/magic/:token', async (request, reply) => {
+    const ok = redeemCheck(request, reply);
+    if (!ok) return reply;
+    const lang = /^it\b/i.test(String(request.headers['accept-language'] || '')) ? 'it' : 'en';
+    reply
+      .header('Content-Type', 'text/html; charset=utf-8')
+      .header('Cache-Control', 'no-store')
+      .header('Referrer-Policy', 'no-referrer');
+    return magicConfirmHtml(ok.user, request.params.token, lang);
+  });
+
+  // The confirm button. A plain form post (no script on the page), so this one
+  // route accepts an urlencoded body; it is registered in its own scope so no
+  // other route does (they all stay JSON only).
+  fastify.register(async (scope) => {
+    scope.addContentTypeParser(
+      'application/x-www-form-urlencoded',
+      { parseAs: 'string', bodyLimit: 1024 },
+      (_req, _body, done) => done(null, {})
+    );
+    scope.post('/api/auth/magic/:token', async (request, reply) => {
+      const ok = redeemCheck(request, reply);
+      if (!ok) return reply;
+      clearMagicFailures(ok.ip);
+      recordUse(ok.match.id);
+      logAccess(EVENTS.MAGIC_LINK, request, true, ok.user.id);
+      // A session IDENTICAL to a password login for the link's account (same
+      // lifetime, same cookie): no reduced permissions.
+      setLastLoginStmt.run(Date.now(), ok.user.id);
+      setSessionCookie(reply, request, createSession(ok.user.id, request), ok.user.id);
+      return reply.redirect(303, `${BASE}/`);
+    });
   });
 
   // GET /api/auth/magic: the caller's active links (never the token value).

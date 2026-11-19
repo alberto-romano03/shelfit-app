@@ -27,7 +27,6 @@ const expiryChips = () => [
   ['7d', t('magic.expiry.days7')],
   ['30d', t('magic.expiry.days30')],
   ['90d', t('magic.expiry.days90')],
-  ['1y', t('magic.expiry.year1')],
 ];
 
 export function buildMagicLinks(api) {

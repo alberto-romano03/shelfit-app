@@ -2,9 +2,10 @@
 //
 // A magic link carries a 64-char random hex token (never the password) that,
 // when visited, mints a session cookie identical to a normal password login.
-// Tokens live in the `magic_links` table; they can be revoked or regenerated at
-// any time, carry an optional device label, and expire. The token value is only
-// ever returned once — at creation — and is never logged or listed afterwards.
+// Links live in the `magic_links` table as a SHA-256 of the token (like sessions
+// and invites), so a copy of the database holds no working URL; they can be
+// revoked or regenerated at any time, carry an optional device label, and expire.
+// The token itself is returned once, at creation, and never logged or listed.
 //
 // No external dependencies — Node's crypto only.
 
@@ -15,12 +16,12 @@ const TOKEN_BYTES = 32; // → 64 hex chars
 export const TOKEN_RE = /^[a-f0-9]{64}$/;
 
 // Selectable expiries offered in the UI (label → milliseconds). The default is
-// 30 days; anything not in this map falls back to it.
+// 30 days; anything not in this map falls back to it. 90 days at most: a link is
+// a standing login for whoever holds the URL.
 export const EXPIRY_OPTIONS = {
   '7d': 7 * 24 * 60 * 60 * 1000,
   '30d': 30 * 24 * 60 * 60 * 1000,
   '90d': 90 * 24 * 60 * 60 * 1000,
-  '1y': 365 * 24 * 60 * 60 * 1000,
 };
 const DEFAULT_EXPIRY_MS = EXPIRY_OPTIONS['30d'];
 
@@ -29,8 +30,10 @@ export function expiryMsFor(key) {
 }
 
 // --- Prepared statements (compiled once at module load, reused thereafter) ---
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
 const insertLinkStmt = db.prepare(
-  `INSERT INTO magic_links (token, label, created_at, expires_at, use_count, user_id)
+  `INSERT INTO magic_links (token_hash, label, created_at, expires_at, use_count, user_id)
    VALUES (?, ?, ?, ?, 0, ?)`
 );
 const listLinksStmt = db.prepare(
@@ -39,12 +42,15 @@ const listLinksStmt = db.prepare(
     WHERE expires_at > ? AND user_id = ?
     ORDER BY created_at DESC`
 );
-const allTokensStmt = db.prepare('SELECT id, token, expires_at, user_id FROM magic_links');
+const findLinkStmt = db.prepare(
+  'SELECT id, expires_at, user_id FROM magic_links WHERE token_hash = ? AND expires_at > ?'
+);
 const recordUseStmt = db.prepare(
   `UPDATE magic_links SET use_count = use_count + 1, last_used_at = ? WHERE id = ?`
 );
 const revokeLinkStmt = db.prepare('DELETE FROM magic_links WHERE id = ? AND user_id = ?');
 const cleanupExpiredStmt = db.prepare('DELETE FROM magic_links WHERE expires_at <= ?');
+const deleteUserLinksStmt = db.prepare('DELETE FROM magic_links WHERE user_id = ?');
 
 // Create a link that signs in `userId`. Returns the full row INCLUDING the token,
 // the only time the token is exposed. The caller turns it into a URL and never
@@ -54,7 +60,7 @@ export function createMagicLink({ userId, label, expiresInMs } = {}) {
   const now = Date.now();
   const expires_at = now + (Number.isFinite(expiresInMs) ? expiresInMs : DEFAULT_EXPIRY_MS);
   const cleanLabel = typeof label === 'string' && label.trim() ? label.trim().slice(0, 60) : null;
-  const info = insertLinkStmt.run(token, cleanLabel, now, expires_at, userId);
+  const info = insertLinkStmt.run(hashToken(token), cleanLabel, now, expires_at, userId);
   return {
     id: info.lastInsertRowid,
     token,
@@ -71,25 +77,13 @@ export function listMagicLinks(userId) {
   return listLinksStmt.all(Date.now(), userId);
 }
 
-// Look up a token with a TIMING-SAFE comparison. Every stored token is compared
-// with crypto.timingSafeEqual and the loop never short-circuits, so the response
-// time doesn't leak which (if any) token matched or how far it matched. Returns
-// the matching, non-expired row ({ id, expires_at, user_id }), or null. Malformed input returns null cheaply
-// (the format is fixed and public, so rejecting it early leaks nothing).
+// The live link a token opens ({ id, expires_at, user_id }), or null. Looked up
+// by the token's SHA-256: the lookup's timing can only reveal something about a
+// hash the caller can't steer, never about the stored tokens. Malformed input
+// returns null cheaply (the format is fixed and public, so that leaks nothing).
 export function redeemToken(token) {
   if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null;
-  const now = Date.now();
-  const candidate = Buffer.from(token, 'utf8');
-  const rows = allTokensStmt.all();
-  let match = null;
-  for (const row of rows) {
-    const stored = Buffer.from(row.token, 'utf8');
-    const equal =
-      stored.length === candidate.length && crypto.timingSafeEqual(stored, candidate);
-    // No early break — keep the work constant regardless of where a match is.
-    if (equal && row.expires_at > now) match = { id: row.id, expires_at: row.expires_at, user_id: row.user_id };
-  }
-  return match;
+  return findLinkStmt.get(hashToken(token), Date.now()) || null;
 }
 
 // Record a successful use (called only after redeemToken matched).
@@ -102,6 +96,11 @@ export function recordUse(id) {
 export function revokeMagicLink(id, userId) {
   const info = revokeLinkStmt.run(id, userId);
   return info.changes > 0;
+}
+
+// Delete every link of `userId` (signed out everywhere, password reset, disabled).
+export function deleteUserMagicLinks(userId) {
+  return deleteUserLinksStmt.run(userId).changes;
 }
 
 // Delete every expired link. Returns the number removed.

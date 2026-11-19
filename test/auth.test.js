@@ -163,8 +163,17 @@ describe('household sign-in', () => {
     assert.equal((await master.del(`/api/auth/magic/${made.json.id}`)).status, 404);
 
     const token = made.json.url.split('/').pop();
-    const redeem = await h.app.inject({ method: 'GET', url: `/api/auth/magic/${token}` });
-    assert.equal(redeem.statusCode, 302);
+    // Opening the link shows whose account it is; the button's POST signs in.
+    const page = await h.app.inject({ method: 'GET', url: `/api/auth/magic/${token}` });
+    assert.equal(page.statusCode, 200);
+    assert.equal(page.headers['set-cookie'], undefined);
+    const redeem = await h.app.inject({
+      method: 'POST',
+      url: `/api/auth/magic/${token}`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'same-origin' },
+      payload: '',
+    });
+    assert.equal(redeem.statusCode, 303);
     const linkCookie = [].concat(redeem.headers['set-cookie'])[0].split(';')[0];
     assert.equal((await client(h.app, linkCookie).get('/api/auth/status')).json.user.id, memberId);
   });
