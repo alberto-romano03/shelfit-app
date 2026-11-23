@@ -802,6 +802,7 @@ yourself.
 | Interface icons (`client/public/icons/lucide/`) | [Lucide](https://lucide.dev/) contributors | ISC License |
 | Animated mood emoji (`client/public/icons/animated-genre/`) | [Animated Noto Emoji](https://googlefonts.github.io/noto-emoji-animation/) by Google | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); resized from 512px to 128px |
 | Receipt font (`client/public/font/Fake-Receipt.woff`) | Fake Receipt by Ray Larabie, [Typodermic Fonts](https://typodermicfonts.com) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain) |
+| Now Playing display font (`client/public/font/DSEG14Modern-Regular.woff2`) | [DSEG](https://www.keshikan.net/fonts-e.html) by keshikan | [SIL Open Font License 1.1](https://openfontlicense.org) (`client/public/font/DSEG-LICENSE.txt`) |
 | Kodi logo and related marks | XBMC Foundation | Trademark of its owner; used for identification only |
 | TMDB logo and all metadata, posters, backdrops, stills and cast photos | [The Movie Database](https://www.themoviedb.org/) and the respective studios and rights holders | TMDB API terms of use; artwork remains © its rights holders |
 | Clear logos and disc art | [Fanart.tv](https://fanart.tv/) and the respective rights holders | Fanart.tv API terms of use |

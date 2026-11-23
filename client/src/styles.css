@@ -6550,6 +6550,9 @@ body:has(.modal-backdrop:not(.backdrop-closing)) .net-toast.show {
 body:has(.modal-backdrop:not(.backdrop-closing)) .np-toast {
   z-index: 99;
 }
+body:has(.modal-backdrop:not(.backdrop-closing)) .np-scrim {
+  z-index: 98;
+}
 .toast-ico {
   flex: 0 0 auto;
   width: 18px;
@@ -12041,102 +12044,122 @@ textarea.lend-message-input:focus {
   .wavyprog-wave { animation: none; }
 }
 
-/* --- Topbar now-playing indicator (icon + text, with a divider to Settings) --- */
+/* --- Topbar now-playing indicator: a deck's little LCD, with a divider to Settings ---
+   A black glass window in which "▶ NOW PLAYING" steps right to left, one letter
+   a second (nowPlaying.js), in a 14-segment display font (DSEG14 Modern, in
+   client/public/font). The unlit segments show faintly behind, as on a real
+   display. The screen is black on either theme, so its colours are its own. */
 .np-indicator {
+  --lcd-lit: #4cc8f5;
+  --lcd-glow: rgba(23, 178, 232, 0.55);
+  --lcd-off: rgba(23, 178, 232, 0.09);
+  --lcd-size: 12px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   /* button reset */
   padding: 0;
   border: none;
   background: none;
   cursor: pointer;
-  color: var(--kodi-blue);
-  font-family: inherit;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  line-height: 1;
-  /* Space always reserved — no layout shift on appear/disappear. */
+  /* Space always reserved: no layout shift on appear/disappear. */
   visibility: hidden;
   opacity: 0;
   transition: opacity var(--dur-medium) var(--ease-state);
 }
-/* Vertical separator between the text and the Settings icon. */
+/* Vertical separator between the screen and the Settings icon. */
 .np-indicator::after {
   content: '';
   width: 1px;
   height: 16px;
-  margin-left: 4px;
   background: var(--border);
 }
 .np-indicator.active {
   visibility: visible;
   opacity: 1;
 }
-/* A slow light drifts across the label: a gradient clipped to the letters. The
-   highlight mixes toward the theme's text colour, so it brightens on dark and
-   deepens on light and the label always stays readable. Ambient only: one pass
-   over ~8s, then ~8s of rest, paused while pressed, still under reduced motion. */
-.np-indicator-label {
-  white-space: nowrap;
-  background: linear-gradient(
-    100deg,
-    var(--kodi-blue) 0%,
-    var(--kodi-blue) 40%,
-    color-mix(in srgb, var(--kodi-blue) 40%, var(--text-primary)) 50%,
-    var(--kodi-blue) 60%,
-    var(--kodi-blue) 100%
-  );
-  background-size: 250% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-/* Only while it shows: the element keeps its place hidden in the header on every
-   page, and an animation left on it repaints for nothing. */
-.np-indicator.active .np-indicator-label {
-  animation: np-sweep 16s ease-in-out infinite;
-}
-@keyframes np-sweep {
-  0% { background-position: 100% 0; }
-  50%, 100% { background-position: -150% 0; }
-}
-/* Pulsing filled play glyph (inline SVG, tinted via currentColor). A calm 4.8s
-   breath, so the indicator never blinks for attention. */
-.np-audio {
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
+.np-lcd {
+  position: relative;
   display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #050505;
+  /* A recessed window: a faint rim, shade inside, and a sheen across the top. */
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    inset 0 2px 4px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(0, 0, 0, 0.35);
+  font-family: 'DSEG14 Modern', ui-monospace, monospace;
+  font-size: var(--lcd-size);
+  line-height: 1;
+  color: var(--lcd-lit);
 }
-.np-indicator.active .np-audio {
-  animation: np-audio-pulse 4.8s ease-in-out infinite;
+.np-lcd::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.08), transparent 45%);
 }
-.np-indicator:active .np-audio,
-.np-indicator:active .np-indicator-label {
-  animation-play-state: paused;
+.np-lcd-row {
+  display: flex;
 }
-/* Paused on Kodi: everything rests and the indicator dims. */
-.np-indicator.paused .np-audio,
-.np-indicator.paused .np-indicator-label {
-  animation: none;
+.np-lcd-ghost {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--lcd-off);
 }
-.np-indicator.active.paused {
-  opacity: 0.75;
+.np-lcd-live {
+  position: relative;
+  text-shadow: 0 0 2px var(--lcd-glow), 0 0 6px var(--lcd-glow);
 }
-.np-audio svg {
-  width: 100%;
-  height: 100%;
-  display: block;
+/* One character cell: every letter, and the drawn ▶ / ‖, take the same width. */
+.np-lcd-c {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.98em;
+  height: 1em;
 }
-@keyframes np-audio-pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
+.np-lcd-c.is-blank {
+  color: transparent;
+  text-shadow: none;
+}
+.np-lcd-c svg {
+  height: 0.95em;
+  width: auto;
+  fill: currentColor;
+  filter: drop-shadow(0 0 2px var(--lcd-glow));
+}
+/* Paused on Kodi: the display holds "‖ PAUSE" and blinks slowly. */
+.np-indicator.paused .np-lcd-live {
+  animation: np-lcd-blink 1.6s steps(1) infinite;
+}
+@keyframes np-lcd-blink {
+  60% {
+    opacity: 0.18;
+  }
+}
+.np-indicator:active .np-lcd {
+  scale: var(--press-small);
+}
+/* Seven characters, on a narrow phone set a size smaller so the screen still
+   sits beside the logo. */
+@media (max-width: 359px) {
+  .np-indicator {
+    --lcd-size: 10.5px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .np-indicator.active .np-audio { animation: none; opacity: 1; }
-  .np-indicator.active .np-indicator-label { animation: none; }
+  .np-indicator.paused .np-lcd-live {
+    animation: none;
+  }
 }
 
 /* --- Now Playing toast (slides down from above, settles below the header) ---
@@ -12193,6 +12216,24 @@ textarea.lend-message-input:focus {
 }
 .np-toast.dismissing {
   transition: transform var(--dur-medium) var(--ease-in), opacity var(--dur-medium) var(--ease-in);
+}
+/* Behind the open toast: a light dim over the whole page, header included, so
+   the toast is what is in focus. It takes any tap outside the toast, which only
+   closes it (nowPlaying.js). Without the toast it is gone and lets taps through. */
+.np-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 299;
+  background: rgba(0, 0, 0, 0.32);
+  opacity: 0;
+  pointer-events: none;
+  touch-action: none;
+  transition: opacity var(--dur-medium) var(--ease-in);
+}
+.np-scrim.show {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity var(--dur-medium) var(--ease-out);
 }
 /* A true 2:3 poster (60 x 90) at the small media radius. The card already
    floats, so the poster gets only a whisper of depth (half the --shadow token,

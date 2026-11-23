@@ -1,5 +1,6 @@
 // Kodi "Now Playing" UI:
-//   • a small header indicator ("Now Playing") — tap to open the toast
+//   • a small header indicator, a deck's LCD with "▶ NOW PLAYING" stepping
+//     through it: tap to open the toast
 //   • the animated wavy avatar ring
 //   • a top-sliding toast (poster · Kodi instance · title · episode · audio and
 //     subtitle chips) with one action row under it: record what is playing in
@@ -14,14 +15,28 @@ import { getNowPlaying } from './kodi.js';
 import { createWavyRing } from './wavyRing.js';
 import { t, onLangChange } from './i18n.js';
 import { fillActions } from './nowPlayingActions.js';
+import { withBase } from './basePath.js';
 
 const KODI_BLUE = '#17B2E8';
-const PLAY = // filled play glyph (inlined so it renders solid, no mask/caching)
-  '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+
+// --- The header's LCD -------------------------------------------------------
+// Seven character cells in a 14-segment display font. While playing, "▶ NOW
+// PLAYING" steps right to left through them, one whole letter a second; paused,
+// they hold "‖ PAUSE" (and blink, in CSS). The ▶ and ‖ are drawn, so they sit in
+// a cell like the letters. Reduced motion holds still on "▶ PLAY".
+const LCD_CELLS = 7;
+const LCD_STEP_MS = 1000;
+const LCD_FONT = 'DSEG14 Modern';
+const LCD_FONT_URL = '/font/DSEG14Modern-Regular.woff2'; // SIL OFL, see DSEG-LICENSE.txt beside it
+const LCD_ALL_SEGMENTS = '~'; // the font's "every segment" glyph: the unlit ghost behind
+const LCD_PLAY = '<svg viewBox="0 0 10 12" aria-hidden="true"><path d="M1 .5 9.5 6 1 11.5z"/></svg>';
+const LCD_PAUSE =
+  '<svg viewBox="0 0 10 12" aria-hidden="true"><rect x="1.2" y=".5" width="2.8" height="11"/><rect x="6" y=".5" width="2.8" height="11"/></svg>';
 
 // --- Module state ---------------------------------------------------------
 let indicator = null;
 let toastEl = null;
+let scrim = null; // the dim behind the open toast, which takes taps outside it
 let els = {}; // cached toast sub-elements
 let toastOpen = false;
 let currentRing = null; // ring attached to the currently-mounted avatar (or null)
@@ -33,15 +48,78 @@ let autoCloseTimer = null; // dismisses an open toast after a short peek
 // focus is on it: someone reading it or reaching for a button keeps it open.
 const TOAST_AUTO_CLOSE_MS = 7000;
 
-// Header label: "Now playing", or "Paused" while Kodi is paused.
-const indicatorLabel = (np) => (np && np.paused ? t('nowPlaying.paused') : t('nowPlaying.label'));
+let lcdCells = []; // the seven cells of the header's screen
+let lcdTimer = 0; // steps the marquee while playing
+let lcdPos = 0; // the marquee's first character in the window
+let lcdFontAsked = false;
+
+const motionReduced = () =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// What runs through the screen: the play mark, the words, a short gap, again.
+const lcdMessage = () => ['▶', ' ', ...t('nowPlaying.lcd').toUpperCase(), ' ', ' ', ' '];
+
+// Fetched only once something plays (a 6 KB file), from the app itself (the
+// Content-Security-Policy allows fonts from 'self' only), under the app's path.
+function loadLcdFont() {
+  if (lcdFontAsked || typeof FontFace !== 'function') return;
+  lcdFontAsked = true;
+  const face = new FontFace(LCD_FONT, `url("${withBase(LCD_FONT_URL)}") format('woff2')`);
+  face
+    .load()
+    .then(() => document.fonts.add(face))
+    .catch(() => {
+      lcdFontAsked = false; // try again on the next play
+    });
+}
+
+function paintLcd(chars) {
+  chars.forEach((ch, i) => {
+    const cell = lcdCells[i];
+    if (!cell) return;
+    cell.classList.toggle('is-blank', ch === ' ');
+    if (ch === '▶') cell.innerHTML = LCD_PLAY;
+    else if (ch === '‖') cell.innerHTML = LCD_PAUSE;
+    else cell.textContent = ch === ' ' ? '!' : ch; // "!" is the font's blank cell
+  });
+}
+function stopLcd() {
+  clearInterval(lcdTimer);
+  lcdTimer = 0;
+}
+// Set the screen for `np`: off, held on pause, still (reduced motion), or stepping.
+function updateLcd(np) {
+  stopLcd();
+  if (!indicator || !(np && np.active)) return;
+  loadLcdFont();
+  if (np.paused) {
+    paintLcd(['‖', ' ', ...t('nowPlaying.lcdPaused').toUpperCase()].slice(0, LCD_CELLS));
+    return;
+  }
+  if (motionReduced()) {
+    paintLcd(['▶', ' ', ...t('nowPlaying.lcdStill').toUpperCase(), ' ', ' ', ' '].slice(0, LCD_CELLS));
+    return;
+  }
+  const step = () => {
+    const msg = lcdMessage();
+    lcdPos %= msg.length;
+    paintLcd(Array.from({ length: LCD_CELLS }, (_, i) => msg[(lcdPos + i) % msg.length]));
+  };
+  step();
+  // A hidden page has nothing to show it to: the steps wait until it is back.
+  if (document.visibilityState === 'hidden') return;
+  lcdTimer = setInterval(() => {
+    lcdPos += 1;
+    step();
+  }, LCD_STEP_MS);
+}
 
 // --- Build (indicator + toast, once) --------------------------------------
 export function initNowPlaying(headerActionsEl) {
   if (indicator) return;
 
-  // Header indicator: a pulsing "play" glyph + "Now Playing", tappable. Space is
-  // always reserved (visibility toggled) so nothing shifts on appear/disappear.
+  // Header indicator: the LCD, tappable. Space is always reserved (visibility
+  // toggled) so nothing shifts on appear/disappear. Its name is read aloud; the
+  // moving letters are not.
   indicator = el('button', {
     class: 'np-indicator',
     'aria-label': t('nowPlaying.indicatorAria'),
@@ -54,10 +132,17 @@ export function initNowPlaying(headerActionsEl) {
       toggleToast({ focus: e.detail === 0 });
     },
   });
-  const glyph = el('span', { class: 'np-audio' });
-  glyph.innerHTML = PLAY;
-  indicator.append(glyph, el('span', { class: 'np-indicator-label' }, [t('nowPlaying.label')]));
+  const ghost = el('span', { class: 'np-lcd-row np-lcd-ghost' });
+  const live = el('span', { class: 'np-lcd-row np-lcd-live' });
+  for (let i = 0; i < LCD_CELLS; i++) {
+    ghost.append(el('span', { class: 'np-lcd-c', text: LCD_ALL_SEGMENTS }));
+    const cell = el('span', { class: 'np-lcd-c is-blank', text: '!' });
+    live.append(cell);
+    lcdCells.push(cell);
+  }
+  indicator.append(el('span', { class: 'np-lcd', 'aria-hidden': 'true' }, [ghost, live]));
   if (headerActionsEl) headerActionsEl.prepend(indicator);
+  document.addEventListener('visibilitychange', () => updateLcd(getNowPlaying()));
 
   // Toast (built once, reused):
   // [poster] [ tv · Kodi instance / title / SxxExx · episode / audio + subtitle chips ]
@@ -87,7 +172,16 @@ export function initNowPlaying(headerActionsEl) {
   // Hidden, it is only see-through: inert keeps its buttons out of Tab and away
   // from screen readers until it opens.
   toastEl.inert = true;
-  document.body.appendChild(toastEl);
+  // While it is open the toast is the one thing in play: a light dim over the
+  // page (header included) takes every tap outside it. That tap only closes the
+  // toast; it never reaches the button, card or link underneath.
+  scrim = el('div', { class: 'np-scrim', 'aria-hidden': 'true' });
+  scrim.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeToast();
+  });
+  document.body.append(scrim, toastEl);
   els = { poster, source, sourceName, title, meta, chips, acts, close };
 
   // A finger, pointer or the focus on the toast holds it open (there is a button
@@ -114,24 +208,12 @@ export function initNowPlaying(headerActionsEl) {
     if (toastOpen && np && np.active) fillToast(np);
   });
 
-  // Outside-tap dismiss.
-  document.addEventListener('click', (e) => {
-    if (
-      toastOpen &&
-      !toastEl.contains(e.target) &&
-      e.target !== indicator &&
-      !indicator.contains(e.target) &&
-      !(currentWrap && currentWrap.contains(e.target))
-    ) {
-      closeToast();
-    }
-  });
 
   window.addEventListener('shelfit:kodi-nowplaying', (e) => render(e.detail || getNowPlaying()));
   // The indicator and toast outlive page renders — relabel them on a language switch.
   onLangChange(() => {
     indicator.setAttribute('aria-label', t('nowPlaying.indicatorAria'));
-    indicator.querySelector('.np-indicator-label').textContent = indicatorLabel(getNowPlaying());
+    updateLcd(getNowPlaying());
     toastEl.setAttribute('aria-label', t('nowPlaying.label'));
     els.close.textContent = t('common.close');
     if (toastOpen) fillToast(getNowPlaying());
@@ -192,10 +274,15 @@ function posterKey(np) {
 function render(np) {
   const active = !!(np && np.active);
   if (indicator) {
+    // Paused on Kodi: the screen holds "‖ PAUSE" and blinks.
+    const paused = active && !!np.paused;
+    const changed =
+      indicator.classList.contains('active') !== active || indicator.classList.contains('paused') !== paused;
     indicator.classList.toggle('active', active);
-    // Paused on Kodi: the indicator rests (no pulse, no light) and says so.
-    indicator.classList.toggle('paused', active && !!np.paused);
-    indicator.querySelector('.np-indicator-label').textContent = indicatorLabel(np);
+    indicator.classList.toggle('paused', paused);
+    // Only a change of state restarts the screen: the snapshot refreshes every
+    // few seconds, and the marquee must not jump back each time.
+    if (changed || !lcdTimer) updateLcd(np);
   }
   applyRing(np);
 
@@ -303,6 +390,7 @@ function openToast({ focus = false } = {}) {
   toastEl.style.top = `${Math.round(top)}px`;
   toastEl.classList.remove('dismissing');
   toastEl.inert = false;
+  scrim.classList.add('show');
   requestAnimationFrame(() => toastEl.classList.add('show'));
   toastOpen = true;
   if (indicator) indicator.setAttribute('aria-expanded', 'true');
@@ -324,6 +412,7 @@ function closeToast() {
   }
   toastEl.classList.add('dismissing');
   toastEl.classList.remove('show');
+  if (scrim) scrim.classList.remove('show');
   toastEl.inert = true;
   toastOpen = false;
 }
