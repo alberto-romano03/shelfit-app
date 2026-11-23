@@ -4395,8 +4395,12 @@ body.season-active #app {
    doesn't bleed through to the underlying app. Plain overflow:hidden (no
    position change) keeps the popup anchored to the viewport bottom as before;
    overscroll-behavior on the popup below stops any scroll chaining. */
-html.modal-open,
-body.modal-open {
+/* On the root only: overflow on <body> as well would make the body a scroll box
+   of its own. The sticky header then sticks to that box, which never scrolls, so
+   with the page scrolled down it went off the top as a popup opened (and Chrome
+   jumped the page back to the top). Touch scrolling is held by lockScroll's
+   touchmove guard in ui.js. */
+html.modal-open {
   overflow: hidden;
 }
 .modal-backdrop {

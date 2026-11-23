@@ -1233,7 +1233,6 @@ function onLockTouchMove(e) {
 export function lockScroll() {
   if (scrollLocks === 0 && typeof document !== 'undefined') {
     document.documentElement.classList.add('modal-open');
-    document.body.classList.add('modal-open');
     document.addEventListener('touchmove', onLockTouchMove, { passive: false });
   }
   scrollLocks += 1;
@@ -1243,7 +1242,6 @@ export function unlockScroll() {
   scrollLocks -= 1;
   if (scrollLocks === 0 && typeof document !== 'undefined') {
     document.documentElement.classList.remove('modal-open');
-    document.body.classList.remove('modal-open');
     document.removeEventListener('touchmove', onLockTouchMove, { passive: false });
   }
 }
