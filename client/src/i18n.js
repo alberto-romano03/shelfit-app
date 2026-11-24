@@ -807,9 +807,8 @@ const it = {
   // --- Kodi, now playing, offline ---
   'nowPlaying.indicatorAria': 'In riproduzione su Kodi: apri',
   'nowPlaying.label': 'In riproduzione',
-  'nowPlaying.lcd': 'In riproduzione',
-  'nowPlaying.lcdPaused': 'Pausa',
-  'nowPlaying.lcdStill': 'Play',
+  'nowPlaying.lcdPlaying': 'Playing',
+  'nowPlaying.lcdPaused': 'Pause',
   'nowPlaying.fallbackTitle': 'In riproduzione',
   'nowPlaying.episode': 'Episodio {episode}',
   'nowPlaying.subtitlesOff': 'Nessuno',
@@ -1971,9 +1970,8 @@ const en = {
   // --- Kodi, now playing, offline ---
   'nowPlaying.indicatorAria': 'Now playing on Kodi: open',
   'nowPlaying.label': 'Now playing',
-  'nowPlaying.lcd': 'Now playing',
+  'nowPlaying.lcdPlaying': 'Playing',
   'nowPlaying.lcdPaused': 'Pause',
-  'nowPlaying.lcdStill': 'Play',
   'nowPlaying.fallbackTitle': 'Now Playing',
   'nowPlaying.episode': 'Episode {episode}',
   'nowPlaying.subtitlesOff': 'None',

@@ -1,6 +1,6 @@
 // Kodi "Now Playing" UI:
-//   • a small header indicator, a deck's LCD with "▶ NOW PLAYING" stepping
-//     through it: tap to open the toast
+//   • a small header indicator, a deck's lit LCD reading PLAYING (or PAUSE),
+//     its play mark blinking: tap to open the toast
 //   • the animated wavy avatar ring
 //   • a top-sliding toast (poster · Kodi instance · title · episode · audio and
 //     subtitle chips) with one action row under it: record what is playing in
@@ -19,19 +19,32 @@ import { withBase } from './basePath.js';
 
 const KODI_BLUE = '#17B2E8';
 
-// --- The header's LCD -------------------------------------------------------
-// Seven character cells in a 14-segment display font. While playing, "▶ NOW
-// PLAYING" steps right to left through them, one whole letter a second; paused,
-// they hold "‖ PAUSE" (and blink, in CSS). The ▶ and ‖ are drawn, so they sit in
-// a cell like the letters. Reduced motion holds still on "▶ PLAY".
-const LCD_CELLS = 7;
-const LCD_STEP_MS = 1000;
+// --- The header's screen ---------------------------------------------------
+// A small backlit LCD, its glass lit Kodi blue, the word in dark 14-segment
+// characters: PLAYING, or PAUSE while Kodi is paused. The word stands still and
+// the screen keeps one width; only the mark beside it (▶, or ‖) goes on and off,
+// as a VCR's on-screen display does (CSS). The mark is drawn soft, not crisp:
+// slightly blurred, its edges uneven, a faint smear to the right, like a picture
+// off tape. The unlit segments show faintly behind the word.
 const LCD_FONT = 'DSEG14 Modern';
 const LCD_FONT_URL = '/font/DSEG14Modern-Regular.woff2'; // SIL OFL, see DSEG-LICENSE.txt beside it
 const LCD_ALL_SEGMENTS = '~'; // the font's "every segment" glyph: the unlit ghost behind
-const LCD_PLAY = '<svg viewBox="0 0 10 12" aria-hidden="true"><path d="M1 .5 9.5 6 1 11.5z"/></svg>';
+// The softening, used by both marks (one indicator, so one id).
+const LCD_SOFT =
+  '<filter id="np-mark-soft" x="-60%" y="-60%" width="220%" height="220%">' +
+  '<feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="1" seed="3" result="n"/>' +
+  '<feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" result="w"/>' +
+  '<feGaussianBlur in="w" stdDeviation="0.45" result="b"/>' +
+  '<feOffset in="b" dx="0.9" result="s"/>' +
+  '<feColorMatrix in="s" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 .35 0" result="sf"/>' +
+  '<feGaussianBlur in="b" stdDeviation="1.4" result="halo"/>' +
+  '<feMerge><feMergeNode in="halo"/><feMergeNode in="sf"/><feMergeNode in="b"/></feMerge></filter>';
+const LCD_PLAY =
+  '<svg viewBox="0 0 9 11" aria-hidden="true"><g filter="url(#np-mark-soft)">' +
+  '<path d="M1.2.9C1 .7.7.8.7 1.2v8.6c0 .4.3.5.6.3l6.9-4.2c.3-.2.3-.6 0-.8Z"/></g></svg>';
 const LCD_PAUSE =
-  '<svg viewBox="0 0 10 12" aria-hidden="true"><rect x="1.2" y=".5" width="2.8" height="11"/><rect x="6" y=".5" width="2.8" height="11"/></svg>';
+  '<svg viewBox="0 0 9 11" aria-hidden="true"><g filter="url(#np-mark-soft)">' +
+  '<rect x=".9" y=".8" width="2.6" height="9.4" rx=".4"/><rect x="5.5" y=".8" width="2.6" height="9.4" rx=".4"/></g></svg>';
 
 // --- Module state ---------------------------------------------------------
 let indicator = null;
@@ -48,15 +61,11 @@ let autoCloseTimer = null; // dismisses an open toast after a short peek
 // focus is on it: someone reading it or reaching for a button keeps it open.
 const TOAST_AUTO_CLOSE_MS = 7000;
 
-let lcdCells = []; // the seven cells of the header's screen
-let lcdTimer = 0; // steps the marquee while playing
-let lcdPos = 0; // the marquee's first character in the window
+let lcdMark = null; // the blinking mark's cell
+let lcdWord = null; // the word on the screen
+let lcdSizer = null; // the longest word, unseen: holds the screen's width
+let lcdGhost = null; // the unlit segments behind
 let lcdFontAsked = false;
-
-const motionReduced = () =>
-  typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-// What runs through the screen: the play mark, the words, a short gap, again.
-const lcdMessage = () => ['▶', ' ', ...t('nowPlaying.lcd').toUpperCase(), ' ', ' ', ' '];
 
 // Fetched only once something plays (a 6 KB file), from the app itself (the
 // Content-Security-Policy allows fonts from 'self' only), under the app's path.
@@ -72,54 +81,31 @@ function loadLcdFont() {
     });
 }
 
-function paintLcd(chars) {
-  chars.forEach((ch, i) => {
-    const cell = lcdCells[i];
-    if (!cell) return;
-    cell.classList.toggle('is-blank', ch === ' ');
-    if (ch === '▶') cell.innerHTML = LCD_PLAY;
-    else if (ch === '‖') cell.innerHTML = LCD_PAUSE;
-    else cell.textContent = ch === ' ' ? '!' : ch; // "!" is the font's blank cell
-  });
+// The words, in the display's capitals. The screen is as wide as the longer one
+// in every state, with as many unlit cells behind.
+function lcdWords() {
+  const playing = t('nowPlaying.lcdPlaying').toUpperCase();
+  const paused = t('nowPlaying.lcdPaused').toUpperCase();
+  const longest = playing.length >= paused.length ? playing : paused;
+  return { playing, paused, longest };
 }
-function stopLcd() {
-  clearInterval(lcdTimer);
-  lcdTimer = 0;
-}
-// Set the screen for `np`: off, held on pause, still (reduced motion), or stepping.
 function updateLcd(np) {
-  stopLcd();
   if (!indicator || !(np && np.active)) return;
   loadLcdFont();
-  if (np.paused) {
-    paintLcd(['‖', ' ', ...t('nowPlaying.lcdPaused').toUpperCase()].slice(0, LCD_CELLS));
-    return;
-  }
-  if (motionReduced()) {
-    paintLcd(['▶', ' ', ...t('nowPlaying.lcdStill').toUpperCase(), ' ', ' ', ' '].slice(0, LCD_CELLS));
-    return;
-  }
-  const step = () => {
-    const msg = lcdMessage();
-    lcdPos %= msg.length;
-    paintLcd(Array.from({ length: LCD_CELLS }, (_, i) => msg[(lcdPos + i) % msg.length]));
-  };
-  step();
-  // A hidden page has nothing to show it to: the steps wait until it is back.
-  if (document.visibilityState === 'hidden') return;
-  lcdTimer = setInterval(() => {
-    lcdPos += 1;
-    step();
-  }, LCD_STEP_MS);
+  const { playing, paused, longest } = lcdWords();
+  lcdSizer.textContent = longest;
+  lcdGhost.textContent = LCD_ALL_SEGMENTS.repeat(longest.length);
+  lcdWord.textContent = np.paused ? paused : playing;
+  lcdMark.innerHTML = np.paused ? LCD_PAUSE : LCD_PLAY;
 }
 
 // --- Build (indicator + toast, once) --------------------------------------
 export function initNowPlaying(headerActionsEl) {
   if (indicator) return;
 
-  // Header indicator: the LCD, tappable. Space is always reserved (visibility
+  // Header indicator: the screen, tappable. Space is always reserved (visibility
   // toggled) so nothing shifts on appear/disappear. Its name is read aloud; the
-  // moving letters are not.
+  // screen's letters are not.
   indicator = el('button', {
     class: 'np-indicator',
     'aria-label': t('nowPlaying.indicatorAria'),
@@ -132,17 +118,23 @@ export function initNowPlaying(headerActionsEl) {
       toggleToast({ focus: e.detail === 0 });
     },
   });
-  const ghost = el('span', { class: 'np-lcd-row np-lcd-ghost' });
-  const live = el('span', { class: 'np-lcd-row np-lcd-live' });
-  for (let i = 0; i < LCD_CELLS; i++) {
-    ghost.append(el('span', { class: 'np-lcd-c', text: LCD_ALL_SEGMENTS }));
-    const cell = el('span', { class: 'np-lcd-c is-blank', text: '!' });
-    live.append(cell);
-    lcdCells.push(cell);
-  }
-  indicator.append(el('span', { class: 'np-lcd', 'aria-hidden': 'true' }, [ghost, live]));
+  lcdMark = el('span', { class: 'np-lcd-mark' });
+  lcdSizer = el('span', { class: 'np-lcd-sizer' });
+  lcdGhost = el('span', { class: 'np-lcd-ghost' });
+  lcdWord = el('span', { class: 'np-lcd-text' });
+  // The mark's softening filter, defined once beside it.
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  defs.setAttribute('class', 'np-lcd-defs');
+  defs.setAttribute('aria-hidden', 'true');
+  defs.innerHTML = `<defs>${LCD_SOFT}</defs>`;
+  indicator.append(
+    el('span', { class: 'np-lcd', 'aria-hidden': 'true' }, [
+      defs,
+      lcdMark,
+      el('span', { class: 'np-lcd-word' }, [lcdSizer, lcdGhost, lcdWord]),
+    ])
+  );
   if (headerActionsEl) headerActionsEl.prepend(indicator);
-  document.addEventListener('visibilitychange', () => updateLcd(getNowPlaying()));
 
   // Toast (built once, reused):
   // [poster] [ tv · Kodi instance / title / SxxExx · episode / audio + subtitle chips ]
@@ -274,15 +266,15 @@ function posterKey(np) {
 function render(np) {
   const active = !!(np && np.active);
   if (indicator) {
-    // Paused on Kodi: the screen holds "‖ PAUSE" and blinks.
+    // Paused on Kodi: the screen reads PAUSE, its mark ‖.
     const paused = active && !!np.paused;
     const changed =
       indicator.classList.contains('active') !== active || indicator.classList.contains('paused') !== paused;
     indicator.classList.toggle('active', active);
     indicator.classList.toggle('paused', paused);
-    // Only a change of state restarts the screen: the snapshot refreshes every
-    // few seconds, and the marquee must not jump back each time.
-    if (changed || !lcdTimer) updateLcd(np);
+    // Repainted on a change of state only: the snapshot refreshes every few
+    // seconds, and a repaint would restart the mark's blink.
+    if (changed) updateLcd(np);
   }
   applyRing(np);
 

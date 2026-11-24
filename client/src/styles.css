@@ -2746,7 +2746,7 @@ body.season-active #app {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 7px; /* the lamp sits clear of the word, its halo not touching the letters */
   padding-left: 0.16em;
   line-height: 1;
 }
@@ -12044,16 +12044,16 @@ textarea.lend-message-input:focus {
   .wavyprog-wave { animation: none; }
 }
 
-/* --- Topbar now-playing indicator: a deck's little LCD, with a divider to Settings ---
-   A black glass window in which "▶ NOW PLAYING" steps right to left, one letter
-   a second (nowPlaying.js), in a 14-segment display font (DSEG14 Modern, in
-   client/public/font). The unlit segments show faintly behind, as on a real
-   display. The screen is black on either theme, so its colours are its own. */
+/* --- Topbar now-playing indicator: a small lit LCD, with a divider to Settings ---
+   The glass lit Kodi blue from behind (a 90s backlit display), the word in dark
+   14-segment characters (DSEG14 Modern, client/public/font), the unlit segments
+   faint behind it. The word stands still; only the mark beside it blinks, slowly,
+   like a VCR's on-screen display (nowPlaying.js). Black-on-blue in either theme,
+   so its colours are its own. */
 .np-indicator {
-  --lcd-lit: #4cc8f5;
-  --lcd-glow: rgba(23, 178, 232, 0.55);
-  --lcd-off: rgba(23, 178, 232, 0.09);
-  --lcd-size: 12px;
+  --lcd-ink: #04263a;
+  --lcd-off: rgba(4, 38, 58, 0.1);
+  --lcd-size: 11px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -12082,82 +12082,93 @@ textarea.lend-message-input:focus {
   position: relative;
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   height: 22px;
-  padding: 0 6px;
-  border-radius: 6px;
+  padding: 0 7px 0 6px;
+  border-radius: 5px;
   overflow: hidden;
-  background: #050505;
-  /* A recessed window: a faint rim, shade inside, and a sheen across the top. */
+  /* The backlight: brightest in the middle, falling off towards the corners. */
+  background: radial-gradient(ellipse 100% 160% at 50% 45%, #6fd2f7, #2a9fd0 70%, #1a6f96);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.07),
-    inset 0 2px 4px rgba(0, 0, 0, 0.9),
+    inset 0 2px 4px rgba(0, 0, 0, 0.45),
     0 0 0 1px rgba(0, 0, 0, 0.35);
   font-family: 'DSEG14 Modern', ui-monospace, monospace;
   font-size: var(--lcd-size);
   line-height: 1;
-  color: var(--lcd-lit);
+  color: var(--lcd-ink);
 }
+/* The sheen of the glass over it all. */
 .np-lcd::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(170deg, rgba(255, 255, 255, 0.08), transparent 45%);
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.1), transparent 45%);
 }
-.np-lcd-row {
-  display: flex;
-}
-.np-lcd-ghost {
+.np-lcd-defs {
   position: absolute;
-  left: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--lcd-off);
+  width: 0;
+  height: 0;
 }
-.np-lcd-live {
+.np-lcd-mark {
   position: relative;
-  text-shadow: 0 0 2px var(--lcd-glow), 0 0 6px var(--lcd-glow);
+  flex: none;
+  width: 9px;
+  height: 11px;
+  fill: var(--lcd-ink);
 }
-/* One character cell: every letter, and the drawn ▶ / ‖, take the same width. */
-.np-lcd-c {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 0.98em;
-  height: 1em;
+/* On, then off, slowly, like a deck's OSD. Only while it shows: the element keeps
+   its place hidden in the header on every page. */
+.np-indicator.active .np-lcd-mark {
+  animation: np-lcd-blink 2.4s steps(1) infinite;
 }
-.np-lcd-c.is-blank {
-  color: transparent;
-  text-shadow: none;
-}
-.np-lcd-c svg {
-  height: 0.95em;
-  width: auto;
-  fill: currentColor;
-  filter: drop-shadow(0 0 2px var(--lcd-glow));
-}
-/* Paused on Kodi: the display holds "‖ PAUSE" and blinks slowly. */
-.np-indicator.paused .np-lcd-live {
-  animation: np-lcd-blink 1.6s steps(1) infinite;
+.np-lcd-mark svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 @keyframes np-lcd-blink {
-  60% {
-    opacity: 0.18;
+  50% {
+    opacity: 0;
   }
+}
+/* The word, its unlit segments and an unseen copy of the longest word share one
+   cell: the screen keeps one width, PLAYING or PAUSE. */
+.np-lcd-word {
+  display: grid;
+  letter-spacing: -0.02em;
+  text-align: left; /* PAUSE starts where PLAYING does (a button centres its text) */
+}
+.np-lcd-word > * {
+  grid-area: 1 / 1;
+}
+.np-lcd-sizer {
+  visibility: hidden;
+}
+.np-lcd-ghost {
+  color: var(--lcd-off);
+}
+.np-lcd-text {
+  text-shadow: 0 0 1px rgba(4, 38, 58, 0.5);
 }
 .np-indicator:active .np-lcd {
   scale: var(--press-small);
 }
-/* Seven characters, on a narrow phone set a size smaller so the screen still
-   sits beside the logo. */
+/* On a narrow phone, a size smaller, so the screen still sits beside the logo. */
 @media (max-width: 359px) {
   .np-indicator {
-    --lcd-size: 10.5px;
+    --lcd-size: 10px;
+  }
+  .np-lcd {
+    gap: 4px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .np-indicator.paused .np-lcd-live {
+  .np-indicator.active .np-lcd-mark {
     animation: none;
   }
 }
