@@ -121,14 +121,14 @@ function skelCardItem() {
   ]);
 }
 
-// One railway stop ghost: name line above, a shimmer circle on the rail, a
-// countdown line below — mirroring a real stop.
+// One railway stop ghost: name line above, a small shimmer dot on the rail (ringed
+// in the page colour like the real one), a countdown and an episode line below.
 function railStopSkeleton(marginLeft) {
   const stop = el('div', { class: 'railway-stop' }, [
     el('div', { class: 'rail-name' }, [el('span', { class: 'rail-name-text', style: { width: '64px' } }, [skelText('100%')])]),
     el('div', {
       class: 'skeleton',
-      style: { width: '20px', height: '20px', borderRadius: '50%', flexShrink: '0' },
+      style: { width: '9px', height: '9px', borderRadius: '50%', flexShrink: '0', boxShadow: '0 0 0 3px var(--bg)' },
     }),
     el('div', { class: 'rail-below' }, [
       el('div', { class: 'rail-when' }, [skelText('40px')]),
@@ -139,10 +139,24 @@ function railStopSkeleton(marginLeft) {
   return stop;
 }
 
+// A typical rail: two stops close together, then wider time gaps, with one month
+// tag ghost on the line where the gap is widest (same 108px stops as the real one).
 function railwaySkeleton() {
+  const GAPS = [20, 87, 87, 168, 168];
+  const STOP_W = 108;
   const track = el('div', { class: 'railway-track' });
-  for (let i = 0; i < 5; i++) track.append(railStopSkeleton(i === 0 ? 20 : 82));
+  const centres = [];
+  let x = 0;
+  for (const gap of GAPS) {
+    track.append(railStopSkeleton(gap));
+    x += gap;
+    centres.push(x + STOP_W / 2);
+    x += STOP_W;
+  }
   track.append(el('div', { class: 'railway-tail' }));
+  const tag = el('span', { class: 'rail-month skeleton', 'aria-hidden': 'true', style: { width: '34px' } }, [' ']);
+  tag.style.left = `${Math.round((centres[2] + centres[3]) / 2)}px`;
+  track.append(tag);
   return el('div', { class: 'railway-section' }, [
     el('div', { class: 'railway-scroller' }, [track]),
   ]);
@@ -279,9 +293,40 @@ function sectionDivider(label, blank = false) {
   ]);
 }
 
+// A tag on the rail for each month that has something airing: it sits where that
+// month begins, between its first stop and the stop before, placed by the day.
+// Months with nothing coming get no tag. Kept clear of the stop dots; it carries
+// the year when the year turns. Decorative: each stop already says its date.
+function monthTags(horizon, centres) {
+  // A tag's half width, the 4.5px dot and a 6px breath; with the year it is about
+  // twice as wide. One tag per gap at most, and gaps are 174px or more, so two
+  // tags never meet.
+  const clearStop = (withYear) => (withYear ? 42 : 28);
+  const tags = [];
+  for (let i = 0; i < horizon.length - 1; i++) {
+    const a = horizon[i].air_date;
+    const b = horizon[i + 1].air_date;
+    const [ay, am] = a.split('-').map(Number);
+    const [by, bm] = b.split('-').map(Number);
+    if (ay === by && am === bm) continue;
+    const withYear = by !== ay;
+    const first = `${by}-${p2(bm)}-01`;
+    const x = centres[i] + (daysBetween(a, first) / Math.max(1, daysBetween(a, b))) * (centres[i + 1] - centres[i]);
+    const at = Math.min(Math.max(x, centres[i] + clearStop(withYear)), centres[i + 1] - clearStop(withYear));
+    const label = new Date(by, bm - 1, 1).toLocaleDateString(
+      locale('en-US'),
+      withYear ? { month: 'short', year: 'numeric' } : { month: 'short' }
+    );
+    const tag = el('span', { class: 'rail-month', 'aria-hidden': 'true', text: label.replace('.', '') });
+    tag.style.left = `${Math.round(at)}px`;
+    tags.push(tag);
+  }
+  return tags;
+}
+
 // Build the horizontal railway. Spacing between stops is proportional to the time
 // gap between their air dates (clamped so stops never overlap or drift too far).
-// Circle size/opacity perspective is CSS-driven (nth-child), not computed here.
+// The next stop's accent dot is CSS (:first-child); month tags sit on the line.
 // Returns { node, init } — call init() once mounted so the desktop arrows can
 // read layout sizes.
 function buildHorizonRailway(horizon) {
@@ -294,6 +339,9 @@ function buildHorizonRailway(horizon) {
   const track = el('div', { class: 'railway-track' });
   scroller.append(track);
 
+  const STOP_W = 108; // .railway-stop's width in the CSS
+  const centres = []; // each stop's centre x on the track, for the month tags
+  let x = 0;
   let prevDate = null;
   horizon.forEach((h, i) => {
     let marginLeft = START;
@@ -302,6 +350,9 @@ function buildHorizonRailway(horizon) {
       marginLeft = Math.round(Math.min(MAX_GAP, Math.max(MIN_GAP, MIN_GAP + days * PER_DAY)));
     }
     prevDate = h.air_date;
+    x += marginLeft;
+    centres.push(x + STOP_W / 2);
+    x += STOP_W;
 
     const below = [el('div', { class: 'rail-when', text: railWhen(h.air_date) })];
     if (h.season != null && h.episode != null) {
@@ -320,6 +371,8 @@ function buildHorizonRailway(horizon) {
   });
   // Trailing spacer so the track line runs visibly past the last stop / viewport.
   track.append(el('div', { class: 'railway-tail' }));
+  // Month tags after the stops, so the stops' nth-child perspective is unchanged.
+  track.append(...monthTags(horizon, centres));
 
   // Desktop-only arrows (hidden on touch via CSS). Same icon-btn style as the app.
   const leftBtn = el('button', {

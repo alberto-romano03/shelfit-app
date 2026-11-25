@@ -504,12 +504,17 @@ function detailSkeleton() {
       el('div', { class: 'detail-titles', style: { flex: '1' } }, [
         el('h2', { 'aria-hidden': 'true' }, [skelText('78%')]),
         el('div', { class: 'orig', 'aria-hidden': 'true' }, [skelText('52%')]),
+        isShow ? el('div', { class: 'detail-updated', 'aria-hidden': 'true' }, [skelText('64%')]) : null,
       ]),
     ]),
     el('div', {}, [
-      el('div', { class: 'detail-facts', 'aria-hidden': 'true' }, [86, 58, 92, 74].map((w) =>
-        el('div', { class: 'skeleton detail-fact-skel', style: { width: `${w}px` } })
-      )),
+      // The chips a title usually has: a date, a duration (a film's carries its
+      // ends-at hint when time hints are on), then two genres.
+      el('div', { class: 'detail-facts', 'aria-hidden': 'true' },
+        [104, isShow ? 62 : timeHintsOn() ? 150 : 74, 96, 84].map((w) =>
+          el('div', { class: 'skeleton detail-fact-skel', style: { width: `${w}px` } })
+        )
+      ),
       skelOverview(4),
       skelShowMore(),
       el('div', { class: 'section-title remote-title', 'aria-hidden': 'true' }, [skelText('34%')]),
