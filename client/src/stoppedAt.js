@@ -5,6 +5,7 @@
 
 import { el, lucideIcon, openSheet, toast, typewriterPlaceholder } from './ui.js';
 import { t } from './i18n.js';
+import { loadLcdFont, LCD_ALL_SEGMENTS } from './lcdFont.js';
 
 // The Clear key's printed symbol: rewind to the start (a bar and two triangles).
 const TO_ZERO =
@@ -21,6 +22,7 @@ export function stopLabel(min, total) {
 //   note   episodes only: { value, placeholder } puts the note under the field
 //   onSave async (minute, noteText) => {}; a throw keeps the sheet open
 export function openStopSheet({ title, total = 0, value = 0, note = null, onSave }) {
+  loadLcdFont(); // the display's 14-segment digits
   openSheet(
     (sheet, close) => {
       const input = el('input', {
@@ -63,7 +65,12 @@ export function openStopSheet({ title, total = 0, value = 0, note = null, onSave
         el('span', { class: 'stop-display-lbl', 'aria-hidden': 'true' }, [
           el('span', { class: 'stop-rew' }, [el('i', { class: 'stop-led' }), t('stop.display')]),
         ]),
-        el('span', { class: 'stop-counter' }, [glow, input]),
+        // Behind the digits, the three cells' unlit segments, as on the deck.
+        el('span', { class: 'stop-counter' }, [
+          el('span', { class: 'stop-ghost', 'aria-hidden': 'true', text: LCD_ALL_SEGMENTS.repeat(3) }),
+          glow,
+          input,
+        ]),
         el('span', { class: 'stop-display-of', text: total ? t('stop.displayOf', { total }) : t('stop.displayMin') }),
       ]);
       // Clear: a hi-fi deck's soft-touch key, set in a recess in the panel. It sinks

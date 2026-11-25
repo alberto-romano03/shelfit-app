@@ -2716,22 +2716,25 @@ body.season-active #app {
   border-radius: var(--r-md);
   background: #070908; /* the display stays dark in both themes, like the device */
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 6px 14px rgba(0, 0, 0, 0.6);
-  font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+  /* The deck's 14-segment LCD characters, as on the Now Playing screen (lcdFont.js);
+     a monospace stands in until the font has loaded. It has one weight. */
+  font-family: 'DSEG14 Modern', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   cursor: text;
   transition: box-shadow var(--dur-short) var(--ease-state);
 }
 .stop-display:focus-within {
-  box-shadow: inset 0 0 0 1.5px rgba(126, 217, 154, 0.55), inset 0 6px 14px rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 0 0 1.5px rgba(238, 244, 248, 0.55), inset 0 6px 14px rgba(0, 0, 0, 0.6);
 }
 .stop-display-lbl {
   flex: 1; /* label and total share the sides equally, so the counter is centred */
   font-size: 0.5625rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.16em;
   /* Dimmed through its colour rather than opacity, so the red light over it keeps
      its full brightness. */
-  color: rgba(126, 217, 154, 0.55);
+  color: rgba(238, 244, 248, 0.55);
   /* The light and the word, as one group, sit in the middle of the display's
      height (the counter and the total keep their shared baseline). A flex box,
      so the group is not set on a line of text that would push it down. */
@@ -2803,9 +2806,17 @@ body.season-active #app {
 .stop-counter {
   position: relative;
   display: inline-block;
-  font-size: 1.875rem;
-  font-weight: 700;
+  font-size: 1.625rem;
   line-height: 1.2;
+}
+/* The three cells' unlit segments, faint behind the digits. */
+.stop-ghost {
+  position: absolute;
+  inset: 0;
+  text-align: right;
+  white-space: pre;
+  color: rgba(238, 244, 248, 0.08);
+  pointer-events: none;
 }
 /* The glow, on a copy of the digits behind the input: an input clips its own text,
    so a text-shadow on it would be cut at its edges. */
@@ -2815,7 +2826,7 @@ body.season-active #app {
   text-align: right;
   white-space: pre;
   color: transparent;
-  text-shadow: 0 0 10px rgba(126, 217, 154, 0.6);
+  text-shadow: 0 0 10px rgba(238, 244, 248, 0.4); /* white blooms easily: kept soft */
   pointer-events: none;
 }
 .stop-glow.is-over {
@@ -2832,16 +2843,16 @@ body.season-active #app {
   appearance: none;
   font: inherit;
   text-align: right;
-  color: #7ed99a;
-  caret-color: #7ed99a;
+  color: #eef4f8;
+  caret-color: #eef4f8;
 }
+/* The unlit cells behind already show where the digits go. */
 .stop-input::placeholder {
-  color: #7ed99a;
-  opacity: 0.18;
+  color: transparent;
 }
 .stop-input::selection {
-  background: rgba(126, 217, 154, 0.3);
-  color: #7ed99a;
+  background: rgba(238, 244, 248, 0.3);
+  color: #eef4f8;
 }
 .stop-input.is-over {
   color: var(--danger);
@@ -2849,9 +2860,11 @@ body.season-active #app {
 }
 .stop-display-of {
   flex: 1;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #7ed99a;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  text-transform: uppercase;
+  word-spacing: 0.4em; /* the display font's space is a sliver: "/ 117 MIN" keeps its gaps */
+  color: #eef4f8;
   opacity: 0.5;
   white-space: nowrap;
 }

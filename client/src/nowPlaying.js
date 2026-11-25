@@ -15,7 +15,7 @@ import { getNowPlaying } from './kodi.js';
 import { createWavyRing } from './wavyRing.js';
 import { t, onLangChange } from './i18n.js';
 import { fillActions } from './nowPlayingActions.js';
-import { withBase } from './basePath.js';
+import { loadLcdFont, LCD_ALL_SEGMENTS } from './lcdFont.js';
 
 const KODI_BLUE = '#17B2E8';
 
@@ -26,9 +26,6 @@ const KODI_BLUE = '#17B2E8';
 // as a VCR's on-screen display does (CSS). The mark is drawn soft, not crisp:
 // slightly blurred, its edges uneven, a faint smear to the right, like a picture
 // off tape. The unlit segments show faintly behind the word.
-const LCD_FONT = 'DSEG14 Modern';
-const LCD_FONT_URL = '/font/DSEG14Modern-Regular.woff2'; // SIL OFL, see DSEG-LICENSE.txt beside it
-const LCD_ALL_SEGMENTS = '~'; // the font's "every segment" glyph: the unlit ghost behind
 // The softening, used by both marks (one indicator, so one id).
 const LCD_SOFT =
   '<filter id="np-mark-soft" x="-60%" y="-60%" width="220%" height="220%">' +
@@ -65,21 +62,6 @@ let lcdMark = null; // the blinking mark's cell
 let lcdWord = null; // the word on the screen
 let lcdSizer = null; // the longest word, unseen: holds the screen's width
 let lcdGhost = null; // the unlit segments behind
-let lcdFontAsked = false;
-
-// Fetched only once something plays (a 6 KB file), from the app itself (the
-// Content-Security-Policy allows fonts from 'self' only), under the app's path.
-function loadLcdFont() {
-  if (lcdFontAsked || typeof FontFace !== 'function') return;
-  lcdFontAsked = true;
-  const face = new FontFace(LCD_FONT, `url("${withBase(LCD_FONT_URL)}") format('woff2')`);
-  face
-    .load()
-    .then(() => document.fonts.add(face))
-    .catch(() => {
-      lcdFontAsked = false; // try again on the next play
-    });
-}
 
 // The words, in the display's capitals. The screen is as wide as the longer one
 // in every state, with as many unlit cells behind.

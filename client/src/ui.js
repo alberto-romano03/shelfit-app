@@ -1218,6 +1218,29 @@ export function undoToast({ msg, onUndo, onExpire }) {
 // stopped by overscroll-behavior on the popup itself (styles.css). A counter
 // keeps nested popups correct; the scroll position is untouched.
 let scrollLocks = 0;
+// Where the page stood when the first popup opened. On iOS, typing in a popup's
+// field scrolls the page under it to keep the field above the keyboard; when the
+// keyboard goes the page can stay there, and the popup, pinned to it, is left
+// lifted up the screen. Once no field has the focus, the page goes back here.
+let lockedY = 0;
+const isField = (n) => !!(n && n.matches && n.matches('input, textarea, select, [contenteditable="true"]'));
+function settlePage() {
+  if (scrollLocks === 0 || isField(document.activeElement)) return; // still typing (or moved on to another field)
+  if (Math.round(window.scrollY) !== Math.round(lockedY)) window.scrollTo(window.scrollX, lockedY);
+}
+let settleTimer = 0;
+function onLockFocusOut(e) {
+  if (!isField(e.target)) return;
+  clearTimeout(settleTimer);
+  // After the focus has had a moment to land elsewhere, and again once the
+  // keyboard has finished going down.
+  settleTimer = setTimeout(settlePage, 60);
+  setTimeout(settlePage, 400);
+}
+// The keyboard closing resizes the visual viewport: settle then too.
+function onViewportResize() {
+  setTimeout(settlePage, 0);
+}
 // Block touch-scrolling of the page while a popup is open, but let the popup's
 // own scroll areas (.modal / .sheet-body) still scroll. This holds on iOS where
 // overflow:hidden alone leaks, without moving the body (which would un-anchor the
@@ -1232,8 +1255,11 @@ function onLockTouchMove(e) {
 }
 export function lockScroll() {
   if (scrollLocks === 0 && typeof document !== 'undefined') {
+    lockedY = window.scrollY;
     document.documentElement.classList.add('modal-open');
     document.addEventListener('touchmove', onLockTouchMove, { passive: false });
+    document.addEventListener('focusout', onLockFocusOut);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', onViewportResize);
   }
   scrollLocks += 1;
 }
@@ -1243,6 +1269,9 @@ export function unlockScroll() {
   if (scrollLocks === 0 && typeof document !== 'undefined') {
     document.documentElement.classList.remove('modal-open');
     document.removeEventListener('touchmove', onLockTouchMove, { passive: false });
+    document.removeEventListener('focusout', onLockFocusOut);
+    if (window.visualViewport) window.visualViewport.removeEventListener('resize', onViewportResize);
+    clearTimeout(settleTimer);
   }
 }
 
