@@ -197,9 +197,14 @@ function avgRuntime(arr) {
 }
 
 
-// One metadata row: a Lucide icon tightly coupled to its label.
-function metaRow(name, text) {
-  return el('div', { class: 'meta-row' }, [lucideIcon(name, 'meta-icon'), el('span', { class: 'meta-label', text })]);
+// One fact chip under the poster: a coloured Lucide icon, a name for screen
+// readers, then the text (kept last, so the runtime clock can repaint it).
+function factChip(kind, icon, label, text) {
+  return el('li', { class: `detail-fact detail-fact--${kind}` }, [
+    lucideIcon(icon, 'detail-fact-ico'),
+    el('span', { class: 'sr-only', text: `${label}: ` }),
+    el('span', { text }),
+  ]);
 }
 
 // --- Bento "Details" section ----------------------------------------------
@@ -498,14 +503,13 @@ function detailSkeleton() {
       el('div', { class: 'detail-poster-wrap' }, [el('div', { class: 'detail-poster skeleton' })]),
       el('div', { class: 'detail-titles', style: { flex: '1' } }, [
         el('h2', { 'aria-hidden': 'true' }, [skelText('78%')]),
-        el('div', { class: 'detail-meta' }, [
-          el('div', { class: 'meta-row' }, [skelText('34%')]),
-          el('div', { class: 'meta-row' }, [skelText('48%')]),
-          el('div', { class: 'meta-row' }, [skelText('62%')]),
-        ]),
+        el('div', { class: 'orig', 'aria-hidden': 'true' }, [skelText('52%')]),
       ]),
     ]),
     el('div', {}, [
+      el('div', { class: 'detail-facts', 'aria-hidden': 'true' }, [86, 58, 92, 74].map((w) =>
+        el('div', { class: 'skeleton detail-fact-skel', style: { width: `${w}px` } })
+      )),
       skelOverview(4),
       skelShowMore(),
       el('div', { class: 'section-title remote-title', 'aria-hidden': 'true' }, [skelText('34%')]),
@@ -716,10 +720,11 @@ export default async function Detail(container, params) {
   // ]);
   const posterWrap = el('div', { class: 'detail-poster-wrap' }, [disc, posterBox]);
 
-  // Metadata as a vertical stack of icon + label rows (Lucide icons, tinted with
-  // the secondary text colour via CSS — see .meta-icon).
-  const metaRows = [];
-  if (meta.year) metaRows.push(metaRow('calendar', String(meta.year)));
+  // Release, duration and genres as one rail of chips under the poster, each
+  // genre a chip of its own; the rail scrolls to the screen edge when it is full.
+  const facts = [];
+  const released = fmtLongDate(meta.release_date || meta.first_air_date) || meta.year;
+  if (released) facts.push(factChip('release', 'calendar', t('detail.factRelease'), String(released)));
   const duration =
     d.type === 'movie'
       ? meta.runtime
@@ -728,8 +733,8 @@ export default async function Detail(container, params) {
       : avgRuntime(meta.episode_run_time)
         ? t('detail.runtimeMin', { n: avgRuntime(meta.episode_run_time) })
         : null;
-  const runtimeRow = duration ? metaRow('clock', duration) : null;
-  if (runtimeRow) metaRows.push(runtimeRow);
+  const runtimeRow = duration ? factChip('runtime', 'clock', t('detail.factRuntime'), duration) : null;
+  if (runtimeRow) facts.push(runtimeRow);
   // A film you haven't seen says when it would end if you pressed play now; one
   // you are watching and stopped partway counts from where you stopped.
   function paintRuntime() {
@@ -758,14 +763,16 @@ export default async function Detail(container, params) {
     onCleanup(() => clearInterval(clock));
   }
   startClock();
-  if (meta.genres && meta.genres.length) metaRows.push(metaRow('tag', meta.genres.join(', ')));
+  for (const g of meta.genres || []) facts.push(factChip('genre', 'drama', t('detail.factGenre'), g));
+  const factRail = facts.length
+    ? el('ul', { class: 'detail-facts', 'aria-label': t('detail.facts') }, facts)
+    : null;
 
   const titles = el('div', { class: 'detail-titles' }, [
     el('h2', { text: d.title_it }),
     d.title_orig && d.title_orig !== d.title_it
       ? el('div', { class: 'orig', text: d.title_orig })
       : null,
-    el('div', { class: 'detail-meta' }, metaRows),
     d.type === 'show' && d.cached_at
       ? el('div', { class: 'detail-updated', text: t('detail.dataUpdated', { date: formatDate(d.cached_at) }) })
       : null,
@@ -780,6 +787,7 @@ export default async function Detail(container, params) {
   // truncate.js). "Show more"/"Show less" swap between the preview and the full
   // text with the same smooth max-height animation.
   const body = el('div', {});
+  if (factRail) body.append(factRail);
   if (offline) {
     const when = formatSyncTime(savedAt);
     body.append(

@@ -51,6 +51,11 @@
   --status-dropped: light-dark(#b5402f, #e5867f);
   --danger: light-dark(#d33, #e5484d);
   --kodi-blue: light-dark(#0b6f96, #17b2e8);
+  /* A title page's fact chips: release, duration, genre. The dark side is the
+     Details bento's pastels; the light side the deeper palette inks. */
+  --fact-release: light-dark(#2f6fa8, #7db6f0);
+  --fact-runtime: light-dark(#0e7c6b, #6fd4c4);
+  --fact-genre: light-dark(#c2445f, #f090b6);
   /* How much of a brand colour (Kodi, TMDB, the cinema red) its text keeps; the
      rest is black. Full on dark; the light theme darkens it to stay readable. */
   --brand-ink: 100%;
@@ -1617,18 +1622,52 @@ button:active,
   flex-direction: column;
   gap: 6px;
 }
-.meta-row {
+/* A title page's facts under the poster: one rail of chips (release, duration,
+   then a chip per genre). Like the card rows it runs to the screen edge, so a
+   chip sliding off the border says the rail goes on; the closing gap is a real
+   flex item for the same reason as .hscroll's. */
+.detail-facts {
+  --fact-gap: 6px;
   display: flex;
-  align-items: center;
-  gap: 7px; /* tight icon↔label coupling */
+  gap: var(--fact-gap);
+  list-style: none;
+  margin: 14px calc(var(--gutter) * -1) 0;
+  padding: 0 0 0 var(--gutter);
+  scroll-padding-inline: var(--gutter);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
 }
-/* Masked Lucide SVG, tinted with the secondary text colour (never hardcoded).
-   The mask-image URL is set inline in JS so the app base path applies. */
-.meta-icon {
+.detail-facts::-webkit-scrollbar {
+  display: none;
+}
+.detail-facts::after {
+  content: '';
+  flex: 0 0 calc(var(--gutter) - var(--fact-gap));
+}
+.detail-fact {
   flex: 0 0 auto;
-  width: 15px;
-  height: 15px;
-  background-color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.detail-fact--release { --fact-ink: var(--fact-release); }
+.detail-fact--runtime { --fact-ink: var(--fact-runtime); }
+.detail-fact--genre { --fact-ink: var(--fact-genre); }
+/* Masked Lucide SVG; the mask-image URL is set inline in JS so the base path applies. */
+.detail-fact-ico {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  background-color: var(--fact-ink);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
@@ -1636,8 +1675,10 @@ button:active,
   -webkit-mask-size: contain;
   mask-size: contain;
 }
-.meta-label {
-  min-width: 0; /* the genres row wraps naturally when long */
+.detail-fact-skel {
+  flex: 0 0 auto;
+  height: 24px;
+  border-radius: var(--r-pill);
 }
 
 /* --- "Details" bento (always expanded) ---------------------------------- */

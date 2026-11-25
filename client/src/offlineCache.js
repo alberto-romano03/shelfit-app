@@ -593,6 +593,8 @@ export function trimPlanDetail(d) {
     meta: {
       overview: m.overview || '',
       year: m.year || '',
+      release_date: m.release_date || '',
+      first_air_date: m.first_air_date || '',
       genres: Array.isArray(m.genres) ? m.genres : [],
       runtime: m.runtime || null,
       episode_run_time: Array.isArray(m.episode_run_time) ? m.episode_run_time : undefined,
