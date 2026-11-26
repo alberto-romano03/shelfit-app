@@ -1666,6 +1666,26 @@ button:active,
 .detail-facts--head + .detail-updated {
   margin-top: 8px;
 }
+/* The duration chip is a button (hours and minutes / plain minutes), held in a
+   plain list item that passes the column's width down to it. */
+.detail-fact-slot {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+}
+.detail-fact-btn {
+  border: 0;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: scale var(--dur-short) var(--ease-out);
+}
+.detail-fact-btn:active {
+  scale: 0.96;
+}
 .detail-fact {
   /* Holds its screen-reader label (.sr-only is absolutely placed): without this
      the labels of chips scrolled past the edge escape the rail and widen the page. */

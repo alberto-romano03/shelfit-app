@@ -197,14 +197,19 @@ function avgRuntime(arr) {
 }
 
 
-// One fact chip under the poster: a coloured Lucide icon, a name for screen
-// readers, then the text (kept last, so the runtime clock can repaint it).
-function factChip(kind, icon, label, text) {
-  return el('li', { class: `detail-fact detail-fact--${kind}` }, [
+// One fact chip: a coloured Lucide icon, a name for screen readers, then the
+// text (kept last, so the runtime clock can repaint it). With `onTap` the chip
+// is a button inside its list item.
+function factChip(kind, icon, label, text, onTap) {
+  const kids = [
     lucideIcon(icon, 'detail-fact-ico'),
     el('span', { class: 'sr-only', text: `${label}: ` }),
     el('span', { text }),
-  ]);
+  ];
+  if (!onTap) return el('li', { class: `detail-fact detail-fact--${kind}` }, kids);
+  const btn = el('button', { type: 'button', class: `detail-fact detail-fact--${kind} detail-fact-btn` }, kids);
+  btn.addEventListener('click', onTap);
+  return el('li', { class: 'detail-fact-slot' }, [btn]);
 }
 
 // --- Bento "Details" section ----------------------------------------------
@@ -734,27 +739,31 @@ export default async function Detail(container, params) {
   const facts = [];
   const released = fmtLongDate(meta.release_date || meta.first_air_date) || meta.year;
   if (released) facts.push(factChip('release', 'calendar', t('detail.factRelease'), String(released)));
-  const duration =
-    d.type === 'movie'
-      ? meta.runtime
-        ? t('detail.runtimeMin', { n: meta.runtime })
-        : null
-      : avgRuntime(meta.episode_run_time)
-        ? t('detail.runtimeMin', { n: avgRuntime(meta.episode_run_time) })
-        : null;
-  const runtimeRow = duration ? factChip('runtime', 'clock', t('detail.factRuntime'), duration) : null;
+  // A film's runtime, or a series' average episode, in minutes.
+  const runtime = (d.type === 'movie' ? meta.runtime : avgRuntime(meta.episode_run_time)) || 0;
+  // Hours and minutes by default ("2h 46m"); a tap on the chip switches it to
+  // plain minutes ("166 min") and back.
+  let inMinutes = false;
+  const length = (n) => (inMinutes ? t('detail.runtimeMin', { n: Math.round(n) }) : hoursAndMinutes(n));
+  const runtimeRow =
+    runtime > 0
+      ? factChip('runtime', 'clock', t('detail.factRuntime'), '', () => {
+          inMinutes = !inMinutes;
+          paintRuntime();
+        })
+      : null;
   if (runtimeRow) facts.push(runtimeRow);
   // A film you haven't seen says when it would end if you pressed play now; one
   // you are watching and stopped partway counts from where you stopped.
   function paintRuntime() {
-    if (!runtimeRow || d.type !== 'movie') return;
-    const unseen = timeHintsOn() && d.status !== 'completed';
+    if (!runtimeRow) return;
+    const unseen = d.type === 'movie' && timeHintsOn() && d.status !== 'completed';
     const left = resumeMinutesLeft();
-    runtimeRow.lastElementChild.textContent = !unseen
-      ? duration
+    runtimeRow.querySelector('.detail-fact-btn').lastElementChild.textContent = !unseen
+      ? length(runtime)
       : left !== null
-        ? t('detail.endsAtLeft', { length: hoursAndMinutes(left), time: endsAt(left) })
-        : t('detail.endsAt', { length: hoursAndMinutes(meta.runtime), time: endsAt(meta.runtime) });
+        ? t('detail.endsAtLeft', { length: length(left), time: endsAt(left) })
+        : t('detail.endsAt', { length: length(runtime), time: endsAt(runtime) });
   }
   // A movie takes a stopped minute while it is being watched, or rewatched once
   // it is on the shelf (recording the rewatch clears it, like finishing it).
