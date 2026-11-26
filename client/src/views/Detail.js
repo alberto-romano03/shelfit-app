@@ -553,7 +553,6 @@ function detailSkeleton() {
             el('div', { class: 'skeleton detail-fact-skel', style: { width: `${w}px` } })
           )
         ),
-        isShow ? el('div', { class: 'detail-updated', 'aria-hidden': 'true' }, [skelText('64%')]) : null,
       ]),
     ]),
     el('div', {}, [
@@ -804,9 +803,6 @@ export default async function Detail(container, params) {
       ? el('div', { class: 'orig', text: d.title_orig })
       : null,
     headFacts,
-    d.type === 'show' && d.cached_at
-      ? el('div', { class: 'detail-updated', text: t('detail.dataUpdated', { date: formatDate(d.cached_at) }) })
-      : null,
   ]);
   const followHeader = () => onCleanup(followTitle(titles.querySelector('h2'), d.title_it));
   followHeader();
@@ -1318,6 +1314,11 @@ export default async function Detail(container, params) {
 
   // Notes is always the last editable field (below the collection row).
   body.append(notesWrap);
+  // A series' TMDB facts (seasons, episodes, airing) are a cached copy refreshed now
+  // and then: when it was last refreshed closes the page, centred under the notes.
+  if (d.type === 'show' && d.cached_at) {
+    body.append(el('p', { class: 'detail-updated', text: t('detail.dataUpdated', { date: formatDate(d.cached_at) }) }));
+  }
 
   // Offline (cached Plan-to-Watch): every write control is visually disabled —
   // nothing here can persist without the server.

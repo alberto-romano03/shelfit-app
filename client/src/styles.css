@@ -1681,9 +1681,6 @@ button:active,
   max-width: 100%;
   white-space: normal;
 }
-.detail-facts--head + .detail-updated {
-  margin-top: 8px;
-}
 /* The duration chip is a button (hours and minutes / plain minutes), held in a
    plain list item that passes the column's width down to it. */
 .detail-fact-slot {
@@ -1919,10 +1916,12 @@ button:active,
 .bento .bento-shade-light .bento-value,
 .bento .bento-shade-light .bento-sub { color: var(--bento-dark); }
 .bento .bento-shade-light .bento-icon { background-color: var(--bento-dark); }
+/* When a series' metadata was last refreshed, centred at the foot of its page. */
 .detail-updated {
   color: var(--text-secondary);
   font-size: 0.6875rem;
-  margin-top: 4px;
+  margin: 14px 0 0;
+  text-align: center;
 }
 .overview {
   font-size: 0.875rem;
