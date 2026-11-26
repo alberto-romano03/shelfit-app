@@ -1355,20 +1355,37 @@ button:active,
   inset: 0;
   background: var(--hero-fade);
 }
-/* Depth: the backdrop moves at half the page's speed and fades as it goes, driven by the
-   browser from the scroll position. The page has to sit above it to slide over it. */
+/* Depth: the backdrop (a page's hero, Home's profile cover) moves at half the page's
+   speed and fades as it goes, driven by the browser from the scroll position. The page
+   has to sit above it to slide over it; on Home through :where(), so the profile row
+   keeps its own higher layer. */
 @supports (animation-timeline: scroll()) {
   @media (prefers-reduced-motion: no-preference) {
     .detail-hero:not(.skeleton),
-    .list-hero-img {
+    .list-hero-img,
+    .profile-cover {
       animation: hero-depth linear both;
       animation-timeline: scroll(root block);
       animation-range: 0 480px;
     }
-    .detail-hero:not(.skeleton) ~ * {
+    .detail-hero:not(.skeleton) ~ *,
+    :where(.profile-cover ~ *) {
       position: relative;
       z-index: 1;
     }
+  }
+}
+/* Where the browser can't, heroDepth.js paints the same motion from the scroll
+   position and marks the root; the page still has to sit above the backdrop. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-depth-js .detail-hero:not(.skeleton),
+  .hero-depth-js .profile-cover {
+    will-change: translate, opacity;
+  }
+  .hero-depth-js .detail-hero:not(.skeleton) ~ *,
+  :where(.hero-depth-js .profile-cover ~ *) {
+    position: relative;
+    z-index: 1;
   }
 }
 @keyframes hero-depth {
@@ -9934,9 +9951,8 @@ textarea.notes:focus,
 }
 
 /* --- Kodi integration ---------------------------------------------------- */
-/* Digital (Play on Kodi) + physical (owned) action pair. The Kodi button sits
-   to the left of the ownership toggle in a shared row; it appears only once a
-   match is confirmed, and until then the owned toggle takes the full width. */
+/* The remote's rows. Play on Kodi has a row of its own under the status, shown
+   only once a match is confirmed (no gap is left while there is none). */
 .detail-actions-row {
   display: flex;
   gap: 10px;
@@ -9946,6 +9962,9 @@ textarea.notes:focus,
 .detail-actions-row .owned-toggle {
   margin-top: 0;
   flex: 1;
+}
+.kodi-row:not(.has-kodi) {
+  display: none;
 }
 .kodi-slot {
   display: none;
@@ -9993,22 +10012,6 @@ textarea.notes:focus,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-/* A film with the stop key showing has three things in its row: the status (with
-   its minute), the key and Kodi. Kodi gives up its label and becomes a round key
-   like the stop key, so the status keeps the room to say where you stopped. */
-.detail-actions-row.has-kodi:has(.stop-key:not([hidden])) .kodi-slot {
-  flex: none;
-  align-self: center;
-}
-.detail-actions-row:has(.stop-key:not([hidden])) .kodi-play-btn {
-  width: 48px;
-  height: 48px;
-  padding: 0;
-  border-radius: 50%;
-}
-.detail-actions-row:has(.stop-key:not([hidden])) .kodi-play-btn span {
-  display: none;
 }
 /* Playback feedback — animates in/out below the row, reserving no space idle. */
 .kodi-feedback {

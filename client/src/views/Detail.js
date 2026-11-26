@@ -1105,12 +1105,10 @@ export default async function Detail(container, params) {
     notes,
   ]);
 
-  // --- Play on Kodi (digital) + Owned (physical) action pair ---
-  // The Kodi button sits to the LEFT of the ownership toggle in a shared row,
-  // branded with the Kodi logo. It appears only once a match is confirmed;
-  // until then the owned toggle takes the full row width, so a disabled /
+  // --- Play on Kodi ---
+  // A full-width button of its own, right under the status row, branded with the
+  // Kodi logo. Its row shows only once a match is confirmed, so a disabled /
   // offline / unmatched Kodi leaves no trace.
-  // Named on the button too: beside the stop key it shows only the logo.
   const kodiBtn = el('button', { class: 'kodi-play-btn', 'aria-label': t('detail.playOnKodi') });
   kodiBtn.innerHTML =
     `<img class="kodi-logo-img" src="${withBase('/icons/kodi.svg')}" alt="" aria-hidden="true"><span>${t('detail.playOnKodi')}</span>`;
@@ -1150,20 +1148,15 @@ export default async function Detail(container, params) {
   }
   paintStop();
   const kodiFeedback = el('div', { class: 'kodi-feedback' });
-  // Movies get a two-row action area: [status | Kodi] then [Owned | Cinema].
-  // Shows keep the original single row [Kodi | Owned] under the full-width status
-  // button. `actionsRow` always holds the Kodi slot, so checkKodi() targets it.
+  // The remote, top to bottom: the status (a film's with its stop key beside it),
+  // Play on Kodi on a row of its own, then a film's date and rewatch keys, then
+  // Owned (and a film's Cinema).
   const isMovie = d.type === 'movie';
-  const actionsRow = isMovie
-    ? el('div', { class: 'detail-actions-row' }, [
-        el('div', { class: 'status-slot' }, [statusBtn]),
-        stopKey,
-        kodiSlot,
-      ])
-    : el('div', { class: 'detail-actions-row' }, [kodiSlot, ownedBtn]);
-  const cinemaRow = isMovie
-    ? el('div', { class: 'detail-actions-row' }, [ownedBtn, cinemaBtn])
-    : null;
+  const statusRow = isMovie
+    ? el('div', { class: 'detail-actions-row' }, [el('div', { class: 'status-slot' }, [statusBtn]), stopKey])
+    : statusBtn;
+  const kodiRow = el('div', { class: 'detail-actions-row kodi-row' }, [kodiSlot]);
+  const ownRow = el('div', { class: 'detail-actions-row' }, isMovie ? [ownedBtn, cinemaBtn] : [ownedBtn]);
   // Set once the match has answered; a match cut short by leaving the page runs
   // again when the retained page is re-attached.
   let kodiChecked = false;
@@ -1188,32 +1181,22 @@ export default async function Detail(container, params) {
       }
     });
     kodiSlot.append(kodiBtn);
-    actionsRow.classList.add('has-kodi');
+    kodiRow.classList.add('has-kodi');
   }
 
-  // A film's controls are its remote, a section of their own after the synopsis: the status
-  // button in its row with Kodi, then the date and rewatch keys, then Owned + Cinema. A show
-  // has one too: the status button full-width, above the Kodi/Owned row.
-  if (isMovie) {
-    body.append(
-      el('h3', { class: 'section-title remote-title', text: t('detail.remote') }),
-      actionsRow,
-      rewatchWrap,
-      cinemaRow,
+  // Every title's controls are its remote, a section of their own after the synopsis.
+  body.append(
+    ...[
+      el('h3', { class: isMovie ? 'section-title remote-title' : 'section-title', text: t('detail.remote') }),
+      statusRow,
+      kodiRow,
+      isMovie ? rewatchWrap : null,
+      ownRow,
       kodiFeedback,
       ratingTitle,
-      ratingWrap
-    );
-  } else {
-    body.append(
-      el('h3', { class: 'section-title', text: t('detail.remote') }),
-      statusBtn,
-      actionsRow,
-      kodiFeedback,
-      ratingTitle,
-      ratingWrap
-    );
-  }
+      ratingWrap,
+    ].filter(Boolean)
+  );
 
   // --- Series progress + seasons ---
   if (d.type === 'show' && d.progress) {

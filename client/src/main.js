@@ -13,6 +13,7 @@ import { openKodiReviewFromPending } from './kodiSync.js';
 import { withBase } from './basePath.js';
 import { initInstallPrompt } from './addToHome.js';
 import { initNavAnimations } from './navAnim.js';
+import { initHeroDepth } from './heroDepth.js';
 import { initUserScope } from './userScope.js';
 import { checkSuggestions } from './suggestions.js';
 
@@ -375,6 +376,9 @@ window.addEventListener('shelfit:server-change', (ev) => {
   }
 });
 startNetworkMonitor();
+
+// The backdrops' scroll depth, painted from script where CSS can't run it.
+initHeroDepth();
 
 // Capture the (single, early) beforeinstallprompt so the "Add to Home Screen"
 // action in Settings can replay it later as a native install dialog.
