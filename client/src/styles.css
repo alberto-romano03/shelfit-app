@@ -1375,12 +1375,13 @@ button:active,
     }
   }
 }
-/* Where the browser can't, heroDepth.js paints the same motion from the scroll
-   position and marks the root; the page still has to sit above the backdrop. */
+/* Where the browser can't, heroDepth.js paints only the fade from the scroll position
+   (moving the backdrop from script shakes on iOS) and marks the root; the page still
+   sits above the backdrop. */
 @media (prefers-reduced-motion: no-preference) {
   .hero-depth-js .detail-hero:not(.skeleton),
   .hero-depth-js .profile-cover {
-    will-change: translate, opacity;
+    will-change: opacity;
   }
   .hero-depth-js .detail-hero:not(.skeleton) ~ *,
   :where(.hero-depth-js .profile-cover ~ *) {
