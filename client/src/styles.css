@@ -1645,7 +1645,31 @@ button:active,
   content: '';
   flex: 0 0 calc(var(--gutter) - var(--fact-gap));
 }
+/* Release and duration under the title, beside the poster: no rail here, one
+   chip per row. */
+.detail-facts--head {
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 10px 0 0;
+  padding: 0;
+  overflow: visible;
+}
+.detail-facts--head::after {
+  content: none;
+}
+/* A long "… left · ends at …" may not fit the column: it wraps inside its chip. */
+.detail-facts--head .detail-fact {
+  flex-shrink: 1;
+  max-width: 100%;
+  white-space: normal;
+}
+.detail-facts--head + .detail-updated {
+  margin-top: 8px;
+}
 .detail-fact {
+  /* Holds its screen-reader label (.sr-only is absolutely placed): without this
+     the labels of chips scrolled past the edge escape the rail and widen the page. */
+  position: relative;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;

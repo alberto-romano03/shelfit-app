@@ -504,16 +504,20 @@ function detailSkeleton() {
       el('div', { class: 'detail-titles', style: { flex: '1' } }, [
         el('h2', { 'aria-hidden': 'true' }, [skelText('78%')]),
         el('div', { class: 'orig', 'aria-hidden': 'true' }, [skelText('52%')]),
+        // Under the title, a date and a duration, one per row (a film's carries
+        // its ends-at hint when time hints are on).
+        el('div', { class: 'detail-facts detail-facts--head', 'aria-hidden': 'true' },
+          [104, isShow ? 62 : timeHintsOn() ? 150 : 74].map((w) =>
+            el('div', { class: 'skeleton detail-fact-skel', style: { width: `${w}px` } })
+          )
+        ),
         isShow ? el('div', { class: 'detail-updated', 'aria-hidden': 'true' }, [skelText('64%')]) : null,
       ]),
     ]),
     el('div', {}, [
-      // The chips a title usually has: a date, a duration (a film's carries its
-      // ends-at hint when time hints are on), then two genres.
+      // Under the poster, two genres.
       el('div', { class: 'detail-facts', 'aria-hidden': 'true' },
-        [104, isShow ? 62 : timeHintsOn() ? 150 : 74, 96, 84].map((w) =>
-          el('div', { class: 'skeleton detail-fact-skel', style: { width: `${w}px` } })
-        )
+        [96, 84].map((w) => el('div', { class: 'skeleton detail-fact-skel', style: { width: `${w}px` } }))
       ),
       skelOverview(4),
       skelShowMore(),
@@ -725,8 +729,8 @@ export default async function Detail(container, params) {
   // ]);
   const posterWrap = el('div', { class: 'detail-poster-wrap' }, [disc, posterBox]);
 
-  // Release, duration and genres as one rail of chips under the poster, each
-  // genre a chip of its own; the rail scrolls to the screen edge when it is full.
+  // Release and duration as chips under the title, beside the poster; the genres
+  // as a rail of chips under the poster, one each, scrolling to the screen edge.
   const facts = [];
   const released = fmtLongDate(meta.release_date || meta.first_air_date) || meta.year;
   if (released) facts.push(factChip('release', 'calendar', t('detail.factRelease'), String(released)));
@@ -768,9 +772,12 @@ export default async function Detail(container, params) {
     onCleanup(() => clearInterval(clock));
   }
   startClock();
-  for (const g of meta.genres || []) facts.push(factChip('genre', 'drama', t('detail.factGenre'), g));
-  const factRail = facts.length
-    ? el('ul', { class: 'detail-facts', 'aria-label': t('detail.facts') }, facts)
+  const headFacts = facts.length
+    ? el('ul', { class: 'detail-facts detail-facts--head', 'aria-label': t('detail.facts') }, facts)
+    : null;
+  const genres = (meta.genres || []).map((g) => factChip('genre', 'drama', t('detail.factGenre'), g));
+  const factRail = genres.length
+    ? el('ul', { class: 'detail-facts', 'aria-label': t('detail.factGenres') }, genres)
     : null;
 
   const titles = el('div', { class: 'detail-titles' }, [
@@ -778,6 +785,7 @@ export default async function Detail(container, params) {
     d.title_orig && d.title_orig !== d.title_it
       ? el('div', { class: 'orig', text: d.title_orig })
       : null,
+    headFacts,
     d.type === 'show' && d.cached_at
       ? el('div', { class: 'detail-updated', text: t('detail.dataUpdated', { date: formatDate(d.cached_at) }) })
       : null,
