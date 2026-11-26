@@ -50,7 +50,6 @@ import {
   stateBlock,
   typewriterPlaceholder,
   settingsRow,
-  epLabel,
   pressable,
   skelLine,
   markInvalid,
@@ -210,6 +209,44 @@ function factChip(kind, icon, label, text, onTap) {
   const btn = el('button', { type: 'button', class: `detail-fact detail-fact--${kind} detail-fact-btn` }, kids);
   btn.addEventListener('click', onTap);
   return el('li', { class: 'detail-fact-slot' }, [btn]);
+}
+
+// A title's release as its chip shows it: the full date, else the year.
+function releaseText(meta) {
+  return String(fmtLongDate(meta.release_date || meta.first_air_date) || meta.year || '');
+}
+
+// A film's runtime, or a series' average episode, in minutes (0 when unknown).
+function runtimeOf(d, meta) {
+  return (d.type === 'movie' ? meta.runtime : avgRuntime(meta.episode_run_time)) || 0;
+}
+
+// The duration chip, on a title's page and on the sheet a held poster opens. Hours and
+// minutes by default ("2h 46m"); a tap switches it to plain minutes ("166 min") and
+// back. A film you haven't seen says when it would end if you pressed play now; one
+// being watched (or rewatched from the shelf) and stopped partway counts from there.
+// Reads d's type, status and minute each time it paints, so it follows their changes.
+function runtimeFact(d, runtime) {
+  let inMinutes = false;
+  const length = (n) => (inMinutes ? t('detail.runtimeMin', { n: Math.round(n) }) : hoursAndMinutes(n));
+  const node = factChip('runtime', 'clock', t('detail.factRuntime'), '', () => {
+    inMinutes = !inMinutes;
+    paint();
+  });
+  const text = node.querySelector('.detail-fact-btn').lastElementChild;
+  function paint() {
+    const movie = d.type === 'movie';
+    const unseen = movie && timeHintsOn() && d.status !== 'completed';
+    const stops = movie && (d.status === 'watching' || d.status === 'completed') && d.stopped_at > 0;
+    const left = stops ? Math.max(0, runtime - d.stopped_at) : null;
+    text.textContent = !unseen
+      ? length(runtime)
+      : left !== null
+        ? t('detail.endsAtLeft', { length: length(left), time: endsAt(left) })
+        : t('detail.endsAt', { length: length(runtime), time: endsAt(runtime) });
+  }
+  paint();
+  return { node, paint };
 }
 
 // --- Bento "Details" section ----------------------------------------------
@@ -737,45 +774,17 @@ export default async function Detail(container, params) {
   // Release and duration as chips under the title, beside the poster; the genres
   // as a rail of chips under the poster, one each, scrolling to the screen edge.
   const facts = [];
-  const released = fmtLongDate(meta.release_date || meta.first_air_date) || meta.year;
-  if (released) facts.push(factChip('release', 'calendar', t('detail.factRelease'), String(released)));
-  // A film's runtime, or a series' average episode, in minutes.
-  const runtime = (d.type === 'movie' ? meta.runtime : avgRuntime(meta.episode_run_time)) || 0;
-  // Hours and minutes by default ("2h 46m"); a tap on the chip switches it to
-  // plain minutes ("166 min") and back.
-  let inMinutes = false;
-  const length = (n) => (inMinutes ? t('detail.runtimeMin', { n: Math.round(n) }) : hoursAndMinutes(n));
-  const runtimeRow =
-    runtime > 0
-      ? factChip('runtime', 'clock', t('detail.factRuntime'), '', () => {
-          inMinutes = !inMinutes;
-          paintRuntime();
-        })
-      : null;
-  if (runtimeRow) facts.push(runtimeRow);
-  // A film you haven't seen says when it would end if you pressed play now; one
-  // you are watching and stopped partway counts from where you stopped.
-  function paintRuntime() {
-    if (!runtimeRow) return;
-    const unseen = d.type === 'movie' && timeHintsOn() && d.status !== 'completed';
-    const left = resumeMinutesLeft();
-    runtimeRow.querySelector('.detail-fact-btn').lastElementChild.textContent = !unseen
-      ? length(runtime)
-      : left !== null
-        ? t('detail.endsAtLeft', { length: length(left), time: endsAt(left) })
-        : t('detail.endsAt', { length: length(runtime), time: endsAt(runtime) });
-  }
+  const released = releaseText(meta);
+  if (released) facts.push(factChip('release', 'calendar', t('detail.factRelease'), released));
+  const runtime = runtimeOf(d, meta);
+  const runtimeChip = runtime > 0 ? runtimeFact(d, runtime) : null;
+  if (runtimeChip) facts.push(runtimeChip.node);
+  const paintRuntime = () => runtimeChip && runtimeChip.paint();
   // A movie takes a stopped minute while it is being watched, or rewatched once
   // it is on the shelf (recording the rewatch clears it, like finishing it).
   const stopsHere = (status) => d.type === 'movie' && (status === 'watching' || status === 'completed');
-  // Minutes left of a movie being watched and stopped partway, else null.
-  function resumeMinutesLeft() {
-    if (!stopsHere(d.status) || !(d.stopped_at > 0) || !(meta.runtime > 0)) return null;
-    return Math.max(0, meta.runtime - d.stopped_at);
-  }
-  paintRuntime();
   function startClock() {
-    if (!runtimeRow || d.type !== 'movie') return;
+    if (!runtimeChip || d.type !== 'movie') return;
     paintRuntime();
     const clock = setInterval(paintRuntime, 30000);
     onCleanup(() => clearInterval(clock));
@@ -1454,9 +1463,13 @@ const LEND_PLACEHOLDERS = ['lend.placeholder1', 'lend.placeholder2', 'lend.place
 const LEND_TINT = '#7cc4f2';
 
 export async function openPosterMenu(item) {
+  // The title's own record, for the release and duration chips: fetched before opening
+  // only when the card lacks what the sheet needs, else while it is already open.
+  let detail = null;
   if (!item.tmdb_id || item.status === undefined) {
     try {
       const d = await api.mediaDetail(item.id);
+      detail = d;
       const meta = d.meta || {};
       item = {
         ...item,
@@ -1479,22 +1492,53 @@ export async function openPosterMenu(item) {
 
   openModal(
     (modal, close) => {
-      const statusText = () =>
-        state.status === 'watching' && item.last_watched
-          ? `${STATUS_LABELS.watching} · ${epLabel(item.last_watched.season, item.last_watched.episode)}`
-          : STATUS_LABELS[state.status] || '';
-
-      // --- Head: the poster, the title, and what it is.
-      // Where it stands, written in its status colour.
-      const chip = el('div', { class: 'poster-menu-status', text: statusText() });
-      const metaBits = [item.year, (item.genres || []).slice(0, 2).join(', ')].filter(Boolean);
+      // --- Head: the poster, the title, its genres, then the release and duration chips
+      // of its page. Until the record is in, the release says the year and the duration
+      // holds a placeholder; a saved copy (Plan to Watch, offline) fills them at once.
+      const genres = (item.genres || []).slice(0, 2).join(', ');
+      const facts = el('ul', {
+        class: 'detail-facts detail-facts--head poster-menu-facts',
+        'aria-label': t('detail.facts'),
+      });
+      // What the chips read from: the title's status as picked here, its stopped minute.
+      const live = { type: item.type, status: state.status, stopped_at: null };
+      let runtimeChip = null;
+      function fillFacts(d) {
+        const meta = (d && d.meta) || {};
+        if (d) {
+          live.type = d.type || live.type;
+          live.stopped_at = d.stopped_at || null;
+        }
+        const released = d ? releaseText(meta) : String(item.year || '');
+        const runtime = d ? runtimeOf(live, meta) : 0;
+        runtimeChip = runtime > 0 ? runtimeFact(live, runtime) : null;
+        facts.replaceChildren(
+          ...[
+            released ? factChip('release', 'calendar', t('detail.factRelease'), released) : null,
+            runtimeChip ? runtimeChip.node : null,
+            // Still waiting on the record: a placeholder where the duration will be.
+            d ? null : el('li', { class: 'skeleton detail-fact-skel', 'aria-hidden': 'true', style: { width: '74px' } }),
+          ].filter(Boolean)
+        );
+      }
+      const saved = detail || (getPlanDetail(item.id) || {}).data || null;
+      fillFacts(saved);
+      if (!detail) {
+        api
+          .mediaDetail(item.id)
+          .then((d) => fillFacts(d))
+          .catch(() => {
+            // Unreachable: keep a saved copy, else the year alone and no duration.
+            if (!saved) fillFacts({ type: item.type, meta: { year: item.year } });
+          });
+      }
       modal.append(
         el('div', { class: 'poster-menu-head' }, [
           poster(item.poster_url, ''),
           el('div', { class: 'poster-menu-titles' }, [
             el('h3', { text: item.title_it || item.title_orig || '' }),
-            metaBits.length ? el('div', { class: 'poster-menu-meta', text: metaBits.join(' · ') }) : null,
-            state.status ? chip : null,
+            genres ? el('div', { class: 'poster-menu-meta', text: genres }) : null,
+            facts,
           ]),
         ])
       );
@@ -1521,10 +1565,12 @@ export async function openPosterMenu(item) {
 
       function paintStatus() {
         const ink = STATUS_COLORS[state.status];
-        for (const node of [statusTile, chip]) node.style.setProperty('--sc', ink || 'var(--text-secondary)');
+        statusTile.style.setProperty('--sc', ink || 'var(--text-secondary)');
         statusTile.firstElementChild.style.maskImage = `url("${withBase(`/icons/lucide/${STATUS_ICON[state.status] || 'eye'}.svg`)}")`;
         statusTile.lastElementChild.textContent = STATUS_LABELS[state.status] || t('posterMenu.status');
-        chip.textContent = statusText();
+        // The duration's hint follows the status (a shelved film no longer says when it ends).
+        live.status = state.status;
+        if (runtimeChip) runtimeChip.paint();
       }
       function paintRating() {
         rateTile.lastElementChild.textContent = state.rating ? `${state.rating} / 5` : t('posterMenu.rate');

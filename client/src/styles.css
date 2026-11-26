@@ -6134,12 +6134,9 @@ button.srow:active {
   font-size: 0.8125rem;
   color: var(--text-secondary);
 }
-/* Where the title stands, in its status colour: a shade lighter on dark, darker on light,
-   so the pale status inks still read as text. */
-.poster-menu-status {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: color-mix(in srgb, var(--sc) 82%, var(--text-primary));
+/* The release and duration chips of the title's page, under its genres. */
+.poster-menu-facts {
+  margin-top: 6px;
 }
 /* Three or four quick tiles, as many columns as there are. */
 .poster-menu-tiles {
